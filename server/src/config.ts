@@ -28,8 +28,8 @@ export const config = {
   roomTtlHours: getEnvInt('ROOM_TTL_HOURS', 24),
   isDev: getEnv('NODE_ENV', 'development') !== 'production',
   // Buffer thresholds for sync (seconds)
-  bufferPauseThreshold: 1,  // pause if bufferedAhead < this (was 2; lower = less aggressive BUFFERING)
-  bufferResumeThreshold: 5, // resume only when bufferedAhead >= this (or readyState 4)
+  bufferPauseThreshold: 0,  // only actual stalls (waiting=true) trigger BUFFERING — preemptive pauses cause seeks that wipe the buffer
+  bufferResumeThreshold: 3, // resume when bufferedAhead >= this (or readyState 4)
   // Drift thresholds (seconds)
   driftIgnoreThreshold: 0.25,
   driftRateThreshold: 1.5,

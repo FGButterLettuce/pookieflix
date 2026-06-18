@@ -10,7 +10,7 @@ import {
 } from './db';
 import { generateThumbnailAsync, thumbPath, extractMetadata } from './ffmpeg';
 import { getRuntimeByToken } from './roomManager';
-import { subtitlePath } from './subtitles';
+import { fetchSubtitles, subtitlePath } from './subtitles';
 
 // ── Remote log buffer ─────────────────────────────────────────────────────────
 interface LogEntry { ts: number; device: string; level: string; msg: string; }
@@ -271,6 +271,37 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ ok: true });
   });
 
+  // ── Library: fetch subtitles for a file ──────────────────────────────────
+  app.post('/api/library/:filename/subtitles', {
+    config: { rateLimit: { max: 5, timeWindow: '1m' } },
+  }, async (req, reply) => {
+    const { filename } = req.params as { filename: string };
+    if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send({ error: 'Invalid filename' });
+    let filePath: string;
+    try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
+    if (!fs.existsSync(filePath)) return reply.status(404).send({ error: 'Not found' });
+    fetchSubtitles(filePath, filename).catch(() => {});
+    return reply.send({ ok: true });
+  });
+
+  // ── Subtitle: serve VTT for a room ────────────────────────────────────────
+  app.get('/api/subtitle/:token', async (req, reply) => {
+    const { token } = req.params as { token: string };
+    if (!SAFE_TOKEN_RE.test(token)) return reply.status(400).send({ error: 'Invalid token' });
+    const row = getRoomByToken(token);
+    if (!row) return reply.status(404).send({ error: 'Room not found' });
+    if (Date.now() > row.expires_at) return reply.status(410).send({ error: 'Room expired' });
+    const resolvedMediaDir = path.resolve(config.mediaDir);
+    const resolvedPath     = path.resolve(row.media_path);
+    if (!resolvedPath.startsWith(resolvedMediaDir + path.sep)) return reply.status(403).send({ error: 'Forbidden' });
+    const vttPath = subtitlePath(resolvedPath);
+    if (!fs.existsSync(vttPath)) return reply.status(404).send({ error: 'No subtitles' });
+    reply.header('Content-Type', 'text/vtt; charset=utf-8');
+    reply.header('Cache-Control', 'public, max-age=3600');
+    reply.header('Access-Control-Allow-Origin', '*');
+    return reply.send(fs.createReadStream(vttPath));
+  });
+
   // ── Upload: save to library, generate thumb, create room ──────────────────
   app.post('/api/upload', {
     config: { rateLimit: { max: 5, timeWindow: '1m' } },
@@ -331,6 +362,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     generateThumbnailAsync(savedPath, savedFilename, (ok) => {
       if (ok) upsertLibraryMeta(savedFilename, duration, true);
     });
+
+    fetchSubtitles(savedPath, savedFilename).catch(() => {});
 
     // Create room
     const roomToken = generateToken();

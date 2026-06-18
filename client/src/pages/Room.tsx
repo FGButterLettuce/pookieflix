@@ -24,6 +24,7 @@ interface RoomInfo {
   viewerCount: number;
   mediaUrl: string;
   mediaFilename: string;
+  subtitleUrl?: string;
 }
 
 export function Room() {
@@ -75,7 +76,7 @@ export function Room() {
     ws.onMessage((msg: ServerMessage) => {
       switch (msg.type) {
         case 'JOINED': {
-          rlog.log(`JOINED host=${msg.isHost} state=${msg.roomState}`);
+          rlog.log(`JOINED host=${msg.isHost} state=${msg.roomState} subs=${!!msg.subtitleUrl}`);
           setRoomInfo({
             viewerId: msg.viewerId,
             isHost: msg.isHost,
@@ -83,6 +84,7 @@ export function Room() {
             viewerCount: 1,
             mediaUrl: msg.mediaUrl,
             mediaFilename: msg.mediaFilename,
+            subtitleUrl: msg.subtitleUrl,
           });
           setRoomState(msg.roomState);
           diagnosticsRef.current = { ...diagnosticsRef.current, isHost: msg.isHost };
@@ -294,6 +296,7 @@ export function Room() {
       <div className="room-player">
         <VideoPlayer
           src={roomInfo.mediaUrl}
+          subtitleUrl={roomInfo.subtitleUrl}
           onControllerReady={handleControllerReady}
           onUserPlay={handleUserPlay}
           onUserPause={handleUserPause}

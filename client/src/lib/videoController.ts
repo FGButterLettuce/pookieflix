@@ -73,7 +73,7 @@ export class VideoController {
     // Only seek if we're far from the target — seeking clears the browser's buffer and
     // triggers a new HTTP range request on mobile, which causes the buffering cascade.
     // Small offsets (<0.5s) are handled by rate correction after resume.
-    const needsSeek = Math.abs(this.video.currentTime - mediaTime) > 0.5;
+    const needsSeek = Math.abs(this.video.currentTime - mediaTime) > 2.0;
     if (needsSeek) {
       this.video.currentTime = mediaTime;
     }
@@ -152,7 +152,7 @@ export class VideoController {
       }
     };
 
-    if (Math.abs(this.video.currentTime - mediaTime) > 0.5) {
+    if (Math.abs(this.video.currentTime - mediaTime) > 2.0) {
       this.video.currentTime = mediaTime;
       this.video.addEventListener('seeked', applySeekAndWait, { once: true });
     } else {

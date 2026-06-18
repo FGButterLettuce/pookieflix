@@ -3,6 +3,7 @@ import type { VideoController } from '../lib/videoController';
 
 interface Props {
   src: string;
+  subtitleUrl?: string;
   onControllerReady: (vc: VideoController) => void;
   onUserPlay: () => void;
   onUserPause: () => void;
@@ -14,7 +15,7 @@ export interface VideoPlayerHandle {
 }
 
 export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPlayer(
-  { src, onControllerReady, onUserPlay, onUserPause, onUserSeek },
+  { src, subtitleUrl, onControllerReady, onUserPlay, onUserPause, onUserSeek },
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -78,6 +79,22 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
       video.removeEventListener('seeking', handleSeeking);
     };
   }, [onUserPlay, onUserPause, onUserSeek]);
+
+  // Imperatively append track — JSX <track> inside <video> triggers MEDIA_ERR_SRC_NOT_SUPPORTED on iOS Safari
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.querySelectorAll('track').forEach(t => t.remove());
+    if (!subtitleUrl) return;
+    const track = document.createElement('track');
+    track.kind = 'subtitles';
+    track.src = subtitleUrl;
+    track.srclang = 'en';
+    track.label = 'English';
+    track.default = true;
+    video.appendChild(track);
+    return () => { try { track.remove(); } catch { /* ignore */ } };
+  }, [subtitleUrl]);
 
   return (
     <video

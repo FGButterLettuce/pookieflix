@@ -58,6 +58,7 @@ export interface JoinedMessage {
   mediaUrl: string;
   mediaFilename: string;
   currentTime: number;
+  subtitleUrl?: string;
 }
 
 export interface RoomUpdateMessage {

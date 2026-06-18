@@ -42,6 +42,8 @@ export function Home() {
   const [thumbErrors, setThumbErrors] = useState<Set<string>>(new Set());
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [fetchingSubFile, setFetchingSubFile] = useState<string | null>(null);
+
   const loadLibrary = useCallback(() => {
     fetch('/api/library')
       .then(r => r.json())
@@ -156,6 +158,22 @@ export function Home() {
     }
   };
 
+  const fetchSubtitles = async (filename: string) => {
+    setFetchingSubFile(filename);
+    try {
+      await fetch(`/api/library/${encodeURIComponent(filename)}/subtitles`, { method: 'POST' });
+      const poll = setInterval(() => {
+        fetch('/api/library').then(r => r.json()).then((d: { files: LibraryFile[] }) => {
+          setLibrary(d.files);
+          const f = d.files.find(f => f.filename === filename);
+          if (!f || !f.subtitleFetching) { clearInterval(poll); setFetchingSubFile(null); }
+        }).catch(() => {});
+      }, 1500);
+    } catch {
+      setFetchingSubFile(null);
+    }
+  };
+
   return (
     <div className="home-root">
       <header className="home-topbar">
@@ -267,6 +285,8 @@ export function Home() {
                   )}
                   <div className="lib-meta-row">
                     <span className="lib-size">{formatBytes(f.size)}</span>
+                    {f.hasSubtitles && <span className="lib-sub-badge" title="Subtitles available">CC</span>}
+                    {f.subtitleFetching && <span className="lib-sub-badge lib-sub-fetching" title="Fetching subtitles…">CC…</span>}
                     {f.lastTime > 5 && (
                       <span className="lib-resume" title="Resume position">
                         ↩ {formatTime(f.lastTime)}
@@ -280,6 +300,12 @@ export function Home() {
                   <button className="lib-watch-btn" onClick={() => createRoomFrom(f.filename)}>
                     {f.lastTime > 5 ? 'Resume' : 'Watch'}
                   </button>
+                  {!f.hasSubtitles && !f.subtitleFetching && (
+                    <button className="lib-sub-btn" disabled={fetchingSubFile === f.filename}
+                      onClick={() => fetchSubtitles(f.filename)} title="Fetch subtitles from OpenSubtitles">
+                      {fetchingSubFile === f.filename ? '…' : 'CC'}
+                    </button>
+                  )}
                   <button
                     className="lib-delete-btn"
                     disabled={deletingFile === f.filename}

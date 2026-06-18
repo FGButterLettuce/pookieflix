@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { WebSocket, WebSocketServer } from 'ws';
 import { config } from './config';
 import { getRoomByToken, updateLibraryLastTime, getLibraryMeta } from './db';
+import { hasSubtitles } from './subtitles';
 import path from 'path';
 import { tick, handleUserAction, handleViewerDisconnect } from './roomStateMachine';
 import type {
@@ -125,6 +126,7 @@ export function joinRoom(token: string, ws: WebSocket): string | null {
     mediaUrl: `/api/media/${token}`,
     mediaFilename: room.mediaFilename,
     currentTime,
+    subtitleUrl: hasSubtitles(room.mediaPath) ? `/api/subtitle/${token}` : undefined,
   });
 
   // Broadcast updated viewer count
@@ -226,6 +228,7 @@ export function setupWebSocketServer(wss: WebSocketServer): void {
     const token = url.searchParams.get('roomToken');
 
     if (!token || !/^[0-9a-f]{64}$/.test(token)) {
+      console.log(`[WS] rejected: invalid token`);
       send(ws, { type: 'ERROR', message: 'Invalid room token' });
       ws.close();
       return;
