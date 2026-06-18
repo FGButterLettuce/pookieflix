@@ -4,6 +4,7 @@ import path from 'path';
 import { pipeline } from 'stream/promises';
 import type { FastifyInstance } from 'fastify';
 import { config } from './config';
+import { isSetupComplete, readPersistedConfig, writePersistedConfig } from './persistedConfig';
 import {
   createRoom, getRoomByToken, listLibraryFiles,
   purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile,
@@ -177,9 +178,51 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return new Promise<void>(() => {});
   });
 
-  // ── Client config (upload URL override for bypassing Cloudflare) ──────────
+  // ── Client config ─────────────────────────────────────────────────────────
   app.get('/api/config', async (_req, reply) => {
-    return reply.send({ uploadUrl: config.uploadUrl || null });
+    // Read fresh from persisted config each time so changes from /api/setup
+    // take effect without a server restart
+    const persisted = readPersistedConfig();
+    const uploadUrl = process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? config.uploadUrl;
+    return reply.send({
+      uploadUrl: uploadUrl || null,
+      setupComplete: isSetupComplete() || !!process.env.APP_BASE_URL,
+    });
+  });
+
+  // ── Setup / Settings ──────────────────────────────────────────────────────
+  app.get('/api/settings', async (_req, reply) => {
+    const persisted = readPersistedConfig();
+    return reply.send({
+      APP_BASE_URL: process.env.APP_BASE_URL ?? persisted.APP_BASE_URL ?? '',
+      UPLOAD_URL: process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? '',
+      OPENSUBTITLES_API_KEY: process.env.OPENSUBTITLES_API_KEY ?? persisted.OPENSUBTITLES_API_KEY ?? '',
+    });
+  });
+
+  app.post('/api/settings', async (req, reply) => {
+    const body = req.body as Record<string, string>;
+    writePersistedConfig({
+      APP_BASE_URL: body.APP_BASE_URL?.trim() || undefined,
+      UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
+      OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
+      setupComplete: true,
+    });
+    return reply.send({ ok: true });
+  });
+
+  app.post('/api/setup', async (req, reply) => {
+    const body = req.body as Record<string, string>;
+    if (!body.APP_BASE_URL?.trim()) {
+      return reply.status(400).send({ error: 'APP_BASE_URL is required' });
+    }
+    writePersistedConfig({
+      APP_BASE_URL: body.APP_BASE_URL.trim(),
+      UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
+      OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
+      setupComplete: true,
+    });
+    return reply.send({ ok: true });
   });
 
   // ── Library: list files with metadata ─────────────────────────────────────
@@ -303,9 +346,21 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Upload: save to library, generate thumb, create room ──────────────────
+  // CORS preflight — needed when the main domain (thought.niranjanrakesh.me)
+  // uploads directly to the LAN IP to bypass Cloudflare's size limit
+  app.options('/api/upload', async (_req, reply) => {
+    const origin = process.env.APP_BASE_URL ?? readPersistedConfig().APP_BASE_URL ?? config.baseUrl;
+    reply.header('Access-Control-Allow-Origin', origin);
+    reply.header('Access-Control-Allow-Methods', 'POST');
+    reply.header('Access-Control-Allow-Headers', 'content-type');
+    return reply.status(204).send();
+  });
+
   app.post('/api/upload', {
     config: { rateLimit: { max: 5, timeWindow: '1m' } },
   }, async (req, reply) => {
+    const origin = process.env.APP_BASE_URL ?? readPersistedConfig().APP_BASE_URL ?? config.baseUrl;
+    reply.header('Access-Control-Allow-Origin', origin);
     const parts = req.parts();
     let savedFilename = '';
     let savedPath = '';
@@ -384,7 +439,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.status(201).send({
       roomToken,
-      roomUrl: `${config.baseUrl}/room/${roomToken}`,
+      roomUrl: `${process.env.APP_BASE_URL ?? readPersistedConfig().APP_BASE_URL ?? config.baseUrl}/room/${roomToken}`,
       filename: savedFilename,
     });
   });
@@ -425,7 +480,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.status(201).send({
       roomToken,
-      roomUrl: `${config.baseUrl}/room/${roomToken}`,
+      roomUrl: `${process.env.APP_BASE_URL ?? readPersistedConfig().APP_BASE_URL ?? config.baseUrl}/room/${roomToken}`,
       resumeTime: meta?.last_time ?? 0,
     });
   });

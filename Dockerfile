@@ -1,6 +1,6 @@
-# Uses Node.js 22 LTS (22.13+ has stable built-in sqlite; 26 is the dev environment)
+# Uses Node.js 26 (matches dev environment; has stable built-in sqlite)
 # ── Stage 1: Build frontend ───────────────────────────────────────────────────
-FROM node:22-alpine AS client-build
+FROM node:26-alpine AS client-build
 
 WORKDIR /app/client
 
@@ -12,7 +12,7 @@ RUN npm run build
 
 
 # ── Stage 2: Build server ─────────────────────────────────────────────────────
-FROM node:22-alpine AS server-build
+FROM node:26-alpine AS server-build
 
 WORKDIR /app/server
 
@@ -24,10 +24,9 @@ RUN npm run build
 
 
 # ── Stage 3: Production runtime ───────────────────────────────────────────────
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 
-# Non-root user for security
-RUN addgroup -S wt && adduser -S wt -G wt
+RUN apk add --no-cache ffmpeg
 
 WORKDIR /app
 
@@ -38,12 +37,6 @@ RUN cd server && npm ci --omit=dev --quiet
 # Built artifacts
 COPY --from=server-build /app/server/dist ./server/dist
 COPY --from=client-build /app/client/dist ./client/dist
-
-# Data directories
-RUN mkdir -p /data/media/rooms /data/media/library && \
-    chown -R wt:wt /data /app
-
-USER wt
 
 ENV NODE_ENV=production \
     PORT=3000 \

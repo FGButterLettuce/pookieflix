@@ -53,7 +53,128 @@ body {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.4px;
+  flex: 1;
 }
+
+.settings-link {
+  font-size: 20px;
+  color: var(--text-muted);
+  text-decoration: none;
+  line-height: 1;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.15s;
+}
+.settings-link:hover { color: var(--text); }
+
+/* ── Setup / Onboarding ───────────────────────────────────────────────────── */
+
+.setup-root {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.setup-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px;
+  width: 100%;
+  max-width: 440px;
+}
+
+.setup-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.setup-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.2s, width 0.2s;
+}
+.setup-dot.active { background: var(--accent); width: 20px; border-radius: 4px; }
+.setup-dot.done { background: var(--success); }
+
+.setup-step { display: flex; flex-direction: column; }
+
+.setup-icon {
+  font-size: 36px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.setup-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.setup-desc {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.setup-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  margin-bottom: 6px;
+}
+.setup-input:focus { border-color: var(--accent); }
+.setup-input::placeholder { color: var(--text-muted); }
+
+.setup-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+
+.setup-btn { width: 100%; margin-top: 8px; }
+
+.setup-nav {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+.setup-nav .setup-btn { margin-top: 0; flex: 1; }
+
+.setup-back {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+}
+.setup-back:hover { color: var(--text); }
+
+.settings-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+  display: block;
+}
+.settings-optional { font-weight: 400; color: var(--text-muted); }
 
 /* Upload zone */
 .upload-zone {

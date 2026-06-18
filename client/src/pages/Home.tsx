@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import type { LibraryFile } from '../types';
 
 function formatBytes(bytes: number): string {
@@ -72,6 +72,15 @@ export function Home() {
       return;
     }
 
+    if (uploadUrl) {
+      try {
+        await fetch(`${uploadUrl}/api/config`, { signal: AbortSignal.timeout(3000) });
+      } catch {
+        setError('You need to be on the same Wi-Fi as the server to upload files. Connect to the local network and try again.');
+        return;
+      }
+    }
+
     setUploading(true);
     setUploadProgress(0);
     setUploadingName(file.name);
@@ -82,7 +91,7 @@ export function Home() {
 
       const result = await new Promise<{ roomToken: string; roomUrl: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/upload');
+        xhr.open('POST', uploadUrl ? `${uploadUrl}/api/upload` : '/api/upload');
         xhr.upload.addEventListener('progress', e => {
           if (e.lengthComputable) setUploadProgress(Math.round(e.loaded / e.total * 100));
         });
@@ -179,6 +188,7 @@ export function Home() {
     <div className="home-root">
       <header className="home-topbar">
         <span className="home-logo">WatchTogether</span>
+        <Link to="/settings" className="settings-link" title="Settings">⚙</Link>
       </header>
 
       {/* Upload zone */}
@@ -216,11 +226,6 @@ export function Home() {
           </>
         )}
       </div>
-      {uploadUrl && (
-        <a className="lan-upload-btn" href={uploadUrl} target="_self">
-          ⚡ Upload via local network (faster)
-        </a>
-      )}
       <input ref={fileInputRef} type="file" accept="video/mp4,.mp4" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); }} />
       {error && <div className="home-error">{error}</div>}
