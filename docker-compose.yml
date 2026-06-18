@@ -1,0 +1,26 @@
+services:
+  watchtogether:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      APP_BASE_URL: "${APP_BASE_URL:-http://localhost:3000}"
+      DATA_DIR: /data
+      MEDIA_DIR: /data/media
+      DB_PATH: /data/app.db
+      MAX_UPLOAD_BYTES: "${MAX_UPLOAD_BYTES:-4294967296}"
+      ROOM_TTL_HOURS: "${ROOM_TTL_HOURS:-24}"
+      # Set to your LAN IP to bypass Cloudflare's 100MB upload limit:
+      UPLOAD_URL: "${UPLOAD_URL:-}"
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/library"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
