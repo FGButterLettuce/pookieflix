@@ -276,8 +276,118 @@ if (room.viewers.size >= 2) {
 
 ---
 
+## Milestone 6 — iOS Buffer Optimizations
+
+> **Status: ✅ Deployed**
+
+A cluster of changes to reduce iOS buffering and stuttering.
+
+### WS ping interval: 2s → 15s
+
+**Problem:** Mobile connections were stuttering increasingly over time. Traced to the 2s WebSocket ping interval: brief cell handoffs or network hiccups (~1-2s) caused `alive=false` → `ws.terminate()` → reconnect loop. Each reconnect triggered a RESYNCING seek, which flushed the buffer.
+
+**Fix:** Raised ping interval to 15s.
+
+```typescript
+// server/src/roomManager.ts
+}, 15_000); // was 2_000
+```
+
+### iOS native player (`playsInline` removed)
+
+`playsInline` was re-removed so iOS uses its native fullscreen AVPlayer. JS sync commands still work via standard HTMLMediaElement API.
+
+### Seek threshold: 0.5s → 2.0s
+
+`applyPause` and `schedulePlayAt` only seek if `|currentTime - targetTime| > 2.0s`. Seeking on iOS flushes the decode buffer — a 2s tolerance avoids unnecessary flushes during normal pause/resume cycles where the server position and client position are naturally slightly different.
+
+### `bufferPauseThreshold: 0`
+
+Previously the server paused both clients if `bufferedAhead < 1s`. This triggered aggressive seeks that flushed the very buffer we were trying to build. Setting threshold to `0` means only actual stall events (`waiting=true`) trigger BUFFERING state.
+
+### `driftRateThreshold: 10s`
+
+Raised from 1.5s to 10s. Below 10s drift, only playback rate adjustment is used (0.97x/1.03x), never a RESYNCING seek. iOS buffer survives; small drift is corrected gradually.
+
+### MP4 fast-start
+
+Uploaded MP4s are reprocessed with `ffmpeg -movflags +faststart` to move the moov atom to the front of the file. Without this, iOS sends a second range request to the end of the file before it can start playing — visible as a double request and startup lag on slow connections.
+
+### Cache-Control + ETag on media endpoint
+
+```
+Cache-Control: public, max-age=3600
+ETag: "<size>-<mtime>"
+```
+
+iOS range requests for already-seen byte ranges return 304 from the server instead of re-sending data.
+
+---
+
+## Milestone 7 — HLS Streaming for iOS
+
+> **Status: ✅ Deployed — commit ba69805**
+
+**Problem:** Despite all optimizations, iOS Safari still buffered aggressively mid-film. Root cause: iOS's HTML5 video player is poorly optimized for long progressive MP4 downloads; it re-requests large ranges and has erratic buffering behaviour past the first few minutes.
+
+**Solution:** Generate HLS segments (`.ts` chunks + `.m3u8` manifest) with ffmpeg at upload time. iOS Safari handles HLS natively and buffers much more efficiently.
+
+### HLS generation (`server/src/ffmpeg.ts`)
+
+```typescript
+ffmpeg -fflags +genpts -err_detect ignore_err \
+  -i video.mp4 -c copy \
+  -hls_time 4 -hls_list_size 0 \
+  -hls_segment_filename video.hls/seg%04d.ts \
+  -y video.hls/index.m3u8
+```
+
+- **Stream copy** (`-c copy`) — no re-encode; runs at ~800x realtime on NVMe
+- **`-fflags +genpts`** — regenerates presentation timestamps; required because some H.264 files (even tagged as x265 in filename) have timestamp discontinuities around the 14-minute mark that cause ffmpeg to stall indefinitely without this flag
+- **`-err_detect ignore_err`** — skips past malformed packets that would otherwise cause a silent hang
+- **10-minute timeout** added to `generateHLS` to kill any process that stalls despite the above flags
+
+### Trigger points
+
+| Event | Action |
+|---|---|
+| File uploaded | `generateHLSAsync(savedPath)` |
+| Room created from library | `generateHLSAsync(filePath)` |
+| Server startup | Scan library dir; `generateHLSAsync` for any `.mp4` missing a `.hls/` folder |
+
+### HLS serving (`server/src/routes.ts`)
+
+```
+GET /api/hls/:token/index.m3u8
+GET /api/hls/:token/seg0001.ts
+```
+
+Token validated, path confined to media dir (directory traversal check), `Content-Type: application/vnd.apple.mpegurl` or `video/mp2t`, `Cache-Control: public, max-age=3600`.
+
+### Client selection (`client/src/pages/Room.tsx`)
+
+```typescript
+function supportsHLS(): boolean {
+  const v = document.createElement('video');
+  return v.canPlayType('application/vnd.apple.mpegurl') !== '';
+}
+
+// in VideoPlayer src prop:
+src={roomInfo.hlsUrl && supportsHLS() ? roomInfo.hlsUrl : roomInfo.mediaUrl}
+```
+
+iOS Safari returns `'probably'` → uses HLS. Desktop Chrome/Firefox returns `''` → falls back to MP4.
+
+### Diagnostics panel removed
+
+The diagnostics overlay was removed from all devices in this milestone. Remote logs (`rlog`) still capture `hls=true/false` in the JOINED log line for debugging.
+
+---
+
 ## Open Questions / Known Limitations
 
-- **Subtitle approach on iOS**: `<track>` + `playsInline` works in Safari's inline player and in AVPlayer fullscreen. The imperative `appendChild` workaround avoids the React/iOS `MEDIA_ERR_SRC_NOT_SUPPORTED` bug. Burn-in (ffmpeg transcode at upload time) is the nuclear option if track-based subtitles remain problematic.
-- **Rate adjustment convergence**: For slow-device drift < 1.5s, rate correction (0.97x/1.03x) is gentle but slow. No known issue currently.
+- **Subtitle approach on iOS**: `<track>` + imperative `appendChild` works in Safari. The JSX `<track>` child causes `MEDIA_ERR_SRC_NOT_SUPPORTED` on iOS — keep the useEffect workaround.
+- **Rate adjustment convergence**: For drift < 10s, rate correction (0.97x/1.03x) is gentle but slow. No known issue currently.
 - **BUFFERING 20s timeout**: Forces PLAY_AT after 20s even if one viewer isn't ready. May cause a brief stall on the unready client, but unsticks iOS Safari's aggressive buffering mode.
+- **HLS for non-MP4 uploads**: Only `.mp4` files in the library dir are scanned at startup. If other formats are ever supported, `generateHLSAsync` would need to handle them.
+- **Existing library files**: HLS is generated at startup for any file missing a `.hls/` folder, so existing files are covered on next server restart.
