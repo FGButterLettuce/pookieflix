@@ -77,6 +77,14 @@ body {
 .upload-zone-lan { text-decoration: none; border-color: #fbbf24; color: var(--text-muted); }
 .upload-zone-lan:hover { border-color: #fbbf24; background: rgba(251,191,36,0.06); }
 .upload-zone-lan .upload-label { color: #fbbf24; }
+.lan-upload-btn {
+  display: block; text-align: center; text-decoration: none;
+  margin: 8px auto 0; padding: 8px 18px;
+  background: rgba(251,191,36,0.1); border: 1px solid #fbbf24;
+  color: #fbbf24; border-radius: 8px; font-size: 13px;
+  max-width: 400px;
+}
+.lan-upload-btn:hover { background: rgba(251,191,36,0.2); }
 
 .upload-icon { font-size: 26px; opacity: 0.5; }
 .upload-label { font-size: 15px; color: var(--text); font-weight: 500; }

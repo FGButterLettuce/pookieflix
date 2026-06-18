@@ -30,13 +30,12 @@ export function Home() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-
   const [library, setLibrary] = useState<LibraryFile[]>([]);
   const [uploadUrl, setUploadUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadingName, setUploadingName] = useState('');
+  const [uploadedRoomUrl, setUploadedRoomUrl] = useState('');
   const [error, setError] = useState('');
   const [deletingFile, setDeletingFile] = useState<string | null>(null);
   const [thumbErrors, setThumbErrors] = useState<Set<string>>(new Set());
@@ -98,7 +97,9 @@ export function Home() {
         xhr.send(formData);
       });
 
-      window.location.href = result.roomUrl;
+      setUploadedRoomUrl(result.roomUrl);
+      setUploading(false);
+      setUploadingName('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
       setUploading(false);
@@ -181,38 +182,44 @@ export function Home() {
       </header>
 
       {/* Upload zone */}
-      {isHttps && uploadUrl ? (
-        <a className="upload-zone upload-zone-lan" href={uploadUrl} target="_self">
-          <div className="upload-icon">⬆</div>
-          <div className="upload-label">Click to open uploader on local network</div>
-          <div className="upload-hint">
-            Large files can't upload through Cloudflare — this opens <strong>{uploadUrl}</strong> directly
-          </div>
-        </a>
-      ) : (
-        <div
-          className={`upload-zone ${uploading ? 'uploading' : ''}`}
-          onClick={() => !uploading && fileInputRef.current?.click()}
-          onDragOver={e => e.preventDefault()}
-          onDrop={handleDrop}
-        >
-          {uploading ? (
-            <div className="upload-progress-inner">
-              <div className="spinner" />
-              <span className="upload-filename">{uploadingName}</span>
-              <div className="upload-bar">
-                <div className="upload-bar-fill" style={{ width: `${uploadProgress}%` }} />
-              </div>
-              <span className="upload-pct">{uploadProgress}%</span>
+      <div
+        className={`upload-zone ${uploading || uploadedRoomUrl ? 'uploading' : ''}`}
+        onClick={() => !uploading && !uploadedRoomUrl && fileInputRef.current?.click()}
+        onDragOver={e => e.preventDefault()}
+        onDrop={handleDrop}
+      >
+        {uploading ? (
+          <div className="upload-progress-inner">
+            <div className="spinner" />
+            <span className="upload-filename">{uploadingName}</span>
+            <div className="upload-bar">
+              <div className="upload-bar-fill" style={{ width: `${uploadProgress}%` }} />
             </div>
-          ) : (
-            <>
-              <div className="upload-icon">⬆</div>
-              <div className="upload-label">Drop an MP4 here or click to upload</div>
-              <div className="upload-hint">Uploads go to your library and are never auto-deleted</div>
-            </>
-          )}
-        </div>
+            <span className="upload-pct">{uploadProgress}%</span>
+          </div>
+        ) : uploadedRoomUrl ? (
+          <div className="upload-progress-inner">
+            <div className="upload-icon">✓</div>
+            <div className="upload-label">Upload complete</div>
+            <a className="primary-btn" href={uploadedRoomUrl} style={{ marginTop: 10 }}>
+              Watch on WatchTogether →
+            </a>
+            <button className="lib-delete-btn" style={{ marginTop: 8 }} onClick={() => setUploadedRoomUrl('')}>
+              Upload another
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="upload-icon">⬆</div>
+            <div className="upload-label">Drop an MP4 here or click to upload</div>
+            <div className="upload-hint">Uploads go to your library and are never auto-deleted</div>
+          </>
+        )}
+      </div>
+      {uploadUrl && (
+        <a className="lan-upload-btn" href={uploadUrl} target="_self">
+          ⚡ Upload via local network (faster)
+        </a>
       )}
       <input ref={fileInputRef} type="file" accept="video/mp4,.mp4" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); }} />
