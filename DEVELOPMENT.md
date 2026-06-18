@@ -391,3 +391,35 @@ The diagnostics overlay was removed from all devices in this milestone. Remote l
 - **BUFFERING 20s timeout**: Forces PLAY_AT after 20s even if one viewer isn't ready. May cause a brief stall on the unready client, but unsticks iOS Safari's aggressive buffering mode.
 - **HLS for non-MP4 uploads**: Only `.mp4` files in the library dir are scanned at startup. If other formats are ever supported, `generateHLSAsync` would need to handle them.
 - **Existing library files**: HLS is generated at startup for any file missing a `.hls/` folder, so existing files are covered on next server restart.
+
+---
+
+## Milestone 8 — LAN Upload Flow
+
+> **Status: ✅ Deployed — commit 93623e6**
+
+**Problem:** Large files can't be uploaded through Cloudflare (tunnel has a request size limit). The server runs on the local network at `192.168.0.91:3000` and needs a direct upload path bypassing the tunnel.
+
+### LAN upload button
+
+`UPLOAD_URL=http://192.168.0.91:3000` added to `.env`. When set, a yellow "Upload via local network (faster)" button appears below the upload zone on every page load — regardless of whether the user is on HTTPS or LAN. Previously gated behind `isHttps` detection which was unreliable.
+
+### Post-upload success screen
+
+After a file finishes uploading via the LAN interface, the page no longer auto-redirects to `localhost:3000/room/TOKEN` (which was broken — localhost means the client's own machine, not the server).
+
+Instead the upload zone shows:
+- ✓ Upload complete
+- **"Watch on WatchTogether →"** — links to `APP_BASE_URL/room/TOKEN` (i.e. `https://thought.niranjanrakesh.me/room/TOKEN`)
+- **"Upload another"** — resets the zone for the next file
+
+`APP_BASE_URL=https://thought.niranjanrakesh.me` added to `.env` so all generated room URLs point to the public domain rather than localhost.
+
+### .env
+
+```
+UPLOAD_URL=http://192.168.0.91:3000
+APP_BASE_URL=https://thought.niranjanrakesh.me
+```
+
+Server must be started with `env $(cat .env | xargs) node dist/index.js` to pick these up (no dotenv dependency).
