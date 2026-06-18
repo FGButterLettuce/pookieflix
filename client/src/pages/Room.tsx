@@ -2,20 +2,21 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { RoomStatus } from '../components/RoomStatus';
-import { DiagnosticsPanel } from '../components/DiagnosticsPanel';
 import { WsClient } from '../lib/wsClient';
 import { rlog } from '../lib/remoteLogger';
 import type { VideoController } from '../lib/videoController';
 import type {
   RoomState,
   PeerStatus,
-  DiagnosticsData,
   ServerMessage,
 } from '../types';
-import type { WsStatus } from '../lib/wsClient';
 
-const IS_DEV = true; // always show diagnostics for now
 const HEARTBEAT_INTERVAL = 500;
+
+function supportsHLS(): boolean {
+  const v = document.createElement('video');
+  return v.canPlayType('application/vnd.apple.mpegurl') !== '';
+}
 
 interface RoomInfo {
   viewerId: string;
@@ -25,6 +26,7 @@ interface RoomInfo {
   mediaUrl: string;
   mediaFilename: string;
   subtitleUrl?: string;
+  hlsUrl?: string;
 }
 
 export function Room() {
@@ -34,9 +36,6 @@ export function Room() {
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [roomState, setRoomState] = useState<RoomState>('WAITING_FOR_VIEWERS');
   const [viewerCount, setViewerCount] = useState(0);
-  const setWsStatus = (status: WsStatus) => {
-    diagnosticsRef.current = { ...diagnosticsRef.current, wsStatus: status };
-  };
   const [peerStatus, setPeerStatus] = useState<PeerStatus>({ bufferedAhead: -1, mediaTime: 0, seeking: false, waiting: false });
   const [copied, setCopied] = useState(false);
   const [fatalError, setFatalError] = useState('');
@@ -44,21 +43,6 @@ export function Room() {
   const vcRef = useRef<VideoController | null>(null);
   const wsRef = useRef<WsClient | null>(null);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const diagnosticsRef = useRef<DiagnosticsData>({
-    ownBufferedAhead: 0,
-    peerBufferedAhead: -1,
-    drift: 0,
-    roomState: 'WAITING_FOR_VIEWERS',
-    wsStatus: 'connecting',
-    viewerCount: 0,
-    playbackRate: 1,
-    mediaTime: 0,
-    isHost: false,
-    readyState: 0,
-    waiting: false,
-    serverCmdPending: false,
-  });
-  const [diagnostics, setDiagnostics] = useState<DiagnosticsData>(diagnosticsRef.current);
 
   // ── WebSocket setup ────────────────────────────────────────────────────────
 
@@ -68,15 +52,10 @@ export function Room() {
     const ws = new WsClient(token);
     wsRef.current = ws;
 
-    ws.onStatus(status => {
-      setWsStatus(status);
-      diagnosticsRef.current = { ...diagnosticsRef.current, wsStatus: status };
-    });
-
     ws.onMessage((msg: ServerMessage) => {
       switch (msg.type) {
         case 'JOINED': {
-          rlog.log(`JOINED host=${msg.isHost} state=${msg.roomState} subs=${!!msg.subtitleUrl}`);
+          rlog.log(`JOINED host=${msg.isHost} state=${msg.roomState} subs=${!!msg.subtitleUrl} hls=${!!msg.hlsUrl}`);
           setRoomInfo({
             viewerId: msg.viewerId,
             isHost: msg.isHost,
@@ -85,9 +64,9 @@ export function Room() {
             mediaUrl: msg.mediaUrl,
             mediaFilename: msg.mediaFilename,
             subtitleUrl: msg.subtitleUrl,
+            hlsUrl: msg.hlsUrl,
           });
           setRoomState(msg.roomState);
-          diagnosticsRef.current = { ...diagnosticsRef.current, isHost: msg.isHost };
           break;
         }
 
@@ -95,11 +74,6 @@ export function Room() {
           rlog.log(`ROOM_UPDATE state=${msg.state} viewers=${msg.viewerCount}`);
           setRoomState(msg.state);
           setViewerCount(msg.viewerCount);
-          diagnosticsRef.current = {
-            ...diagnosticsRef.current,
-            roomState: msg.state,
-            viewerCount: msg.viewerCount,
-          };
           break;
         }
 
@@ -141,10 +115,6 @@ export function Room() {
             seeking: msg.seeking,
             waiting: msg.waiting,
           });
-          diagnosticsRef.current = {
-            ...diagnosticsRef.current,
-            peerBufferedAhead: msg.bufferedAhead,
-          };
           break;
         }
 
@@ -185,21 +155,6 @@ export function Room() {
         lastLoggedHbRef.current = now;
         rlog.log(`HB rs=${hb.readyState} buf=${hb.bufferedAhead.toFixed(1)}s wait=${hb.waiting} srvCmd=${hb.serverCommandPending} paused=${hb.paused}`);
       }
-
-      // Update diagnostics
-      const peer = peerStatusRef.current;
-      const drift = peer.mediaTime > 0 ? hb.mediaTime - peer.mediaTime : 0;
-      diagnosticsRef.current = {
-        ...diagnosticsRef.current,
-        ownBufferedAhead: hb.bufferedAhead,
-        drift,
-        playbackRate: hb.playbackRate,
-        mediaTime: hb.mediaTime,
-        readyState: hb.readyState,
-        waiting: hb.waiting,
-        serverCmdPending: hb.serverCommandPending,
-      };
-      setDiagnostics({ ...diagnosticsRef.current });
     }, HEARTBEAT_INTERVAL);
   }, []);
 
@@ -295,7 +250,7 @@ export function Room() {
 
       <div className="room-player">
         <VideoPlayer
-          src={roomInfo.mediaUrl}
+          src={roomInfo.hlsUrl && supportsHLS() ? roomInfo.hlsUrl : roomInfo.mediaUrl}
           subtitleUrl={roomInfo.subtitleUrl}
           onControllerReady={handleControllerReady}
           onUserPlay={handleUserPlay}
@@ -334,7 +289,6 @@ export function Room() {
         )}
       </div>
 
-      {IS_DEV && <DiagnosticsPanel data={diagnostics} />}
     </div>
   );
 }

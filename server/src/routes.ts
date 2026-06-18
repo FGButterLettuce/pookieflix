@@ -8,7 +8,7 @@ import {
   createRoom, getRoomByToken, listLibraryFiles,
   purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile,
 } from './db';
-import { generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart } from './ffmpeg';
+import { generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir } from './ffmpeg';
 import { getRuntimeByToken } from './roomManager';
 import { fetchSubtitles, subtitlePath } from './subtitles';
 
@@ -364,7 +364,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     });
 
     fetchSubtitles(savedPath, savedFilename).catch(() => {});
-    applyFastStart(savedPath).catch(() => {}); // move moov atom to front for iOS
+    applyFastStart(savedPath).catch(() => {});
+    generateHLSAsync(savedPath);
 
     // Create room
     const roomToken = generateToken();
@@ -405,7 +406,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const stat   = fs.statSync(filePath);
     const meta   = getLibraryMeta(filename);
-    applyFastStart(filePath).catch(() => {}); // move moov atom to front for iOS
+    applyFastStart(filePath).catch(() => {});
+    generateHLSAsync(filePath);
     const roomToken = generateToken();
     const now    = Date.now();
 
@@ -426,6 +428,29 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       roomUrl: `${config.baseUrl}/room/${roomToken}`,
       resumeTime: meta?.last_time ?? 0,
     });
+  });
+
+  // ── HLS: manifest + segments ──────────────────────────────────────────────
+  app.get('/api/hls/:token/:file', async (req, reply) => {
+    const { token, file } = req.params as { token: string; file: string };
+    if (!SAFE_TOKEN_RE.test(token)) return reply.status(400).send();
+    if (!/^(index\.m3u8|seg\d+\.ts)$/.test(file)) return reply.status(400).send();
+
+    const row = getRoomByToken(token);
+    if (!row || Date.now() > row.expires_at) return reply.status(404).send();
+
+    const resolvedMediaDir = path.resolve(config.mediaDir);
+    const resolvedPath = path.resolve(row.media_path);
+    if (!resolvedPath.startsWith(resolvedMediaDir + path.sep)) return reply.status(403).send();
+
+    const filePath = path.join(hlsDir(resolvedPath), file);
+    if (!fs.existsSync(filePath)) return reply.status(404).send();
+
+    const isManifest = file.endsWith('.m3u8');
+    reply.header('Content-Type', isManifest ? 'application/vnd.apple.mpegurl' : 'video/mp2t');
+    reply.header('Cache-Control', 'public, max-age=3600');
+    reply.header('Access-Control-Allow-Origin', '*');
+    return reply.send(fs.createReadStream(filePath));
   });
 
   // ── Media: serve video with byte-range support ─────────────────────────────

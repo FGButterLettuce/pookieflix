@@ -10,6 +10,7 @@ import { config } from './config';
 import { registerRoutes } from './routes';
 import { setupWebSocketServer, startTickLoop, stopTickLoop } from './roomManager';
 import { getDb } from './db';
+import { generateHLSAsync, hasHLS } from './ffmpeg';
 
 async function main() {
   // Ensure data directories exist
@@ -88,6 +89,14 @@ async function main() {
 
   setupWebSocketServer(wss);
   startTickLoop();
+
+  // Kick off HLS generation for any existing library files that don't have it yet
+  const libraryDir = path.join(config.mediaDir, 'library');
+  for (const f of fs.readdirSync(libraryDir)) {
+    if (!f.endsWith('.mp4')) continue;
+    const fp = path.join(libraryDir, f);
+    if (!hasHLS(fp)) generateHLSAsync(fp);
+  }
 
   // Graceful shutdown
   process.on('SIGTERM', async () => {

@@ -25,7 +25,7 @@ export type ClientMessage =
   | { type: 'USER_ACTION'; data: { action: 'PLAY' | 'PAUSE' | 'SEEK'; mediaTime?: number } };
 
 export type ServerMessage =
-  | { type: 'JOINED'; viewerId: string; isHost: boolean; roomState: RoomState; mediaUrl: string; mediaFilename: string; currentTime: number; subtitleUrl?: string }
+  | { type: 'JOINED'; viewerId: string; isHost: boolean; roomState: RoomState; mediaUrl: string; mediaFilename: string; currentTime: number; subtitleUrl?: string; hlsUrl?: string }
   | { type: 'ROOM_UPDATE'; state: RoomState; viewerCount: number }
   | { type: 'PAUSE'; mediaTime: number }
   | { type: 'SEEK'; mediaTime: number }
@@ -43,6 +43,7 @@ export interface RoomInfo {
   mediaUrl: string;
   mediaFilename: string;
   subtitleUrl?: string;
+  hlsUrl?: string;
 }
 
 export interface LibraryFile {
@@ -77,4 +78,5 @@ export interface DiagnosticsData {
   readyState: number;
   waiting: boolean;
   serverCmdPending: boolean;
+  usingHLS: boolean;
 }

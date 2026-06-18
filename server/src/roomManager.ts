@@ -3,6 +3,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { config } from './config';
 import { getRoomByToken, updateLibraryLastTime, getLibraryMeta } from './db';
 import { hasSubtitles } from './subtitles';
+import { hasHLS } from './ffmpeg';
 import path from 'path';
 import { tick, handleUserAction, handleViewerDisconnect } from './roomStateMachine';
 import type {
@@ -127,6 +128,7 @@ export function joinRoom(token: string, ws: WebSocket): string | null {
     mediaFilename: room.mediaFilename,
     currentTime,
     subtitleUrl: hasSubtitles(room.mediaPath) ? `/api/subtitle/${token}` : undefined,
+    hlsUrl: hasHLS(room.mediaPath) ? `/api/hls/${token}/index.m3u8` : undefined,
   });
 
   // Broadcast updated viewer count

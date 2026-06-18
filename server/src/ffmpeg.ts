@@ -80,3 +80,50 @@ export async function applyFastStart(videoPath: string): Promise<void> {
     try { fs.rmSync(tmp); } catch { /* ignore */ }
   }
 }
+
+// ── HLS ───────────────────────────────────────────────────────────────────────
+
+export function hlsDir(videoPath: string): string {
+  return videoPath.replace(/\.mp4$/i, '.hls');
+}
+
+export function hlsManifestPath(videoPath: string): string {
+  return path.join(hlsDir(videoPath), 'index.m3u8');
+}
+
+export function hasHLS(videoPath: string): boolean {
+  return fs.existsSync(hlsManifestPath(videoPath));
+}
+
+// Segment video into HLS chunks (copy, no re-encode). Runs async — call and forget.
+const HLS_TIMEOUT_MS = 10 * 60 * 1000; // 10 min — stream copy should never take longer
+
+export async function generateHLS(videoPath: string): Promise<boolean> {
+  if (hasHLS(videoPath)) return true;
+  const dir = hlsDir(videoPath);
+  fs.mkdirSync(dir, { recursive: true });
+  const manifest = hlsManifestPath(videoPath);
+  const ok = await new Promise<boolean>(resolve => {
+    const ff = spawn('ffmpeg', [
+      '-fflags', '+genpts',
+      '-err_detect', 'ignore_err',
+      '-i', videoPath,
+      '-c', 'copy',
+      '-hls_time', '4',
+      '-hls_list_size', '0',
+      '-hls_segment_filename', path.join(dir, 'seg%04d.ts'),
+      '-y', manifest,
+    ]);
+    const timer = setTimeout(() => { try { ff.kill(); } catch {} resolve(false); }, HLS_TIMEOUT_MS);
+    ff.on('close', code => { clearTimeout(timer); resolve(code === 0); });
+    ff.on('error', () => { clearTimeout(timer); resolve(false); });
+  });
+  if (!ok) {
+    try { fs.rmSync(dir, { recursive: true }); } catch { /* ignore */ }
+  }
+  return ok;
+}
+
+export function generateHLSAsync(videoPath: string): void {
+  generateHLS(videoPath).catch(() => {});
+}

@@ -58,6 +58,7 @@ export function DiagnosticsPanel({ data }: Props) {
       <div>waiting: <b style={{ color: data.waiting ? '#f87171' : '#4ade80' }}>{data.waiting ? 'yes' : 'no'}</b></div>
       <div>srvCmd: <b style={{ color: data.serverCmdPending ? '#facc15' : '#94a3b8' }}>{data.serverCmdPending ? 'pending' : 'idle'}</b></div>
       <div>ws: <b style={{ color: statusColor(data.wsStatus) }}>{data.wsStatus}</b></div>
+      <div>hls: <b style={{ color: data.usingHLS ? '#4ade80' : '#94a3b8' }}>{data.usingHLS ? 'yes' : 'no'}</b></div>
     </div>
   );
 }
