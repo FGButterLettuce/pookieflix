@@ -102,7 +102,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
       src={src}
       controls
       preload="auto"
-      playsInline
       style={{
         width: '100%',
         height: '100%',

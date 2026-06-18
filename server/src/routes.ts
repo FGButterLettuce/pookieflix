@@ -8,7 +8,7 @@ import {
   createRoom, getRoomByToken, listLibraryFiles,
   purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile,
 } from './db';
-import { generateThumbnailAsync, thumbPath, extractMetadata } from './ffmpeg';
+import { generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart } from './ffmpeg';
 import { getRuntimeByToken } from './roomManager';
 import { fetchSubtitles, subtitlePath } from './subtitles';
 
@@ -364,6 +364,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     });
 
     fetchSubtitles(savedPath, savedFilename).catch(() => {});
+    applyFastStart(savedPath).catch(() => {}); // move moov atom to front for iOS
 
     // Create room
     const roomToken = generateToken();
@@ -404,6 +405,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const stat   = fs.statSync(filePath);
     const meta   = getLibraryMeta(filename);
+    applyFastStart(filePath).catch(() => {}); // move moov atom to front for iOS
     const roomToken = generateToken();
     const now    = Date.now();
 
@@ -447,8 +449,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const fileSize = stat.size;
     const rangeHeader = (req.headers as Record<string, string>).range;
 
+    const etag = `"${stat.size}-${stat.mtimeMs}"`;
+    if ((req.headers as Record<string, string>)['if-none-match'] === etag) {
+      return reply.status(304).send();
+    }
+
     reply.header('Accept-Ranges', 'bytes');
     reply.header('Content-Type', 'video/mp4');
+    reply.header('Cache-Control', 'public, max-age=3600');
+    reply.header('ETag', etag);
 
     if (rangeHeader) {
       const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);

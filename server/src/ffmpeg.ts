@@ -59,3 +59,24 @@ export function generateThumbnailAsync(videoPath: string, filename: string, onDo
     .then(ok => onDone?.(ok))
     .catch(() => onDone?.(false));
 }
+
+// Move moov atom to front of file so iOS can start buffering without a second range request.
+// Writes to a temp file then atomically replaces the original.
+export async function applyFastStart(videoPath: string): Promise<void> {
+  const tmp = videoPath + '.faststart.tmp';
+  const ok = await new Promise<boolean>(resolve => {
+    const ff = spawn('ffmpeg', [
+      '-i', videoPath,
+      '-c', 'copy',
+      '-movflags', '+faststart',
+      '-y', tmp,
+    ]);
+    ff.on('close', code => resolve(code === 0));
+    ff.on('error', () => resolve(false));
+  });
+  if (ok) {
+    fs.renameSync(tmp, videoPath);
+  } else {
+    try { fs.rmSync(tmp); } catch { /* ignore */ }
+  }
+}

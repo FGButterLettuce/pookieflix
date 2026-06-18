@@ -32,7 +32,7 @@ export const config = {
   bufferResumeThreshold: 3, // resume when bufferedAhead >= this (or readyState 4)
   // Drift thresholds (seconds)
   driftIgnoreThreshold: 0.25,
-  driftRateThreshold: 1.5,
+  driftRateThreshold: 10,
   // Rate adjustment range
   playbackRateSlow: 0.97,
   playbackRateFast: 1.03,
