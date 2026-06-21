@@ -12,8 +12,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
-    # All settings below are optional — configure via the web UI on first run instead.
-    # Env vars take precedence over UI settings if set here.
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -21,8 +19,19 @@ services:
       DATA_DIR: /data
       MEDIA_DIR: /data/media
       DB_PATH: /data/app.db
+      # Override any setting from the web UI by setting it here.
       # APP_BASE_URL: "https://watch.yourdomain.com"
       # UPLOAD_URL: "http://192.168.0.91:3000"
       # OPENSUBTITLES_API_KEY: "your-key-here"
       # MAX_UPLOAD_BYTES: "10737418240"
-      # ROOM_TTL_HOURS: "24"
+
+  # Optional: Cloudflare Tunnel — remove this block if you're using a different method.
+  # Set TUNNEL_TOKEN to your token from the Cloudflare dashboard.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:-placeholder}
+    depends_on:
+      - watchtogether
+    profiles:
+      - tunnel

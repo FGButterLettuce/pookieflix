@@ -197,6 +197,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       APP_BASE_URL: process.env.APP_BASE_URL ?? persisted.APP_BASE_URL ?? '',
       UPLOAD_URL: process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? '',
       OPENSUBTITLES_API_KEY: process.env.OPENSUBTITLES_API_KEY ?? persisted.OPENSUBTITLES_API_KEY ?? '',
+      TUNNEL_TOKEN: process.env.TUNNEL_TOKEN ?? persisted.TUNNEL_TOKEN ?? '',
     });
   });
 
@@ -206,6 +207,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       APP_BASE_URL: body.APP_BASE_URL?.trim() || undefined,
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
       OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
+      TUNNEL_TOKEN: body.TUNNEL_TOKEN?.trim() || undefined,
       setupComplete: true,
     });
     return reply.send({ ok: true });
@@ -220,6 +222,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       APP_BASE_URL: body.APP_BASE_URL.trim(),
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
       OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
+      TUNNEL_TOKEN: body.TUNNEL_TOKEN?.trim() || undefined,
       setupComplete: true,
     });
     return reply.send({ ok: true });

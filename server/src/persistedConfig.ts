@@ -8,6 +8,7 @@ export interface PersistedConfig {
   APP_BASE_URL?: string;
   UPLOAD_URL?: string;
   OPENSUBTITLES_API_KEY?: string;
+  TUNNEL_TOKEN?: string;
   setupComplete?: boolean;
 }
 

@@ -84,7 +84,7 @@ body {
   border-radius: var(--radius);
   padding: 40px;
   width: 100%;
-  max-width: 440px;
+  max-width: 520px;
 }
 
 .setup-dots {
@@ -166,6 +166,119 @@ body {
   padding: 0;
 }
 .setup-back:hover { color: var(--text); }
+
+.setup-choice-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.setup-choice {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+.setup-choice:hover { border-color: var(--accent); }
+
+.setup-choice-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.setup-choice-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.setup-instructions {
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  padding-left: 18px;
+  margin-bottom: 20px;
+}
+.setup-instructions li { margin-bottom: 4px; }
+.setup-instructions strong { color: var(--text); }
+.setup-instructions code {
+  background: var(--surface2);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--accent-hover);
+}
+.setup-instructions em { color: var(--text-muted); font-style: normal; }
+
+.setup-instructions-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.setup-os-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.setup-os-tab {
+  flex: 1;
+  padding: 7px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.setup-os-tab.active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.setup-code-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 4px;
+}
+.setup-code-block code {
+  flex: 1;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--accent-hover);
+  word-break: break-all;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.copy-btn:hover { color: var(--text); border-color: var(--accent); }
 
 .settings-label {
   font-size: 13px;
