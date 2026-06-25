@@ -100,7 +100,8 @@ function addEntry(e){
   const row=document.createElement('div');
   row.className='row';row.dataset.dev=e.device;
   row.style.display=devFilters[e.device]?'':'none';
-  row.innerHTML='<span class="ts">'+t+'</span><span class="dev" style="color:'+devColor(e.device)+'">'+e.device+'</span><span class="msg '+e.level+'">'+e.msg.replace(/</g,'&lt;')+'</span>';
+  const _e=(s)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');const _lvl=/^(info|warn|error|debug)$/.test(e.level)?e.level:'info';
+  row.innerHTML='<span class="ts">'+t+'</span><span class="dev" style="color:'+devColor(e.device)+'">'+_e(e.device)+'</span><span class="msg '+_lvl+'">'+_e(e.msg)+'</span>';
   logEl.appendChild(row);
   if(autoScroll)logEl.scrollTop=logEl.scrollHeight;
 }
@@ -121,6 +122,10 @@ function generateId(): string    { return crypto.randomBytes(16).toString('hex')
 
 async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (!config.passwordHash) return;
+  if (!config.sessionSecret) {
+    await reply.status(503).send({ error: 'Server misconfigured: SESSION_SECRET not set' });
+    return;
+  }
   const token = getSessionToken(req.headers.cookie);
   if (!token || !verifySession(token, config.sessionSecret)) {
     await reply.status(401).send({ error: 'Unauthorized' });
@@ -155,6 +160,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // ── Auth ──────────────────────────────────────────────────────────────────
   app.get('/api/auth/me', async (req, reply) => {
     if (!config.passwordHash) return reply.send({ authed: true });
+    if (!config.sessionSecret) return reply.send({ authed: false });
     const token = getSessionToken(req.headers.cookie);
     return reply.send({ authed: token ? verifySession(token, config.sessionSecret) : false });
   });
@@ -164,6 +170,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!password || !config.passwordHash || !verifyPassword(password, config.passwordHash)) {
       return reply.status(401).send({ error: 'Wrong password' });
     }
+    if (!config.sessionSecret) return reply.status(503).send({ error: 'Server misconfigured: SESSION_SECRET not set' });
     const token = signSession(config.sessionSecret);
     reply.header('Set-Cookie', makeSessionCookie(token));
     return reply.send({ ok: true });
@@ -178,10 +185,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const { newPassword } = req.body as { newPassword?: string };
     if (!newPassword || newPassword.length < 6) return reply.status(400).send({ error: 'Password must be at least 6 characters' });
     const persisted = readPersistedConfig();
-    (persisted as Record<string, string>).PASSWORD_HASH = hashPassword(newPassword);
-    writePersistedConfig(persisted);
-    // Rotate session secret so old sessions are invalidated
     const newSecret = crypto.randomBytes(32).toString('hex');
+    (persisted as Record<string, string>).PASSWORD_HASH = hashPassword(newPassword);
     (persisted as Record<string, string>).SESSION_SECRET = newSecret;
     writePersistedConfig(persisted);
     const token = signSession(newSecret);
@@ -290,7 +295,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Library: serve thumbnail ───────────────────────────────────────────────
-  app.get('/api/library/:filename/thumb', async (req, reply) => {
+  app.get('/api/library/:filename/thumb', { preHandler: requireAdmin }, async (req, reply) => {
     const { filename } = req.params as { filename: string };
     if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send();
 
@@ -432,7 +437,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!content) return reply.status(400).send({ error: 'No file received' });
     if (ext !== '.srt' && ext !== '.vtt') return reply.status(400).send({ error: 'Only .srt and .vtt files are supported' });
 
-    const vtt = ext === '.srt' ? srtToVtt(content) : content;
+    const vtt = srtToVtt(content);
     fs.writeFileSync(subtitlePath(filePath), vtt, 'utf8');
     setSubtitleName(filename, uploadedName || 'Uploaded file');
     return reply.send({ ok: true });

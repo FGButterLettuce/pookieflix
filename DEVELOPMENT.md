@@ -554,3 +554,104 @@ ALTER TABLE library_meta ADD COLUMN subtitle_name TEXT DEFAULT NULL
 **`fetchSubtitles` return value changed:** was `boolean`, now `string | null` — returns the chosen subtitle label so the route can call `setSubtitleName` in a `.then()` without a circular import (`db` → `subtitles` → `db`).
 
 **Upload route fix:** The loop variable `part` goes out of scope after `break`. The original code referenced `part.filename` after the loop (would have thrown). Fixed by storing `uploadedName` inside the loop before breaking.
+
+---
+
+## Milestone 10 — Security Hardening, Sync Fixes, and Correctness Patches
+
+> **Status: ✅ Deployed**
+
+Post-review fixes across security, data integrity, sync engine, and UX.
+
+---
+
+### 10a — Security
+
+**Stored XSS in log viewer (`server/src/routes.ts`)**
+
+`POST /api/debug/logs` is intentionally unauthenticated (clients push logs without a session). The inline log viewer HTML rendered user-supplied `device` and `level` fields via `innerHTML` without escaping, and `level` was injected directly into a class attribute. An attacker on the network could POST a crafted `level` value to break out of the attribute and execute script when an admin opened `/api/debug/logs`.
+
+Fix: added an `_e()` HTML-escape helper inside `addEntry`; `level` is now allowlisted to `info|warn|error|debug` before use in the class string.
+
+**Empty `SESSION_SECRET` allows HMAC token forgery (`server/src/config.ts`, `routes.ts`, `index.ts`)**
+
+If `PASSWORD_HASH` was seeded manually (per the DEVELOPMENT.md instructions) without also setting `SESSION_SECRET`, the HMAC key defaulted to `""`. Node.js accepts an empty HMAC key, so an attacker who knows the token format could compute a valid session token without the password.
+
+Fixes:
+- Server now exits at startup with a clear error if `PASSWORD_HASH` is set but `SESSION_SECRET` is missing.
+- `requireAdmin` and `/api/auth/login` fail-closed with 503 if `sessionSecret` is empty at runtime.
+- `requireAdmin` now has an explicit `return` after each early-exit branch for clarity.
+
+**Manual install note:** When seeding `PASSWORD_HASH` by hand, you must also set `SESSION_SECRET` to a random 32-byte hex string. The easiest path is to use the UI's Settings → Change Password flow, which generates and persists both values automatically.
+
+```bash
+# Generate a session secret manually if needed:
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# Add as SESSION_SECRET in data/config.json
+```
+
+**Thumbnail endpoint exposed without auth (`routes.ts:293`)**
+
+`GET /api/library/:filename/thumb` was served to unauthenticated callers. An attacker could enumerate library filenames by probing thumbnail URLs. Fixed by adding `preHandler: requireAdmin`.
+
+---
+
+### 10b — Data Integrity
+
+**`renameLibraryFile` lost `subtitle_name` and was non-atomic (`server/src/db.ts`)**
+
+The INSERT…SELECT that copies the metadata row on rename explicitly listed columns and omitted `subtitle_name`, so the subtitle label was silently cleared on every rename. Additionally, the INSERT and DELETE ran as separate statements — a crash between them would leave ghost rows.
+
+Fix: `subtitle_name` added to the column list; both statements (plus the room-record UPDATE) wrapped in an explicit `BEGIN`/`COMMIT`/`ROLLBACK` transaction.
+
+**`change-password` wrote config twice (`server/src/routes.ts`)**
+
+`writePersistedConfig` was called once for `PASSWORD_HASH` and again for `SESSION_SECRET`. A crash between the two writes would leave the new hash saved but the old secret intact, invalidating the freshly issued cookie. Both fields are now set before the single write.
+
+**`.vtt` subtitle uploads bypassed normalization (`routes.ts`)**
+
+The upload handler called `srtToVtt()` only for `.srt` files. A `.vtt` file missing the mandatory `WEBVTT` header was written verbatim; browsers rejected it silently. `srtToVtt` already short-circuits if the content starts with `WEBVTT`, so calling it unconditionally is safe and fixes the malformed-VTT case.
+
+**`srtToVtt` regex didn't handle `MM:SS,mmm` timestamps (`server/src/subtitles.ts`)**
+
+The pattern `/(\d+:\d+:\d+),(\d+)/g` required exactly three colon-separated groups (HH:MM:SS). Some SRT files use two-group timestamps (MM:SS). Changed to `/(\d+:\d+(?::\d+)?),(\d+)/g`.
+
+---
+
+### 10c — Sync Engine
+
+**Disconnect during `SEEKING` didn't pause the remaining viewer (`server/src/roomStateMachine.ts`)**
+
+`handleViewerDisconnect` only sent a `PAUSE` broadcast for `PLAYING`, `BUFFERING`, and `RESYNCING` states. If a viewer disconnected mid-seek, the remaining viewer kept playing while the server waited in `WAITING_FOR_VIEWERS`. Fixed by adding `'SEEKING'` to the list.
+
+**Ended detection used inferred heuristic instead of `video.ended` (`types.ts`, `videoController.ts`, `roomStateMachine.ts`)**
+
+The server inferred video completion from `paused && bufferedAhead === 0 && readyState >= 1`. This could false-positive in the ~500ms window after a seek near end-of-file, when `serverCommandPending` clears before `PLAY_AT` arrives.
+
+Fix: `ended: boolean` (from `HTMLMediaElement.ended`) added to `ClientHeartbeat`. The state machine now checks `hb.ended` directly; the old multi-condition heuristic is removed.
+
+**Stale-viewer eviction threshold too aggressive (`server/src/roomManager.ts`)**
+
+The eviction window for dropping a viewer who fails to heartbeat before allowing a third party to take their slot was 1500ms — only 3 missed heartbeats at the 500ms interval, with no allowance for jitter. Raised to 2500ms (5 missed heartbeats), which still evicts truly dead connections quickly but survives normal network jitter.
+
+---
+
+### 10d — Performance
+
+**`listLibraryFiles` made N per-file database queries (`server/src/db.ts`)**
+
+`listLibraryFiles` issued one `SELECT * FROM library_meta WHERE filename = ?` per `.mp4` file inside a `.map()`. For a library with N files this was N round-trips, re-preparing the same statement each time, on every `/api/library` poll.
+
+Fix: replaced with a single `SELECT * FROM library_meta` up front, loaded into a `Map` keyed by filename, then looked up O(1) per file.
+
+---
+
+### 10e — UX
+
+**Setup wizard advanced to "all set" before save confirmed (`client/src/pages/Setup.tsx`)**
+
+`onClick` called `void finish()` (async, fire-and-forget) and `setStep(4)` simultaneously. If the POST failed, the user saw the success screen with no error. Fixed: `setStep(4)` moved inside `finish()`, called only on success. Errors now show correctly on the subtitles step where the user can retry.
+
+**Disconnect overlay showed wrong message mid-session (`client/src/pages/Room.tsx`)**
+
+When a peer left during an active session, `WAITING_FOR_VIEWERS` triggered the initial "waiting for them to show up" overlay with the invite-link flow — indistinguishable from the cold-start state. Added `peerEverJoinedRef` (set when `viewerCount >= 2` first arrives) to differentiate: mid-session disconnects now show **"they disconnected — paused until they're back"** with a "copy link" button in case they need to rejoin.

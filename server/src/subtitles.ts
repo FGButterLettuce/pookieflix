@@ -99,7 +99,7 @@ async function downloadOs(fileId: number): Promise<string | null> {
 
 export function srtToVtt(content: string): string {
   if (content.trimStart().startsWith('WEBVTT')) return content;
-  return 'WEBVTT\n\n' + content.trim().replace(/\r\n/g, '\n').replace(/(\d+:\d+:\d+),(\d+)/g, '$1.$2');
+  return 'WEBVTT\n\n' + content.trim().replace(/\r\n/g, '\n').replace(/(\d+:\d+(?::\d+)?),(\d+)/g, '$1.$2');
 }
 
 // ── Public entry points ───────────────────────────────────────────────────────

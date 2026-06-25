@@ -21,6 +21,11 @@ async function main() {
   // Initialize DB
   getDb();
 
+  if (config.passwordHash && !config.sessionSecret) {
+    console.error('[auth] PASSWORD_HASH is set but SESSION_SECRET is missing. Set SESSION_SECRET in config.json or as an env var, then restart.');
+    process.exit(1);
+  }
+
   const app = Fastify({
     logger: config.isDev ? { level: 'info' } : { level: 'warn' },
     trustProxy: true,

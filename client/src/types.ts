@@ -11,6 +11,7 @@ export type RoomState =
 export interface ClientHeartbeat {
   mediaTime: number;
   paused: boolean;
+  ended: boolean;
   seeking: boolean;
   waiting: boolean;
   readyState: number;

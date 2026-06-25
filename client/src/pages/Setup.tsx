@@ -83,6 +83,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         const d = await res.json() as { error?: string };
         throw new Error(d.error ?? 'Failed to save');
       }
+      setStep(4);
       onComplete();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save settings');
@@ -328,7 +329,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               }}>← Back</button>
               <button
                 className="primary-btn setup-btn"
-                onClick={() => { void finish(); setStep(4); }}
+                onClick={() => { void finish(); }}
                 disabled={saving}
               >
                 {saving ? 'Saving…' : 'Finish →'}

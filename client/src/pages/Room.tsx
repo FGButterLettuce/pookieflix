@@ -60,6 +60,7 @@ export function Room() {
   const stallCountRef = useRef(0);       // how many quick re-stalls since last stable run
   const lastPlayStartRef = useRef(0);    // epoch ms when PLAYING was last entered
   const prevRoomStateRef = useRef<RoomState>('WAITING_FOR_VIEWERS');
+  const peerEverJoinedRef = useRef(false); // true once viewerCount reached 2
 
   // ── WebSocket setup ────────────────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ export function Room() {
             else if (playedMs > 25_000) stallCountRef.current = Math.max(0, stallCountRef.current - 1);
           }
           prevRoomStateRef.current = msg.state;
+          if (msg.viewerCount >= 2) peerEverJoinedRef.current = true;
           setRoomState(msg.state);
           setViewerCount(msg.viewerCount);
           break;
@@ -377,15 +379,26 @@ export function Room() {
           <div className="video-overlay">
             <div className="overlay-content">
               {roomState === 'WAITING_FOR_VIEWERS' ? (
-                <>
-                  <div className="overlay-icon">🎬</div>
-                  <div className="overlay-title">waiting for them to show up</div>
-                  <div className="overlay-sub">share this link to get them in:</div>
-                  <div className="overlay-url">{roomUrl}</div>
-                  <button className="copy-btn-lg" onClick={copyLink}>
-                    {copied ? '✓ copied!' : 'copy invite link'}
-                  </button>
-                </>
+                peerEverJoinedRef.current ? (
+                  <>
+                    <div className="overlay-title">they disconnected — paused until they're back</div>
+                    <div className="overlay-sub">send them this link if they need to rejoin:</div>
+                    <div className="overlay-url">{roomUrl}</div>
+                    <button className="copy-btn-lg" onClick={copyLink}>
+                      {copied ? '✓ copied!' : 'copy link'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="overlay-icon">🎬</div>
+                    <div className="overlay-title">waiting for them to show up</div>
+                    <div className="overlay-sub">share this link to get them in:</div>
+                    <div className="overlay-url">{roomUrl}</div>
+                    <button className="copy-btn-lg" onClick={copyLink}>
+                      {copied ? '✓ copied!' : 'copy invite link'}
+                    </button>
+                  </>
+                )
               ) : (
                 <>
                   <div className="overlay-title">

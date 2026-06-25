@@ -17,6 +17,7 @@ export type RoomState =
 export interface ClientHeartbeat {
   mediaTime: number;
   paused: boolean;
+  ended: boolean;          // HTMLMediaElement.ended
   seeking: boolean;
   waiting: boolean;        // video "waiting" event / stalled
   readyState: number;      // HTMLMediaElement.readyState (0-4)

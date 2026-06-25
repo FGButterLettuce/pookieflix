@@ -91,7 +91,7 @@ export function joinRoom(token: string, ws: WebSocket): string | null {
   if (room.viewers.size >= 2) {
     const now = Date.now();
     const stale = Array.from(room.viewers.values()).find(
-      v => v.heartbeatAt > 0 && now - v.heartbeatAt > 1500
+      v => v.heartbeatAt > 0 && now - v.heartbeatAt > 2500
     );
     if (!stale) {
       send(ws, { type: 'ERROR', message: 'Room is full (max 2 viewers)' });

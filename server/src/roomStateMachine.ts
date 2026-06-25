@@ -266,9 +266,9 @@ export function tick(room: RoomRuntime): TickResult {
         updateCanonicalTime(room, host.heartbeat.mediaTime);
       }
 
-      // Check for video ended — exclude clients with serverCommandPending to avoid false
-      // positives immediately after PLAY_AT when clients are paused+seeking to new position.
-      if (active.every(v => v.heartbeat && !v.heartbeat.serverCommandPending && v.heartbeat.readyState >= 1 && v.heartbeat.mediaTime > 0 && v.heartbeat.paused && v.heartbeat.bufferedAhead === 0)) {
+      // Check for video ended — use the explicit ended flag from the browser rather than
+      // inferring from bufferedAhead===0, which can false-positive after seeks near EOF.
+      if (active.every(v => v.heartbeat && !v.heartbeat.serverCommandPending && v.heartbeat.ended)) {
         setRoomState(room, 'ENDED');
         dispatches.push(...buildRoomUpdate(room));
         break;
@@ -438,7 +438,7 @@ export function handleViewerDisconnect(room: RoomRuntime, viewerId: string): Tic
   const prevState = room.state;
   room.wasUserPaused = room.state === 'USER_PAUSED';
 
-  if (room.state === 'PLAYING' || room.state === 'BUFFERING' || room.state === 'RESYNCING') {
+  if (room.state === 'PLAYING' || room.state === 'BUFFERING' || room.state === 'RESYNCING' || room.state === 'SEEKING') {
     const t = canonicalTimeNow(room);
     updateCanonicalTime(room, t);
     dispatches.push(...buildPauseAll(room));

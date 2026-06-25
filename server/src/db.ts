@@ -109,15 +109,20 @@ export function deleteLibraryMeta(filename: string): void {
 
 export function renameLibraryFile(oldFilename: string, newFilename: string, oldPath: string, newPath: string): void {
   const db = getDb();
-  // Rename meta row (filename is the primary key, so insert+delete)
-  db.prepare(`
-    INSERT INTO library_meta (filename, duration, last_time, last_played_at, thumb_ready)
-    SELECT ?, duration, last_time, last_played_at, thumb_ready FROM library_meta WHERE filename = ?
-  `).run(newFilename, oldFilename);
-  db.prepare('DELETE FROM library_meta WHERE filename = ?').run(oldFilename);
-  // Update any existing room records that reference the old file
-  db.prepare(`UPDATE rooms SET media_path = ?, media_filename = ? WHERE media_filename = ?`)
-    .run(newPath, newFilename, oldFilename);
+  db.exec('BEGIN');
+  try {
+    db.prepare(`
+      INSERT INTO library_meta (filename, duration, last_time, last_played_at, thumb_ready, subtitle_name)
+      SELECT ?, duration, last_time, last_played_at, thumb_ready, subtitle_name FROM library_meta WHERE filename = ?
+    `).run(newFilename, oldFilename);
+    db.prepare('DELETE FROM library_meta WHERE filename = ?').run(oldFilename);
+    db.prepare(`UPDATE rooms SET media_path = ?, media_filename = ? WHERE media_filename = ?`)
+      .run(newPath, newFilename, oldFilename);
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
 }
 
 // ── Library file listing ──────────────────────────────────────────────────────
@@ -130,13 +135,18 @@ export function listLibraryFiles(): LibraryFileInfo[] {
   const files = fs.readdirSync(libraryDir)
     .filter(f => f.toLowerCase().endsWith('.mp4'));
 
+  const allMeta = new Map(
+    (db.prepare('SELECT * FROM library_meta').all() as unknown as Array<LibraryMetaRow & { subtitle_name?: string | null }>)
+      .map(r => [r.filename, r])
+  );
+
   return files.map(filename => {
     const stat = fs.statSync(path.join(libraryDir, filename));
-    const meta = db.prepare('SELECT * FROM library_meta WHERE filename = ?').get(filename) as unknown as LibraryMetaRow | undefined;
+    const meta = allMeta.get(filename) as unknown as (LibraryMetaRow & { subtitle_name?: string | null }) | undefined;
 
     const fullPath = path.join(libraryDir, filename);
     const hasSub = hasSubtitles(fullPath);
-    let subtitleName = (meta as unknown as Record<string, string | null>)?.subtitle_name ?? null;
+    let subtitleName = meta?.subtitle_name ?? null;
     if (hasSub && !subtitleName) {
       subtitleName = filename.replace(/\.mp4$/i, '');
       setSubtitleName(filename, subtitleName);

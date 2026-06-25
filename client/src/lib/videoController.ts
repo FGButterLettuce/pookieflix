@@ -198,6 +198,7 @@ export class VideoController {
     return {
       mediaTime: video.currentTime,
       paused: video.paused,
+      ended: video.ended,
       seeking: video.seeking,
       waiting: this.isWaiting(),
       readyState: video.readyState,
