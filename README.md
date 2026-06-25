@@ -69,9 +69,9 @@ Requires `OPENSUBTITLES_API_KEY` in your config. Subtitle language defaults to `
 - The server is the single source of truth — all play/pause/seek commands come from it.
 - **Buffering:** if either viewer stalls (`waiting=true`), both pause. Both resume when each has enough buffer (adaptive threshold — starts at 1.5 s, increases on quick re-stalls).
 - **Drift < 250 ms:** ignored.
-- **Drift 250 ms – 10 s:** rate nudge (0.97× / 1.03×) on the lagging viewer.
-- **Drift > 10 s:** RESYNCING — server seeks both to the behind viewer's position, then `PLAY_AT`.
-- **`PLAY_AT`** carries a wall-clock timestamp 1.5 s in the future so both clients start simultaneously regardless of message delivery jitter.
+- **Drift 250 ms – 5 s:** rate nudge (0.95× / 1.05×) on the lagging viewer.
+- **Drift > 5 s:** RESYNCING — server seeks both to the behind viewer's position, then `PLAY_AT`.
+- **`PLAY_AT`** carries a wall-clock timestamp 800 ms in the future so both clients start simultaneously regardless of message delivery jitter.
 - **User pause:** any viewer pausing pauses the room; only a user play action resumes it.
 - **Adaptive buffer messages:** the buffering overlay explains what's happening — "buffering more runway", "connection looks slow", etc. — as the adaptive threshold rises.
 

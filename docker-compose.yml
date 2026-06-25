@@ -7,7 +7,7 @@ services:
     volumes:
       - ./data:/data
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/library"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/auth/me"]
       interval: 30s
       timeout: 5s
       retries: 3
