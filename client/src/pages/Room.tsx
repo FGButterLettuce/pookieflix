@@ -11,6 +11,13 @@ import type {
   ServerMessage,
 } from '../types';
 
+function guessTitle(filename: string): string {
+  let t = filename.replace(/\.mp4$/i, '').replace(/[._]/g, ' ');
+  t = t.replace(/\b(19|20)\d{2}\b.*/i, '');
+  t = t.replace(/\b(480p|576p|720p|1080p|2160p|4k|uhd|hdr|bluray|brrip|webrip|web[-. ]dl|dvdrip|hdtv|x264|x265|hevc|avc|remux|repack)\b.*/gi, '');
+  return t.replace(/\s+/g, ' ').trim();
+}
+
 const HEARTBEAT_INTERVAL = 500;
 
 function supportsHLS(): boolean {
@@ -40,9 +47,19 @@ export function Room() {
   const [copied, setCopied] = useState(false);
   const [fatalError, setFatalError] = useState('');
 
+  const [subtitleUrl, setSubtitleUrl] = useState<string | undefined>();
+  const [showSubPicker, setShowSubPicker] = useState(false);
+  const [subQuery, setSubQuery] = useState('');
+  const [subResults, setSubResults] = useState<{ fileId: number; label: string }[]>([]);
+  const [subSearching, setSubSearching] = useState(false);
+  const [subApplying, setSubApplying] = useState(false);
+
   const vcRef = useRef<VideoController | null>(null);
   const wsRef = useRef<WsClient | null>(null);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stallCountRef = useRef(0);       // how many quick re-stalls since last stable run
+  const lastPlayStartRef = useRef(0);    // epoch ms when PLAYING was last entered
+  const prevRoomStateRef = useRef<RoomState>('WAITING_FOR_VIEWERS');
 
   // ── WebSocket setup ────────────────────────────────────────────────────────
 
@@ -66,12 +83,22 @@ export function Room() {
             subtitleUrl: msg.subtitleUrl,
             hlsUrl: msg.hlsUrl,
           });
+          setSubtitleUrl(msg.subtitleUrl);
+          setSubQuery(guessTitle(msg.mediaFilename));
           setRoomState(msg.roomState);
           break;
         }
 
         case 'ROOM_UPDATE': {
           rlog.log(`ROOM_UPDATE state=${msg.state} viewers=${msg.viewerCount}`);
+          const prev = prevRoomStateRef.current;
+          if (msg.state === 'PLAYING') lastPlayStartRef.current = Date.now();
+          if (msg.state === 'BUFFERING' && prev === 'PLAYING') {
+            const playedMs = Date.now() - lastPlayStartRef.current;
+            if (playedMs < 12_000) stallCountRef.current += 1;
+            else if (playedMs > 25_000) stallCountRef.current = Math.max(0, stallCountRef.current - 1);
+          }
+          prevRoomStateRef.current = msg.state;
           setRoomState(msg.state);
           setViewerCount(msg.viewerCount);
           break;
@@ -188,6 +215,45 @@ export function Room() {
   const peerStatusRef = useRef(peerStatus);
   useEffect(() => { peerStatusRef.current = peerStatus; }, [peerStatus]);
 
+  // ── Subtitle picker ────────────────────────────────────────────────────────
+
+  const searchSubs = useCallback(async () => {
+    if (!subQuery.trim()) return;
+    setSubSearching(true);
+    setSubResults([]);
+    try {
+      const res = await fetch(`/api/subtitle-search?q=${encodeURIComponent(subQuery.trim())}`);
+      const data = await res.json() as { results: { fileId: number; label: string }[] };
+      setSubResults(data.results ?? []);
+    } finally {
+      setSubSearching(false);
+    }
+  }, [subQuery]);
+
+  const applySub = useCallback(async (fileId: number) => {
+    if (!roomInfo) return;
+    setSubApplying(true);
+    try {
+      await fetch(`/api/library/${encodeURIComponent(roomInfo.mediaFilename)}/subtitles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId }),
+      });
+      // Cache-bust so the track element re-fetches the new VTT
+      setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
+      setShowSubPicker(false);
+      setSubResults([]);
+    } finally {
+      setSubApplying(false);
+    }
+  }, [roomInfo, token]);
+
+  const removeSubs = useCallback(() => {
+    setSubtitleUrl(undefined);
+    setShowSubPicker(false);
+    setSubResults([]);
+  }, []);
+
   // ── Copy room link ─────────────────────────────────────────────────────────
 
   const copyLink = async () => {
@@ -240,6 +306,13 @@ export function Room() {
         <span className="room-title">{roomInfo.mediaFilename}</span>
         <RoomStatus state={roomState} viewerCount={viewerCount || roomInfo.viewerCount} />
         <button
+          className={`copy-btn sub-btn${subtitleUrl ? ' sub-btn--active' : ''}`}
+          onClick={() => setShowSubPicker(v => !v)}
+          title={subtitleUrl ? 'Subtitles on · click to change' : 'Subtitles off · click to search'}
+        >
+          CC{subtitleUrl ? ' ✓' : ''}
+        </button>
+        <button
           className="copy-btn"
           onClick={copyLink}
           title="Copy invite link"
@@ -248,10 +321,52 @@ export function Room() {
         </button>
       </div>
 
+      {showSubPicker && (
+        <div className="sub-picker">
+          <div className="sub-picker-row">
+            <input
+              className="sub-picker-input"
+              value={subQuery}
+              onChange={e => setSubQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && void searchSubs()}
+              placeholder="Search for subtitles…"
+              autoFocus
+            />
+            <button className="copy-btn" onClick={() => void searchSubs()} disabled={subSearching}>
+              {subSearching ? '…' : 'Search'}
+            </button>
+            {subtitleUrl && (
+              <button className="copy-btn sub-remove-btn" onClick={removeSubs} title="Turn off subtitles">
+                Off
+              </button>
+            )}
+          </div>
+          {subResults.length > 0 && (
+            <ul className="sub-results">
+              {subResults.map(r => (
+                <li key={r.fileId} className="sub-result">
+                  <span className="sub-result-label">{r.label}</span>
+                  <button
+                    className="copy-btn"
+                    onClick={() => void applySub(r.fileId)}
+                    disabled={subApplying}
+                  >
+                    {subApplying ? '…' : 'Use'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {subResults.length === 0 && !subSearching && subQuery && (
+            <p className="sub-no-results">No results yet — hit Search</p>
+          )}
+        </div>
+      )}
+
       <div className="room-player">
         <VideoPlayer
           src={roomInfo.hlsUrl && supportsHLS() ? roomInfo.hlsUrl : roomInfo.mediaUrl}
-          subtitleUrl={roomInfo.subtitleUrl}
+          subtitleUrl={subtitleUrl}
           onControllerReady={handleControllerReady}
           onUserPlay={handleUserPlay}
           onUserPause={handleUserPause}
@@ -263,23 +378,43 @@ export function Room() {
             <div className="overlay-content">
               {roomState === 'WAITING_FOR_VIEWERS' ? (
                 <>
-                  <div className="overlay-icon">⏳</div>
-                  <div className="overlay-title">Waiting for the other viewer</div>
-                  <div className="overlay-sub">Share this link:</div>
+                  <div className="overlay-icon">🎬</div>
+                  <div className="overlay-title">waiting for them to show up</div>
+                  <div className="overlay-sub">share this link to get them in:</div>
                   <div className="overlay-url">{roomUrl}</div>
                   <button className="copy-btn-lg" onClick={copyLink}>
-                    {copied ? '✓ Copied!' : 'Copy invite link'}
+                    {copied ? '✓ copied!' : 'copy invite link'}
                   </button>
                 </>
               ) : (
                 <>
-                  <div className="spinner" />
                   <div className="overlay-title">
-                    {roomState === 'BUFFERING' ? 'Buffering…' : 'Syncing…'}
+                    {roomState === 'SEEKING'
+                      ? 'jumping to that spot…'
+                      : roomState === 'RESYNCING'
+                      ? 'getting you both back in sync…'
+                      : (() => {
+                          const peerLow = peerStatus.bufferedAhead >= 0 && peerStatus.bufferedAhead < 0.5;
+                          const stalls = stallCountRef.current;
+                          if (peerLow) return stalls >= 2 ? 'their connection is a bit slow — giving them extra time to load' : 'waiting for them to load up 🍿';
+                          if (stalls >= 3) return 'slow connection detected — we\'re buffering a bit more so it plays smoothly';
+                          if (stalls >= 1) return 'had a couple of hiccups — building up a bit more buffer';
+                          return 'almost ready…';
+                        })()}
                   </div>
-                  {peerStatus.bufferedAhead >= 0 && (
-                    <div className="overlay-sub">
-                      Peer buffer: {peerStatus.bufferedAhead.toFixed(1)}s
+                  {roomState === 'BUFFERING' && stallCountRef.current >= 1 && (
+                    <div className="overlay-sub" style={{ marginTop: 6 }}>
+                      {stallCountRef.current >= 3
+                        ? 'the app is waiting for a bigger head start to keep things uninterrupted'
+                        : 'it stopped briefly, so we\'re loading a little more ahead before continuing'}
+                    </div>
+                  )}
+                  {peerStatus.bufferedAhead >= 0 && roomState === 'BUFFERING' && (
+                    <div className="overlay-buffer-bar">
+                      <div
+                        className="overlay-buffer-fill"
+                        style={{ width: `${Math.min(100, (peerStatus.bufferedAhead / 3) * 100)}%` }}
+                      />
                     </div>
                   )}
                 </>

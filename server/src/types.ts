@@ -145,7 +145,9 @@ export interface RoomRuntime {
   pendingRateTarget: Map<string, number>; // viewerId → pending playback rate
   lastTickAt: number;
   lastPersistedAt?: number;
-  lastResyncAt?: number; // epoch ms of last RESYNCING transition (for cooldown)
+  lastResyncAt?: number;                 // epoch ms of last RESYNCING transition (for cooldown)
+  lastPlayStartAt?: number;             // epoch ms when PLAYING was last entered (for adaptive buffer)
+  adaptiveResumeThreshold: number;      // dynamic buffer threshold, increases on quick re-stalls
 }
 
 // ── DB row types ─────────────────────────────────────────────────────────────
@@ -178,4 +180,5 @@ export interface LibraryFileInfo {
   thumbUrl: string;
   hasSubtitles: boolean;
   subtitleFetching: boolean;
+  subtitleName: string | null;
 }

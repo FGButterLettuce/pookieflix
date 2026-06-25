@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+
 interface SettingsData {
   APP_BASE_URL: string;
   UPLOAD_URL: string;
@@ -17,6 +18,11 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSaved, setPwSaved] = useState(false);
 
   useEffect(() => {
     fetch('/api/settings')
@@ -49,6 +55,26 @@ export function Settings() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const changePassword = async () => {
+    setPwError('');
+    if (newPassword.length < 6) { setPwError('Must be at least 6 characters'); return; }
+    if (newPassword !== confirmPassword) { setPwError('Passwords don\'t match'); return; }
+    setPwSaving(true);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPwSaved(true);
+      setTimeout(() => setPwSaved(false), 2500);
+    } catch { setPwError('Failed to change password'); }
+    setPwSaving(false);
   };
 
   return (
@@ -93,6 +119,34 @@ export function Settings() {
 
         <button className="primary-btn" style={{ width: '100%' }} onClick={save} disabled={saving}>
           {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save settings'}
+        </button>
+
+        <hr style={{ margin: '28px 0', borderColor: 'var(--border)' }} />
+        <h2 className="settings-label" style={{ fontSize: 15, marginBottom: 16 }}>Change password</h2>
+
+        <label className="settings-label">New password</label>
+        <input
+          className="setup-input"
+          type="password"
+          placeholder="At least 6 characters"
+          value={newPassword}
+          onChange={e => setNewPassword(e.target.value)}
+        />
+
+        <label className="settings-label" style={{ marginTop: 12 }}>Confirm password</label>
+        <input
+          className="setup-input"
+          type="password"
+          placeholder="Repeat new password"
+          value={confirmPassword}
+          onChange={e => setConfirmPassword(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && void changePassword()}
+        />
+
+        {pwError && <div className="home-error" style={{ margin: '8px 0' }}>{pwError}</div>}
+
+        <button className="primary-btn" style={{ width: '100%', marginTop: 12 }} onClick={() => void changePassword()} disabled={pwSaving}>
+          {pwSaving ? 'Saving…' : pwSaved ? '✓ Password changed' : 'Change password'}
         </button>
       </div>
     </div>

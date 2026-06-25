@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Logo } from '../components/Logo';
 
 type Mode = 'local' | 'tunnel' | 'ddns' | null;
 
@@ -109,8 +110,9 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {/* Step 0 — Welcome */}
         {step === 0 && (
           <div className="setup-step">
-            <div className="setup-icon">🎬</div>
-            <h1 className="setup-title">Welcome to WatchTogether</h1>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
+              <Logo size="lg" />
+            </div>
             <p className="setup-desc">
               Watch movies in perfect sync with someone — your files, your server, completely private.
               No accounts, no subscriptions, no limits.
@@ -342,10 +344,10 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             <h1 className="setup-title">You're all set!</h1>
             <p className="setup-desc">
               {mode === 'local'
-                ? `WatchTogether is ready. Share ${localUrl} with whoever you're watching with — they need to be on the same Wi-Fi.`
+                ? `PookieFlix is ready. Share ${localUrl} with whoever you're watching with — they need to be on the same Wi-Fi.`
                 : mode === 'tunnel'
-                ? `WatchTogether is live at ${baseUrl}. Upload a video, share the room link, and enjoy.`
-                : `WatchTogether is ready at ${baseUrl}. Upload a video and share the room link.`}
+                ? `PookieFlix is live at ${baseUrl}. Upload a video, share the room link, and enjoy.`
+                : `PookieFlix is ready at ${baseUrl}. Upload a video and share the room link.`}
             </p>
             {mode === 'tunnel' && tunnelToken && (
               <p className="setup-desc" style={{ fontSize: '0.85em', opacity: 0.6, marginTop: 0 }}>

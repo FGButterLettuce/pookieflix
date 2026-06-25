@@ -38,6 +38,8 @@ export function getDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_rooms_expires ON rooms(expires_at);
   `);
 
+  try { _db.exec('ALTER TABLE library_meta ADD COLUMN subtitle_name TEXT DEFAULT NULL'); } catch {}
+
   return _db;
 }
 
@@ -91,6 +93,15 @@ export function getLibraryMeta(filename: string): LibraryMetaRow | undefined {
   return db.prepare('SELECT * FROM library_meta WHERE filename = ?').get(filename) as unknown as LibraryMetaRow | undefined;
 }
 
+export function setSubtitleName(filename: string, name: string | null): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO library_meta (filename, duration, last_time, last_played_at, thumb_ready, subtitle_name)
+    VALUES (?, 0, 0, 0, 0, ?)
+    ON CONFLICT(filename) DO UPDATE SET subtitle_name = excluded.subtitle_name
+  `).run(filename, name);
+}
+
 export function deleteLibraryMeta(filename: string): void {
   const db = getDb();
   db.prepare('DELETE FROM library_meta WHERE filename = ?').run(filename);
@@ -124,6 +135,12 @@ export function listLibraryFiles(): LibraryFileInfo[] {
     const meta = db.prepare('SELECT * FROM library_meta WHERE filename = ?').get(filename) as unknown as LibraryMetaRow | undefined;
 
     const fullPath = path.join(libraryDir, filename);
+    const hasSub = hasSubtitles(fullPath);
+    let subtitleName = (meta as unknown as Record<string, string | null>)?.subtitle_name ?? null;
+    if (hasSub && !subtitleName) {
+      subtitleName = filename.replace(/\.mp4$/i, '');
+      setSubtitleName(filename, subtitleName);
+    }
     return {
       filename,
       size: stat.size,
@@ -132,8 +149,9 @@ export function listLibraryFiles(): LibraryFileInfo[] {
       lastPlayedAt: meta?.last_played_at ?? 0,
       thumbReady: (meta?.thumb_ready ?? 0) === 1,
       thumbUrl: `/api/library/${encodeURIComponent(filename)}/thumb`,
-      hasSubtitles: hasSubtitles(fullPath),
+      hasSubtitles: hasSub,
       subtitleFetching: isFetching(fullPath),
+      subtitleName,
     };
   }).sort((a, b) => (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0) || a.filename.localeCompare(b.filename));
 }

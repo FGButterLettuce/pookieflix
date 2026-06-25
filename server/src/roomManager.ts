@@ -41,6 +41,7 @@ export function getOrCreateRuntime(token: string): RoomRuntime | null {
     wasUserPaused: false,
     pendingRateTarget: new Map(),
     lastTickAt: Date.now(),
+    adaptiveResumeThreshold: config.bufferResumeThreshold,
   };
 
   rooms.set(token, runtime);

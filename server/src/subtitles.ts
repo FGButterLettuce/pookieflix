@@ -52,12 +52,12 @@ export function extractTitle(filename: string): string {
 // ── OpenSubtitles API ─────────────────────────────────────────────────────────
 
 interface OsFile { file_id: number; }
-interface OsAttrs { files: OsFile[]; ai_translated: boolean; machine_translated: boolean; }
+interface OsAttrs { files: OsFile[]; ai_translated: boolean; machine_translated: boolean; movie_name?: string; release?: string; }
 interface OsEntry { attributes: OsAttrs; }
 interface OsSearchResp { data?: OsEntry[]; }
 interface OsDownloadResp { link?: string; }
 
-async function searchOs(params: Record<string, string>): Promise<number | null> {
+async function searchOsWithLabel(params: Record<string, string>): Promise<{ id: number; label: string } | null> {
   const qs = new URLSearchParams({ ...params, languages: config.subtitleLang }).toString();
   try {
     const res = await fetch(`${OS_API}/subtitles?${qs}`, {
@@ -66,11 +66,13 @@ async function searchOs(params: Record<string, string>): Promise<number | null> 
     });
     if (!res.ok) return null;
     const json = await res.json() as OsSearchResp;
-    // Prefer non-AI/machine results, but accept any
     const entries = json.data ?? [];
-    const best = entries.find(e => !e.attributes.ai_translated && !e.attributes.machine_translated)
-      ?? entries[0];
-    return best?.attributes.files[0]?.file_id ?? null;
+    const best = entries.find(e => !e.attributes.ai_translated && !e.attributes.machine_translated) ?? entries[0];
+    if (!best) return null;
+    const id = best.attributes.files[0]?.file_id;
+    if (!id) return null;
+    const parts = [best.attributes.movie_name, best.attributes.release].filter(Boolean);
+    return { id, label: parts.join(' · ') || 'Unknown' };
   } catch {
     return null;
   }
@@ -95,42 +97,71 @@ async function downloadOs(fileId: number): Promise<string | null> {
   }
 }
 
-function srtToVtt(content: string): string {
+export function srtToVtt(content: string): string {
   if (content.trimStart().startsWith('WEBVTT')) return content;
   return 'WEBVTT\n\n' + content.trim().replace(/\r\n/g, '\n').replace(/(\d+:\d+:\d+),(\d+)/g, '$1.$2');
 }
 
-// ── Public entry point ────────────────────────────────────────────────────────
+// ── Public entry points ───────────────────────────────────────────────────────
 
-export async function fetchSubtitles(videoPath: string, filename: string): Promise<boolean> {
-  if (!config.openSubtitlesApiKey) return false;
-  if (inFlight.has(videoPath)) return false;
-  if (hasSubtitles(videoPath)) return true;
+export async function searchSubtitles(query: string): Promise<{ fileId: number; label: string }[]> {
+  if (!config.openSubtitlesApiKey) return [];
+  const qs = new URLSearchParams({ query, languages: config.subtitleLang }).toString();
+  try {
+    const res = await fetch(`${OS_API}/subtitles?${qs}`, {
+      headers: { 'Api-Key': config.openSubtitlesApiKey, 'User-Agent': UA },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return [];
+    const json = await res.json() as OsSearchResp;
+    return (json.data ?? []).slice(0, 10).flatMap(e => {
+      const a = e.attributes;
+      const fid = a.files[0]?.file_id;
+      if (!fid) return [];
+      const parts = [a.movie_name, a.release].filter(Boolean);
+      const label = parts.join(' · ') || 'Unknown';
+      return [{ fileId: fid, label }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchSubtitles(videoPath: string, filename: string, fileId?: number, label?: string): Promise<string | null> {
+  if (!config.openSubtitlesApiKey) return null;
+  if (inFlight.has(videoPath)) return null;
+  if (!fileId && hasSubtitles(videoPath)) return null;
 
   inFlight.add(videoPath);
   try {
-    const stat = await fs.promises.stat(videoPath);
-    let fileId: number | null = null;
+    let targetId: number | null = fileId ?? null;
+    let chosenLabel = label ?? null;
 
-    // 1. Hash search (most accurate)
-    const hash = await computeOsHash(videoPath, stat.size);
-    if (hash) fileId = await searchOs({ moviehash: hash });
-
-    // 2. Title fallback
-    if (!fileId) {
-      const title = extractTitle(filename);
-      if (title) fileId = await searchOs({ query: title });
+    if (!targetId) {
+      const stat = await fs.promises.stat(videoPath);
+      const hash = await computeOsHash(videoPath, stat.size);
+      if (hash) {
+        const res = await searchOsWithLabel({ moviehash: hash });
+        targetId = res?.id ?? null;
+        chosenLabel = res?.label ?? null;
+      }
+      if (!targetId) {
+        const title = extractTitle(filename);
+        if (title) {
+          const res = await searchOsWithLabel({ query: title });
+          targetId = res?.id ?? null;
+          chosenLabel = res?.label ?? null;
+        }
+      }
     }
 
-    if (!fileId) return false;
-
-    const content = await downloadOs(fileId);
-    if (!content) return false;
-
+    if (!targetId) return null;
+    const content = await downloadOs(targetId);
+    if (!content) return null;
     await fs.promises.writeFile(subtitlePath(videoPath), srtToVtt(content), 'utf8');
-    return true;
+    return chosenLabel;
   } catch {
-    return false;
+    return null;
   } finally {
     inFlight.delete(videoPath);
   }

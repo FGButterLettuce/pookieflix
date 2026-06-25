@@ -1,50 +1,39 @@
 # WatchTogether
 
-A private two-person synchronized video watching app. Upload or select a video, create a room, share the link, watch in perfect sync with automatic buffer-aware pausing.
+A private two-person synchronized video watching app. Upload or drop videos into your library, create a room, share the link, watch in perfect sync. Buffer-aware pausing, adaptive thresholds, and HLS streaming for mobile.
 
 ## Quick start (Docker)
 
 ```bash
-# 1. Clone / copy the project
 cd watchtogether
-
-# 2. Copy and edit the env file
 cp .env.example .env
-# Edit APP_BASE_URL if you're exposing via Cloudflare Tunnel (see below)
-
-# 3. Build and start
+# Edit APP_BASE_URL to your public domain
 docker compose up --build -d
-
-# 4. Open the app
 open http://localhost:3000
 ```
 
-The app stores all data under `./data/`:
-- `./data/media/rooms/`   — uploaded video files (room-scoped)
-- `./data/media/library/` — pre-existing videos you drop here manually
-- `./data/app.db`         — SQLite room metadata
+On first run, the app shows a setup wizard to configure your public URL and set a password.
 
 ## How to use
 
-### Upload a video and create a room
+### Upload a video
 
-1. Open `http://localhost:3000` (or your public URL).
-2. Click **Upload video**, select an MP4 file, then click **Create room**.
-3. The app redirects you to the room page and shows a shareable link.
-4. Copy the link (top-right button) and send it to your girlfriend.
-5. She opens the link in her browser — no account, no install.
+1. Open the app and sign in with your password.
+2. Drop an MP4 into the upload zone or click to browse.
+3. After upload, click **Watch on WatchTogether →** to get the room URL.
+4. Share the room URL — your partner opens it, no account needed.
 
 ### Use a video already on the server
 
-1. Copy the MP4 into `./data/media/library/`:
-   ```bash
-   cp ~/Videos/movie.mp4 ./data/media/library/
-   ```
-2. Open the app → click **Library** → select the file → **Create room**.
+Drop an MP4 into `./data/media/library/`:
+
+```bash
+cp ~/Videos/movie.mp4 ./data/media/library/
+```
+
+It appears in your library on the next page refresh. Thumbnails and HLS segments generate automatically in the background.
 
 ### Recommended video format
-
-Re-encode with ffmpeg for browser compatibility:
 
 ```bash
 ffmpeg -i input.mkv \
@@ -54,132 +43,143 @@ ffmpeg -i input.mkv \
   output.mp4
 ```
 
-Key points:
-- `-movflags +faststart` moves the moov atom to the front for faster browser load.
-- CRF 20 gives good quality. Use 23–26 to reduce file size.
+`-movflags +faststart` moves the moov atom to the front — required for fast browser load. CRF 20 is good quality; use 23–26 for smaller files.
+
+## Authentication
+
+The app uses password auth with a session cookie (7-day TTL, `HttpOnly; SameSite=Strict`). Set your password during the setup wizard, or change it anytime in **Settings → Change password**.
+
+No accounts, no registration — there's one password for the whole app (it's private).
+
+## Subtitles
+
+Each library file has a **CC** button that opens the subtitle modal:
+
+- **Auto-pick** — searches OpenSubtitles by file hash + title, downloads the best match.
+- **Search** — manual search against OpenSubtitles, pre-filled with the filename.
+- **Upload your own** — drag-drop `.srt` or `.vtt`. SRT is converted to VTT automatically.
+- **Remove** — deletes the subtitle file.
+- **Currently active** — the active subtitle always appears as the first item in the list with a "✓ Active" badge and the subtitle name.
+
+Requires `OPENSUBTITLES_API_KEY` in your config. Subtitle language defaults to `en`; set `SUBTITLE_LANG` to change it.
+
+## Sync behaviour
+
+- Both viewers send a heartbeat every 500 ms (`bufferedAhead`, `paused`, `seeking`, `waiting`, etc.).
+- The server is the single source of truth — all play/pause/seek commands come from it.
+- **Buffering:** if either viewer stalls (`waiting=true`), both pause. Both resume when each has enough buffer (adaptive threshold — starts at 1.5 s, increases on quick re-stalls).
+- **Drift < 250 ms:** ignored.
+- **Drift 250 ms – 10 s:** rate nudge (0.97× / 1.03×) on the lagging viewer.
+- **Drift > 10 s:** RESYNCING — server seeks both to the behind viewer's position, then `PLAY_AT`.
+- **`PLAY_AT`** carries a wall-clock timestamp 1.5 s in the future so both clients start simultaneously regardless of message delivery jitter.
+- **User pause:** any viewer pausing pauses the room; only a user play action resumes it.
+- **Adaptive buffer messages:** the buffering overlay explains what's happening — "buffering more runway", "connection looks slow", etc. — as the adaptive threshold rises.
+
+## iOS / mobile
+
+iOS Safari receives HLS (`.m3u8` + `.ts` segments, generated at upload time) instead of the raw MP4. HLS buffering on iOS is significantly better than progressive MP4.
 
 ## Expose via Cloudflare Tunnel
 
-Cloudflare Tunnel gives your girlfriend a public HTTPS/WSS URL without port forwarding:
-
 ```bash
-# Install cloudflared (Arch Linux)
-yay -S cloudflared
+# Install cloudflared
+yay -S cloudflared   # or brew install cloudflare/cloudflare/cloudflared
 
-# Login (one-time)
+# One-time login
 cloudflared tunnel login
 
-# Create a named tunnel
+# Create tunnel
 cloudflared tunnel create watchtogether
-
-# Route to your local app
 cloudflared tunnel route dns watchtogether watch.yourdomain.com
 
-# Run the tunnel (or add to systemd)
+# Run (or add to systemd)
 cloudflared tunnel run --url http://localhost:3000 watchtogether
 ```
 
-Then set in your `.env`:
-```
-APP_BASE_URL=https://watch.yourdomain.com
-```
+Set `APP_BASE_URL=https://watch.yourdomain.com` in `.env` and rebuild.
 
-And rebuild:
-```bash
-docker compose up --build -d
-```
-
-Cloudflare handles TLS termination. WebSocket (`wss://`) works automatically.
-
-If you don't have a custom domain, use a quick tunnel:
+For a quick throwaway URL:
 ```bash
 cloudflared tunnel --url http://localhost:3000
-# Prints a random *.trycloudflare.com URL — share that as APP_BASE_URL
 ```
+
+## LAN upload (bypasses Cloudflare file size limit)
+
+Set `UPLOAD_URL=http://<server-lan-ip>:3000` in `.env`. The upload zone will use the LAN address directly for large file transfers.
 
 ## Running locally (development)
 
 ```bash
-# Terminal 1 — server
-cd server
-npm install
-npm run dev
+# Terminal 1 — server (watches + restarts on changes)
+cd server && npm install && npm run dev
 
-# Terminal 2 — client (Vite dev server with HMR)
-cd client
-npm install
-npm run dev
-# Opens at http://localhost:5173, proxies /api and /ws to :3000
+# Terminal 2 — client (Vite HMR)
+cd client && npm install && npm run dev
+# http://localhost:5173 — proxies /api and /ws to :3000
 ```
-
-## Sync behavior
-
-- Both viewers send a heartbeat every 500 ms (bufferedAhead, paused, seeking, etc.).
-- The server is the single source of truth. It drives all play/pause/seek commands.
-- **Buffering:** if either viewer has < 2 s buffered while playing, both pause. Both resume only when each has ≥ 10 s buffered (hysteresis).
-- **Drift < 250 ms:** ignored.
-- **Drift 250 ms – 1.5 s:** the lagging viewer gets a `playbackRate` nudge (0.97–1.03).
-- **Drift > 1.5 s:** server commands pause + seek to host position + coordinated resume.
-- **User pause:** any viewer pausing pauses the room; only a user play action resumes it.
-- **User seek:** server commands both viewers to seek, waits for readiness, then resumes.
-- `PLAY_AT` commands carry a wall-clock timestamp 1.5 s in the future so both clients start playing simultaneously regardless of message delivery jitter.
 
 ## Architecture
 
 ```
 watchtogether/
-├── server/           Node.js + TypeScript + Fastify
-│   └── src/
-│       ├── config.ts            — env-var config
-│       ├── db.ts                — SQLite (better-sqlite3)
-│       ├── types.ts             — shared type definitions
-│       ├── roomStateMachine.ts  — pure sync state machine
-│       ├── roomManager.ts       — WebSocket + room runtime
-│       ├── routes.ts            — HTTP routes (upload, media, rooms)
-│       └── index.ts             — Fastify + WS server bootstrap
-│   └── tests/
-│       └── roomStateMachine.test.ts
-├── client/           React 18 + Vite + TypeScript
-│   └── src/
-│       ├── lib/
-│       │   ├── videoController.ts  — HTMLVideoElement wrapper
-│       │   └── wsClient.ts         — WebSocket client + reconnect
-│       ├── components/
-│       │   ├── VideoPlayer.tsx
-│       │   ├── RoomStatus.tsx
-│       │   └── DiagnosticsPanel.tsx  (visible in dev mode only)
-│       └── pages/
-│           ├── Home.tsx    — upload / library / create room
-│           └── Room.tsx    — player + sync
+├── server/src/
+│   ├── index.ts              — Fastify + WebSocket bootstrap
+│   ├── config.ts             — env-var config (reads data/config.json)
+│   ├── auth.ts               — password hash, session sign/verify (Node crypto only)
+│   ├── db.ts                 — SQLite via node:sqlite
+│   ├── types.ts              — shared type definitions
+│   ├── roomStateMachine.ts   — pure sync state machine (no I/O)
+│   ├── roomManager.ts        — WebSocket handling + room runtime
+│   ├── routes.ts             — HTTP routes
+│   ├── subtitles.ts          — OpenSubtitles API + SRT→VTT conversion
+│   └── ffmpeg.ts             — thumbnail + HLS generation
+├── client/src/
+│   ├── pages/
+│   │   ├── Home.tsx          — library, upload, subtitle modal
+│   │   ├── Room.tsx          — player + sync + buffering overlay
+│   │   ├── Settings.tsx      — password change, config
+│   │   └── Setup.tsx         — first-run wizard
+│   ├── lib/
+│   │   ├── videoController.ts — HTMLVideoElement wrapper
+│   │   └── wsClient.ts        — WebSocket client + reconnect
+│   └── components/
+│       ├── VideoPlayer.tsx
+│       └── RoomStatus.tsx
 ├── Dockerfile
 ├── docker-compose.yml
-└── data/             (created at runtime, mounted as volume)
-    ├── media/
-    │   ├── rooms/    — uploaded videos, one dir per room token
-    │   └── library/  — manually placed videos
-    └── app.db
+└── data/                     (created at runtime, mounted as volume)
+    ├── app.db                 — SQLite
+    ├── config.json            — persisted config (PASSWORD_HASH, SESSION_SECRET, etc.)
+    └── media/
+        ├── library/           — your video files
+        └── rooms/             — room-scoped uploads (auto-deleted on expiry)
 ```
 
-## Security notes
+## Security
 
-- Room tokens are 32 bytes of cryptographically random data (64-char hex).
-- Media is served at `/api/media/:token` — only valid, non-expired tokens work.
-- Path traversal is prevented by resolving and checking paths against the media root.
-- Only MP4 files are accepted; content-type and extension are both checked.
-- Rate limiting: global 200 req/min, upload 5/min, room creation 10/min.
-- Rooms expire after `ROOM_TTL_HOURS` (default 24 h); expired room uploads are deleted.
-- The library file picker validates filenames against a safe pattern (`[\w\-. ]+\.mp4`).
-- All uploads are stored outside the frontend public directory.
+- Room tokens: 32 bytes of cryptographic random (64-char hex).
+- Media served at `/api/media/:token` — only valid, non-expired tokens work.
+- Path traversal prevented by resolving and checking all paths against the media root.
+- Only MP4 accepted on upload; content-type and extension both checked.
+- Rate limiting: 200 req/min global, 5/min upload, 10/min room creation.
+- Rooms expire after `ROOM_TTL_HOURS` (default 24 h); expired files are deleted.
+- Password hashed with `crypto.scrypt` (N=16384, r=8, p=1), 64-byte random salt.
+- Session tokens: HMAC-SHA256 signed, 7-day expiry, `HttpOnly; SameSite=Strict` cookie.
 
 ## Environment variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `APP_BASE_URL` | `http://localhost:3000` | Shown in room share links |
+| `APP_BASE_URL` | `http://localhost:3000` | Public URL shown in room share links |
 | `PORT` | `3000` | HTTP server port |
 | `HOST` | `0.0.0.0` | Bind address |
-| `DATA_DIR` | `../data` | Root data directory |
+| `DATA_DIR` | `../data` | Root data directory (relative to `server/`) |
 | `MEDIA_DIR` | `$DATA_DIR/media` | Video storage root |
 | `DB_PATH` | `$DATA_DIR/app.db` | SQLite database path |
 | `MAX_UPLOAD_BYTES` | `4294967296` | Max upload size (4 GB) |
 | `ROOM_TTL_HOURS` | `24` | Room / link lifetime |
+| `UPLOAD_URL` | — | LAN address for large file uploads (bypasses Cloudflare) |
+| `OPENSUBTITLES_API_KEY` | — | Required for subtitle auto-fetch and search |
+| `SUBTITLE_LANG` | `en` | Language code for subtitle search (e.g. `fr`, `de`, `ja`) |
+| `PASSWORD_HASH` | — | `scrypt` hash of the app password (set via setup wizard) |
+| `SESSION_SECRET` | — | HMAC secret for session tokens (auto-generated at setup) |

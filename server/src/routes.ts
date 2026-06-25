@@ -1,17 +1,18 @@
 import crypto from 'crypto';
+import { verifyPassword, signSession, verifySession, getSessionToken, makeSessionCookie, clearSessionCookie, hashPassword } from './auth';
 import fs from 'fs';
 import path from 'path';
 import { pipeline } from 'stream/promises';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { config } from './config';
 import { isSetupComplete, readPersistedConfig, writePersistedConfig } from './persistedConfig';
 import {
   createRoom, getRoomByToken, listLibraryFiles,
-  purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile,
+  purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile, setSubtitleName,
 } from './db';
 import { generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir } from './ffmpeg';
 import { getRuntimeByToken } from './roomManager';
-import { fetchSubtitles, subtitlePath } from './subtitles';
+import { fetchSubtitles, subtitlePath, searchSubtitles, extractTitle, srtToVtt } from './subtitles';
 
 // ── Remote log buffer ─────────────────────────────────────────────────────────
 interface LogEntry { ts: number; device: string; level: string; msg: string; }
@@ -118,6 +119,14 @@ const SAFE_FILENAME_RE = /^[\w\-. ]+\.mp4$/i;
 function generateToken(): string { return crypto.randomBytes(32).toString('hex'); }
 function generateId(): string    { return crypto.randomBytes(16).toString('hex'); }
 
+async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (!config.passwordHash) return;
+  const token = getSessionToken(req.headers.cookie);
+  if (!token || !verifySession(token, config.sessionSecret)) {
+    await reply.status(401).send({ error: 'Unauthorized' });
+  }
+}
+
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._\- ]/g, '_').substring(0, 200);
 }
@@ -135,8 +144,53 @@ function assertLibraryPath(filename: string): string {
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
+  // ── Security headers on every response ────────────────────────────────────
+  app.addHook('onSend', (_req, reply, _payload, done) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    done();
+  });
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  app.get('/api/auth/me', async (req, reply) => {
+    if (!config.passwordHash) return reply.send({ authed: true });
+    const token = getSessionToken(req.headers.cookie);
+    return reply.send({ authed: token ? verifySession(token, config.sessionSecret) : false });
+  });
+
+  app.post('/api/auth/login', async (req, reply) => {
+    const { password } = req.body as { password?: string };
+    if (!password || !config.passwordHash || !verifyPassword(password, config.passwordHash)) {
+      return reply.status(401).send({ error: 'Wrong password' });
+    }
+    const token = signSession(config.sessionSecret);
+    reply.header('Set-Cookie', makeSessionCookie(token));
+    return reply.send({ ok: true });
+  });
+
+  app.post('/api/auth/logout', async (_req, reply) => {
+    reply.header('Set-Cookie', clearSessionCookie());
+    return reply.send({ ok: true });
+  });
+
+  app.post('/api/auth/change-password', { preHandler: requireAdmin }, async (req, reply) => {
+    const { newPassword } = req.body as { newPassword?: string };
+    if (!newPassword || newPassword.length < 6) return reply.status(400).send({ error: 'Password must be at least 6 characters' });
+    const persisted = readPersistedConfig();
+    (persisted as Record<string, string>).PASSWORD_HASH = hashPassword(newPassword);
+    writePersistedConfig(persisted);
+    // Rotate session secret so old sessions are invalidated
+    const newSecret = crypto.randomBytes(32).toString('hex');
+    (persisted as Record<string, string>).SESSION_SECRET = newSecret;
+    writePersistedConfig(persisted);
+    const token = signSession(newSecret);
+    reply.header('Set-Cookie', makeSessionCookie(token));
+    return reply.send({ ok: true });
+  });
+
   // ── Debug: log viewer (HTML) ───────────────────────────────────────────────
-  app.get('/api/debug/logs', async (_req, reply) => {
+  app.get('/api/debug/logs', { preHandler: requireAdmin }, async (_req, reply) => {
     reply.header('Content-Type', 'text/html; charset=utf-8');
     return reply.send(LOG_VIEWER_HTML);
   });
@@ -152,13 +206,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Debug: delete logs ────────────────────────────────────────────────────
-  app.delete('/api/debug/logs', async (_req, reply) => {
+  app.delete('/api/debug/logs', { preHandler: requireAdmin }, async (_req, reply) => {
     clearLogs();
     return reply.send({ ok: true });
   });
 
   // ── Debug: SSE log stream ─────────────────────────────────────────────────
-  app.get('/api/debug/logs/stream', async (req, reply) => {
+  app.get('/api/debug/logs/stream', { preHandler: requireAdmin }, async (req, reply) => {
     const res = reply.raw;
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -187,21 +241,23 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       uploadUrl: uploadUrl || null,
       setupComplete: isSetupComplete() || !!process.env.APP_BASE_URL,
+      subtitleLang: config.subtitleLang,
     });
   });
 
   // ── Setup / Settings ──────────────────────────────────────────────────────
-  app.get('/api/settings', async (_req, reply) => {
+  app.get('/api/settings', { preHandler: requireAdmin }, async (_req, reply) => {
     const persisted = readPersistedConfig();
+    const osKey = process.env.OPENSUBTITLES_API_KEY ?? persisted.OPENSUBTITLES_API_KEY ?? '';
     return reply.send({
       APP_BASE_URL: process.env.APP_BASE_URL ?? persisted.APP_BASE_URL ?? '',
       UPLOAD_URL: process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? '',
-      OPENSUBTITLES_API_KEY: process.env.OPENSUBTITLES_API_KEY ?? persisted.OPENSUBTITLES_API_KEY ?? '',
+      OPENSUBTITLES_API_KEY: osKey ? '••••••••' : '',  // mask — never expose key over HTTP
       TUNNEL_TOKEN: process.env.TUNNEL_TOKEN ?? persisted.TUNNEL_TOKEN ?? '',
     });
   });
 
-  app.post('/api/settings', async (req, reply) => {
+  app.post('/api/settings', { preHandler: requireAdmin }, async (req, reply) => {
     const body = req.body as Record<string, string>;
     writePersistedConfig({
       APP_BASE_URL: body.APP_BASE_URL?.trim() || undefined,
@@ -213,7 +269,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ ok: true });
   });
 
-  app.post('/api/setup', async (req, reply) => {
+  app.post('/api/setup', { preHandler: requireAdmin }, async (req, reply) => {
     const body = req.body as Record<string, string>;
     if (!body.APP_BASE_URL?.trim()) {
       return reply.status(400).send({ error: 'APP_BASE_URL is required' });
@@ -229,7 +285,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Library: list files with metadata ─────────────────────────────────────
-  app.get('/api/library', async (_req, reply) => {
+  app.get('/api/library', { preHandler: requireAdmin }, async (_req, reply) => {
     return reply.send({ files: listLibraryFiles() });
   });
 
@@ -251,6 +307,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // ── Library: delete a file ─────────────────────────────────────────────────
   app.delete('/api/library/:filename', {
     config: { rateLimit: { max: 20, timeWindow: '1m' } },
+    preHandler: requireAdmin,
   }, async (req, reply) => {
     const { filename } = req.params as { filename: string };
     if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send({ error: 'Invalid filename' });
@@ -276,6 +333,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // ── Library: rename a file ────────────────────────────────────────────────
   app.patch('/api/library/:filename', {
     config: { rateLimit: { max: 20, timeWindow: '1m' } },
+    preHandler: requireAdmin,
   }, async (req, reply) => {
     const { filename } = req.params as { filename: string };
     const body = req.body as { newFilename?: string };
@@ -319,15 +377,77 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Library: fetch subtitles for a file ──────────────────────────────────
   app.post('/api/library/:filename/subtitles', {
-    config: { rateLimit: { max: 5, timeWindow: '1m' } },
+    config: { rateLimit: { max: 10, timeWindow: '1m' } },
+    preHandler: requireAdmin,
   }, async (req, reply) => {
     const { filename } = req.params as { filename: string };
     if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send({ error: 'Invalid filename' });
     let filePath: string;
     try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
     if (!fs.existsSync(filePath)) return reply.status(404).send({ error: 'Not found' });
-    fetchSubtitles(filePath, filename).catch(() => {});
+    const body = req.body as { fileId?: number; label?: string } | null;
+    fetchSubtitles(filePath, filename, body?.fileId ?? undefined, body?.label ?? undefined)
+      .then(name => { if (name) setSubtitleName(filename, name); })
+      .catch(() => {});
     return reply.send({ ok: true });
+  });
+
+  // ── Subtitle delete ────────────────────────────────────────────────────────
+  app.delete('/api/library/:filename/subtitles', { preHandler: requireAdmin }, async (req, reply) => {
+    const { filename } = req.params as { filename: string };
+    if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send({ error: 'Invalid filename' });
+    let filePath: string;
+    try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
+    const vtt = subtitlePath(filePath);
+    if (fs.existsSync(vtt)) fs.unlinkSync(vtt);
+    setSubtitleName(filename, null);
+    return reply.send({ ok: true });
+  });
+
+  // ── Subtitle upload (user's own SRT/VTT) ─────────────────────────────────
+  app.post('/api/library/:filename/subtitle-upload', {
+    config: { rateLimit: { max: 20, timeWindow: '1m' } },
+    preHandler: requireAdmin,
+  }, async (req, reply) => {
+    const { filename } = req.params as { filename: string };
+    if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send({ error: 'Invalid filename' });
+    let filePath: string;
+    try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
+    if (!fs.existsSync(filePath)) return reply.status(404).send({ error: 'Not found' });
+
+    const parts = req.parts();
+    let content = '';
+    let ext = '';
+    let uploadedName = '';
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        ext = path.extname(part.filename ?? '').toLowerCase();
+        uploadedName = part.filename ?? '';
+        const chunks: Buffer[] = [];
+        for await (const chunk of part.file) chunks.push(chunk as Buffer);
+        content = Buffer.concat(chunks).toString('utf8');
+        break;
+      }
+    }
+    if (!content) return reply.status(400).send({ error: 'No file received' });
+    if (ext !== '.srt' && ext !== '.vtt') return reply.status(400).send({ error: 'Only .srt and .vtt files are supported' });
+
+    const vtt = ext === '.srt' ? srtToVtt(content) : content;
+    fs.writeFileSync(subtitlePath(filePath), vtt, 'utf8');
+    setSubtitleName(filename, uploadedName || 'Uploaded file');
+    return reply.send({ ok: true });
+  });
+
+  // ── Subtitle search ────────────────────────────────────────────────────────
+  app.get('/api/subtitle-search', {
+    config: { rateLimit: { max: 20, timeWindow: '1m' } },
+    preHandler: requireAdmin,
+  }, async (req, reply) => {
+    const { q, filename } = req.query as { q?: string; filename?: string };
+    const query = q?.trim() || (filename ? extractTitle(filename) : '');
+    if (!query) return reply.status(400).send({ error: 'q required' });
+    const results = await searchSubtitles(query);
+    return reply.send({ results });
   });
 
   // ── Subtitle: serve VTT for a room ────────────────────────────────────────
@@ -355,12 +475,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const origin = process.env.APP_BASE_URL ?? readPersistedConfig().APP_BASE_URL ?? config.baseUrl;
     reply.header('Access-Control-Allow-Origin', origin);
     reply.header('Access-Control-Allow-Methods', 'POST');
-    reply.header('Access-Control-Allow-Headers', 'content-type');
+    reply.header('Access-Control-Allow-Headers', 'content-type, x-admin-key');
     return reply.status(204).send();
   });
 
   app.post('/api/upload', {
     config: { rateLimit: { max: 5, timeWindow: '1m' } },
+    preHandler: requireAdmin,
   }, async (req, reply) => {
     const origin = process.env.APP_BASE_URL ?? readPersistedConfig().APP_BASE_URL ?? config.baseUrl;
     reply.header('Access-Control-Allow-Origin', origin);
@@ -450,6 +571,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // ── Room from library ──────────────────────────────────────────────────────
   app.post('/api/rooms', {
     config: { rateLimit: { max: 10, timeWindow: '1m' } },
+    preHandler: requireAdmin,
   }, async (req, reply) => {
     const body = req.body as { filename?: string };
     const filename = body?.filename;

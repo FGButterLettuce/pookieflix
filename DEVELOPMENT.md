@@ -423,3 +423,134 @@ APP_BASE_URL=https://thought.niranjanrakesh.me
 ```
 
 Server must be started with `env $(cat .env | xargs) node dist/index.js` to pick these up (no dotenv dependency).
+
+---
+
+## Milestone 9 — Password Auth, Subtitle Modal, Adaptive Buffer Messages
+
+> **Status: ✅ Deployed**
+
+Three independent features landed together.
+
+---
+
+### 9a — Password Auth (replaced admin key)
+
+**Problem:** The previous auth model used a shared `ADMIN_KEY` header that had to be stored in `localStorage` and sent manually on every request. Ugly, stateless, and easy to lose.
+
+**Solution:** Password auth with session cookies.
+
+**Server: `server/src/auth.ts`** (new file — all primitives, no deps beyond Node built-ins)
+
+```typescript
+hashPassword(password)          // crypto.scrypt, 64-byte salt, stored as "salt:hash"
+verifyPassword(password, stored) // timing-safe compare
+signSession(secret)              // base64url payload (exp: 7d) + HMAC-SHA256 sig
+verifySession(token, secret)     // validates sig + expiry
+getSessionToken(cookieHeader)    // parses wt_session= out of Cookie header
+makeSessionCookie(token)         // HttpOnly; SameSite=Strict; Path=/; Max-Age=604800
+clearSessionCookie()             // Max-Age=0
+```
+
+**Config:** `config.ts` — replaced `adminKey` with `passwordHash` and `sessionSecret`. Both read from `config.json` (persisted) or env vars.
+
+**Initial setup:** `PASSWORD_HASH` written to `config.json` at first run via `/api/setup`. Existing installs can be seeded manually:
+
+```bash
+node -e "
+const {hashPassword} = require('./server/dist/auth');
+console.log(hashPassword('yourpassword'));
+"
+# paste output into data/config.json as PASSWORD_HASH
+```
+
+**Routes added:**
+
+| Route | Auth | Purpose |
+|---|---|---|
+| `GET /api/auth/me` | none | Returns `{ authed: bool }` — used to decide whether to show login |
+| `POST /api/auth/login` | none | Verifies password, sets `wt_session` cookie |
+| `POST /api/auth/logout` | session | Clears cookie |
+| `POST /api/auth/change-password` | session | Re-hashes, rotates session secret, re-issues cookie |
+
+**Critical bug fixed — Fastify preHandler hang:**
+
+The `requireAdmin` hook was synchronous with 2 parameters `(req, reply)`. Fastify's `hookRunnerGenerator` passes `next` as the 3rd argument. A sync hook that doesn't call `next()` and returns `void` causes Fastify to wait forever — the `hookIterator` checks if the return is a Promise; `undefined` means it never resolves. All `/api/library` requests hung indefinitely.
+
+Fix: make `requireAdmin` `async`. An `async` function always returns a Promise, which Fastify awaits correctly.
+
+```typescript
+// WRONG — hangs forever
+function requireAdmin(req, reply) {
+  if (!authed) reply.status(401).send(...); // returns void, next() never called
+}
+
+// CORRECT
+async function requireAdmin(req, reply) {
+  if (!authed) { await reply.status(401).send(...); }
+}
+```
+
+**Client:** `Home.tsx` — `authed: boolean | null` state (null=loading, false=show login card, true=show library). Login sends `POST /api/auth/login` with password; success sets `authed=true`. All fetch calls drop `x-admin-key` header; cookies are automatic on same-origin requests. `Settings.tsx` — password change section added.
+
+---
+
+### 9b — Adaptive Buffer Messages
+
+**Problem:** When buffering stalls repeatedly, the `bufferResumeThreshold` adapts upward (BUFFERING state waits for more data before resuming). Users saw increasing pauses with no explanation.
+
+**Solution:** Show transparent messages on the buffering overlay explaining what's happening and why.
+
+**Stall tracking (`client/src/pages/Room.tsx`):**
+
+```typescript
+const stallCountRef = useRef(0);      // cumulative stalls this session
+const lastPlayStartRef = useRef(0);   // wall-clock when PLAYING was last entered
+```
+
+On `ROOM_UPDATE`:
+- If state becomes `PLAYING`: record `lastPlayStartRef = Date.now()`
+- If state becomes `BUFFERING`:
+  - Stalled in < 12s of play → `stallCount++` (quick re-stall)
+  - Previous play lasted > 25s → `stallCount = max(0, stallCount - 1)` (decay)
+
+Overlay messages by stall count:
+
+| Count | Message |
+|---|---|
+| 0 | *(default buffering message)* |
+| 1–2 | "Buffering more data than usual to keep things smooth." |
+| 3–4 | "Connection looks a bit slow — giving the buffer more runway." |
+| 5+ | "Waiting for a larger buffer to avoid interruptions. Hang tight." |
+
+---
+
+### 9c — Subtitle Modal + Upload + Search
+
+**Problem:** The subtitle UX was an inline card on the library grid, cramped and unusable.
+
+**Solution:** Full modal (`sub-modal-overlay` → `sub-modal`) opened per file.
+
+**Modal sections:**
+
+1. **Status row** — green/grey dot + "Subtitles active" / "No subtitles" + Auto-pick + Remove buttons.
+
+2. **Currently active** — if a subtitle is loaded, shown as the first item in the results list with a green left border and "✓ Active" badge. Falls back to the video filename (minus `.mp4`) when the subtitle name wasn't stored (backfill below).
+
+3. **Upload your own** — drag-drop zone accepting `.srt` or `.vtt`. SRT is converted to VTT server-side via `srtToVtt()`. Stored next to the video as `filename.mp4.vtt`.
+
+4. **Search OpenSubtitles** — pre-filled with the raw filename minus `.mp4` extension (no title guessing, no space normalisation). Auto-searches on modal open. Results show movie name + release label; "Use" applies the subtitle and stores its name.
+
+**Subtitle name storage:**
+
+`subtitle_name TEXT` column added to `library_meta` via migration:
+```sql
+ALTER TABLE library_meta ADD COLUMN subtitle_name TEXT DEFAULT NULL
+```
+`setSubtitleName(filename, name)` does an upsert so it works for files dropped in manually (no prior DB row). On library scan, if a file has a `.vtt` but `subtitle_name IS NULL`, it's backfilled to `filename.replace(/\.mp4$/, '')` — so the active subtitle name is always populated.
+
+**Language flag:** The configured `SUBTITLE_LANG` (default `en`) is returned by `GET /api/config` as `subtitleLang`. A `langFlag()` helper maps language codes to flag emojis. The CC button on each card shows `CC ✓ 🇬🇧` (or relevant flag) when a subtitle is loaded. All search results are filtered to `subtitleLang` so there's no per-result flag.
+
+**`fetchSubtitles` return value changed:** was `boolean`, now `string | null` — returns the chosen subtitle label so the route can call `setSubtitleName` in a `.then()` without a circular import (`db` → `subtitles` → `db`).
+
+**Upload route fix:** The loop variable `part` goes out of scope after `break`. The original code referenced `part.filename` after the loop (would have thrown). Fixed by storing `uploadedName` inside the loop before breaking.

@@ -56,6 +56,7 @@ export interface LibraryFile {
   thumbUrl: string;
   hasSubtitles: boolean;
   subtitleFetching: boolean;
+  subtitleName: string | null;
 }
 
 export interface PeerStatus {

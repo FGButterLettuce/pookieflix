@@ -42,11 +42,9 @@ function isSeeking(hb: ClientHeartbeat): boolean {
   return !hb.serverCommandPending && hb.seeking;
 }
 
-function isReadyToPlay(hb: ClientHeartbeat): boolean {
+function isReadyToPlay(hb: ClientHeartbeat, threshold: number = config.bufferResumeThreshold): boolean {
   if (hb.serverCommandPending || hb.seeking || hb.waiting) return false;
-  // Accept if the browser says it has enough data (readyState 4 = HAVE_ENOUGH_DATA)
-  // or if we have our threshold buffered ahead
-  return hb.readyState >= 4 || hb.bufferedAhead >= config.bufferResumeThreshold;
+  return hb.readyState >= 4 || hb.bufferedAhead >= threshold;
 }
 
 function canonicalTimeNow(room: RoomRuntime): number {
@@ -208,12 +206,13 @@ export function tick(room: RoomRuntime): TickResult {
       if (active.length < 2) {
         setRoomState(room, 'WAITING_FOR_VIEWERS');
         dispatches.push(...buildRoomUpdate(room));
-      } else if (active.every(v => v.heartbeat && isReadyToPlay(v.heartbeat))) {
+      } else if (active.every(v => v.heartbeat && isReadyToPlay(v.heartbeat, room.adaptiveResumeThreshold))) {
         if (room.wasUserPaused) {
           room.wasUserPaused = false;
           setRoomState(room, 'USER_PAUSED');
           dispatches.push(...buildPauseAll(room));
         } else {
+          room.lastPlayStartAt = Date.now();
           setRoomState(room, 'PLAYING');
           dispatches.push(...buildPlayAt(room));
         }
@@ -240,6 +239,19 @@ export function tick(room: RoomRuntime): TickResult {
 
       // Check for buffering
       if (active.some(v => v.heartbeat && isBuffering(v.heartbeat))) {
+        // Adaptive threshold: quick re-stall → raise, else decay toward base
+        const playedMs = Date.now() - (room.lastPlayStartAt ?? 0);
+        if (playedMs < config.bufferQuickStallMs) {
+          room.adaptiveResumeThreshold = Math.min(
+            room.adaptiveResumeThreshold + 1,
+            config.bufferResumeThresholdMax
+          );
+        } else if (playedMs > config.bufferStableMs) {
+          room.adaptiveResumeThreshold = Math.max(
+            room.adaptiveResumeThreshold - 0.5,
+            config.bufferResumeThreshold
+          );
+        }
         setRoomState(room, 'BUFFERING');
         room.wasPlayingBeforeInterruption = true;
         room.bufferingStartAt = Date.now();
@@ -287,15 +299,16 @@ export function tick(room: RoomRuntime): TickResult {
         break;
       }
 
-      const allReady = active.every(v => v.heartbeat && isReadyToPlay(v.heartbeat));
-      // Timeout: if stuck in BUFFERING >20s and at least one viewer is ready,
-      // force PLAY_AT anyway. iOS Safari only buffers aggressively while "playing",
-      // so sending PLAY_AT unsticks it — it may briefly stall then recover.
-      const bufferingTimedOut = Date.now() - (room.bufferingStartAt ?? Date.now()) > 20_000
-        && active.some(v => v.heartbeat && isReadyToPlay(v.heartbeat));
+      const t = room.adaptiveResumeThreshold;
+      const allReady = active.every(v => v.heartbeat && isReadyToPlay(v.heartbeat, t));
+      // Timeout: if stuck >15s and at least one viewer is ready, force PLAY_AT.
+      // iOS Safari only buffers aggressively while "playing", so this unsticks it.
+      const bufferingTimedOut = Date.now() - (room.bufferingStartAt ?? Date.now()) > 15_000
+        && active.some(v => v.heartbeat && isReadyToPlay(v.heartbeat, t));
 
       if (allReady || bufferingTimedOut) {
         room.bufferingStartAt = undefined;
+        room.lastPlayStartAt = Date.now();
         setRoomState(room, 'PLAYING');
         dispatches.push(...buildPlayAt(room));
         dispatches.push(...buildRoomUpdate(room));
@@ -310,8 +323,9 @@ export function tick(room: RoomRuntime): TickResult {
         break;
       }
 
-      if (active.every(v => v.heartbeat && !isSeeking(v.heartbeat) && isReadyToPlay(v.heartbeat))) {
+      if (active.every(v => v.heartbeat && !isSeeking(v.heartbeat) && isReadyToPlay(v.heartbeat, room.adaptiveResumeThreshold))) {
         if (room.wasPlayingBeforeInterruption) {
+          room.lastPlayStartAt = Date.now();
           setRoomState(room, 'PLAYING');
           dispatches.push(...buildPlayAt(room));
         } else {
@@ -329,7 +343,8 @@ export function tick(room: RoomRuntime): TickResult {
         break;
       }
 
-      if (active.every(v => v.heartbeat && !isSeeking(v.heartbeat) && isReadyToPlay(v.heartbeat))) {
+      if (active.every(v => v.heartbeat && !isSeeking(v.heartbeat) && isReadyToPlay(v.heartbeat, room.adaptiveResumeThreshold))) {
+        room.lastPlayStartAt = Date.now();
         setRoomState(room, 'PLAYING');
         dispatches.push(...buildPlayAt(room));
         dispatches.push(...buildRoomUpdate(room));
@@ -365,7 +380,8 @@ export function handleUserAction(
       if (room.state === 'USER_PAUSED' || room.state === 'READY_CHECK') {
         room.wasUserPaused = false;
         const active = activeViewers(room);
-        if (active.length >= 2 && active.every(v => v.heartbeat && isReadyToPlay(v.heartbeat))) {
+        if (active.length >= 2 && active.every(v => v.heartbeat && isReadyToPlay(v.heartbeat, room.adaptiveResumeThreshold))) {
+          room.lastPlayStartAt = Date.now();
           setRoomState(room, 'PLAYING');
           dispatches.push(...buildPlayAt(room));
         } else {

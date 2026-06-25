@@ -1,6 +1,19 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { Logo } from '../components/Logo';
 import type { LibraryFile } from '../types';
+
+
+
+const LANG_FLAGS: Record<string, string> = {
+  en: '🇬🇧', fr: '🇫🇷', de: '🇩🇪', es: '🇪🇸', pt: '🇵🇹',
+  it: '🇮🇹', nl: '🇳🇱', pl: '🇵🇱', ru: '🇷🇺', ja: '🇯🇵',
+  ko: '🇰🇷', zh: '🇨🇳', ar: '🇸🇦', tr: '🇹🇷', sv: '🇸🇪',
+  da: '🇩🇰', fi: '🇫🇮', nb: '🇳🇴', cs: '🇨🇿', ro: '🇷🇴',
+  hu: '🇭🇺', el: '🇬🇷', he: '🇮🇱', th: '🇹🇭', vi: '🇻🇳',
+  id: '🇮🇩', hi: '🇮🇳',
+};
+function langFlag(code: string): string { return LANG_FLAGS[code] ?? code.toUpperCase(); }
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -32,6 +45,7 @@ export function Home() {
 
   const [library, setLibrary] = useState<LibraryFile[]>([]);
   const [uploadUrl, setUploadUrl] = useState('');
+  const [subtitleLang, setSubtitleLang] = useState('en');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadingName, setUploadingName] = useState('');
@@ -41,23 +55,64 @@ export function Home() {
   const [thumbErrors, setThumbErrors] = useState<Set<string>>(new Set());
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [fetchingSubFile, setFetchingSubFile] = useState<string | null>(null);
+
+  const [subPickerFile, setSubPickerFile] = useState<string | null>(null);
+  const [subQuery, setSubQuery] = useState('');
+  const [subResults, setSubResults] = useState<{ fileId: number; label: string }[]>([]);
+  const [subSearching, setSubSearching] = useState(false);
+  const [subApplying, setSubApplying] = useState(false);
+  const [subUploading, setSubUploading] = useState(false);
+  const [subUploadError, setSubUploadError] = useState('');
+  const [subAutoLoading, setSubAutoLoading] = useState(false);
+  const [subRemoving, setSubRemoving] = useState(false);
+  const subFileInputRef = useRef<HTMLInputElement>(null);
+  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
 
   const loadLibrary = useCallback(() => {
     fetch('/api/library')
-      .then(r => r.json())
-      .then((d: { files: LibraryFile[] }) => setLibrary(d.files))
+      .then(r => {
+        if (r.status === 401) { setAuthed(false); return null; }
+        return r.json();
+      })
+      .then((d: { files: LibraryFile[] } | null) => { if (d) setLibrary(d.files); })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    fetch('/api/config').then(r => r.json()).then((c: { uploadUrl: string | null }) => {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then((d: { authed: boolean }) => setAuthed(d.authed))
+      .catch(() => setAuthed(false));
+    fetch('/api/config').then(r => r.json()).then((c: { uploadUrl: string | null; subtitleLang?: string }) => {
       if (c.uploadUrl) setUploadUrl(c.uploadUrl);
+      if (c.subtitleLang) setSubtitleLang(c.subtitleLang);
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!authed) return;
     loadLibrary();
     const interval = setInterval(loadLibrary, 3000);
     return () => clearInterval(interval);
-  }, [loadLibrary]);
+  }, [authed, loadLibrary]);
+
+  const login = async () => {
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: loginPassword }),
+      });
+      if (res.ok) { setAuthed(true); setLoginPassword(''); }
+      else setLoginError('Wrong password');
+    } catch { setLoginError('Could not connect'); }
+    setLoginLoading(false);
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -92,6 +147,7 @@ export function Home() {
       const result = await new Promise<{ roomToken: string; roomUrl: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', uploadUrl ? `${uploadUrl}/api/upload` : '/api/upload');
+        xhr.withCredentials = true;
         xhr.upload.addEventListener('progress', e => {
           if (e.lengthComputable) setUploadProgress(Math.round(e.loaded / e.total * 100));
         });
@@ -168,26 +224,136 @@ export function Home() {
     }
   };
 
-  const fetchSubtitles = async (filename: string) => {
-    setFetchingSubFile(filename);
-    try {
-      await fetch(`/api/library/${encodeURIComponent(filename)}/subtitles`, { method: 'POST' });
-      const poll = setInterval(() => {
-        fetch('/api/library').then(r => r.json()).then((d: { files: LibraryFile[] }) => {
-          setLibrary(d.files);
-          const f = d.files.find(f => f.filename === filename);
-          if (!f || !f.subtitleFetching) { clearInterval(poll); setFetchingSubFile(null); }
-        }).catch(() => {});
-      }, 1500);
-    } catch {
-      setFetchingSubFile(null);
+
+  const openSubPicker = (filename: string) => {
+    const query = filename.replace(/\.mp4$/i, '');
+    setSubPickerFile(filename);
+    setSubQuery(query);
+    setSubResults([]);
+    setSubUploadError('');
+    if (query) {
+      setSubSearching(true);
+      fetch(`/api/subtitle-search?q=${encodeURIComponent(query)}`)
+        .then(r => r.json())
+        .then((d: { results: { fileId: number; label: string }[] }) => setSubResults(d.results ?? []))
+        .catch(() => {})
+        .finally(() => setSubSearching(false));
     }
   };
+
+  const closeSubPicker = () => {
+    setSubPickerFile(null);
+    setSubResults([]);
+    setSubUploadError('');
+  };
+
+  const uploadSubFile = async (file: File) => {
+    if (!subPickerFile) return;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext !== 'srt' && ext !== 'vtt') {
+      setSubUploadError('Only .srt and .vtt files are supported');
+      return;
+    }
+    setSubUploading(true);
+    setSubUploadError('');
+    try {
+      const form = new FormData();
+      form.append('subtitle', file);
+      const res = await fetch(`/api/library/${encodeURIComponent(subPickerFile)}/subtitle-upload`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        setSubUploadError(d.error ?? 'Upload failed');
+      } else {
+        closeSubPicker();
+        loadLibrary();
+      }
+    } catch {
+      setSubUploadError('Upload failed');
+    } finally {
+      setSubUploading(false);
+    }
+  };
+
+  const autoPick = async () => {
+    if (!subPickerFile) return;
+    setSubAutoLoading(true);
+    await fetch(`/api/library/${encodeURIComponent(subPickerFile)}/subtitles`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+    }).catch(() => {});
+    setSubAutoLoading(false);
+    closeSubPicker();
+    loadLibrary();
+  };
+
+  const removeSub = async () => {
+    if (!subPickerFile) return;
+    setSubRemoving(true);
+    await fetch(`/api/library/${encodeURIComponent(subPickerFile)}/subtitles`, { method: 'DELETE' }).catch(() => {});
+    setSubRemoving(false);
+    loadLibrary();
+  };
+
+  const searchSubs = async () => {
+    if (!subQuery.trim()) return;
+    setSubSearching(true);
+    setSubResults([]);
+    try {
+      const res = await fetch(`/api/subtitle-search?q=${encodeURIComponent(subQuery.trim())}`);
+      const data = await res.json() as { results: { fileId: number; label: string }[] };
+      setSubResults(data.results ?? []);
+    } finally {
+      setSubSearching(false);
+    }
+  };
+
+  const applySub = async (filename: string, fileId: number, label: string) => {
+    setSubApplying(true);
+    try {
+      await fetch(`/api/library/${encodeURIComponent(filename)}/subtitles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId, label }),
+      });
+      closeSubPicker();
+      loadLibrary();
+    } finally {
+      setSubApplying(false);
+    }
+  };
+
+  if (authed === false) {
+    return (
+      <div className="home-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div className="setup-card" style={{ maxWidth: 360, width: '100%' }}>
+          <div className="overlay-icon" style={{ fontSize: 32, marginBottom: 12 }}>🎬</div>
+          <h1 className="setup-title" style={{ marginBottom: 20 }}>PookieFlix</h1>
+          <input
+            className="setup-input"
+            type="password"
+            placeholder="Password"
+            value={loginPassword}
+            autoFocus
+            onChange={e => setLoginPassword(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && void login()}
+          />
+          {loginError && <div className="home-error" style={{ margin: '8px 0' }}>{loginError}</div>}
+          <button className="primary-btn" style={{ width: '100%', marginTop: 12 }} onClick={() => void login()} disabled={loginLoading}>
+            {loginLoading ? 'Checking…' : 'Sign in'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (authed === null) return null; // loading
 
   return (
     <div className="home-root">
       <header className="home-topbar">
-        <span className="home-logo">WatchTogether</span>
+        <span className="home-logo"><Logo size="sm" /></span>
         <Link to="/settings" className="settings-link" title="Settings">⚙</Link>
       </header>
 
@@ -212,7 +378,7 @@ export function Home() {
             <div className="upload-icon">✓</div>
             <div className="upload-label">Upload complete</div>
             <a className="primary-btn" href={uploadedRoomUrl} style={{ marginTop: 10 }}>
-              Watch on WatchTogether →
+              Watch on PookieFlix →
             </a>
             <button className="lib-delete-btn" style={{ marginTop: 8 }} onClick={() => setUploadedRoomUrl('')}>
               Upload another
@@ -297,7 +463,6 @@ export function Home() {
                   )}
                   <div className="lib-meta-row">
                     <span className="lib-size">{formatBytes(f.size)}</span>
-                    {f.hasSubtitles && <span className="lib-sub-badge" title="Subtitles available">CC</span>}
                     {f.subtitleFetching && <span className="lib-sub-badge lib-sub-fetching" title="Fetching subtitles…">CC…</span>}
                     {f.lastTime > 5 && (
                       <span className="lib-resume" title="Resume position">
@@ -312,12 +477,13 @@ export function Home() {
                   <button className="lib-watch-btn" onClick={() => createRoomFrom(f.filename)}>
                     {f.lastTime > 5 ? 'Resume' : 'Watch'}
                   </button>
-                  {!f.hasSubtitles && !f.subtitleFetching && (
-                    <button className="lib-sub-btn" disabled={fetchingSubFile === f.filename}
-                      onClick={() => fetchSubtitles(f.filename)} title="Fetch subtitles from OpenSubtitles">
-                      {fetchingSubFile === f.filename ? '…' : 'CC'}
-                    </button>
-                  )}
+                  <button
+                    className={`lib-sub-btn${f.hasSubtitles ? ' lib-sub-btn--active' : ''}`}
+                    onClick={() => openSubPicker(f.filename)}
+                    title={f.hasSubtitles ? 'Subtitles loaded · click to change' : 'Add subtitles'}
+                  >
+                    CC{f.hasSubtitles ? ` ✓ ${langFlag(subtitleLang)}` : ''}
+                  </button>
                   <button
                     className="lib-delete-btn"
                     disabled={deletingFile === f.filename}
@@ -332,6 +498,108 @@ export function Home() {
           })}
         </div>
       )}
+
+      {/* Subtitle modal */}
+      {subPickerFile && (() => {
+        const currentFile = library.find(f => f.filename === subPickerFile);
+        const hasSub = currentFile?.hasSubtitles ?? false;
+        return (
+        <div className="sub-modal-overlay" onClick={closeSubPicker}>
+          <div className="sub-modal" onClick={e => e.stopPropagation()}>
+            <div className="sub-modal-header">
+              <div>
+                <div className="sub-modal-title">Subtitles</div>
+                <div className="sub-modal-filename">{subPickerFile}</div>
+              </div>
+              <button className="sub-modal-close" onClick={closeSubPicker}>✕</button>
+            </div>
+
+            {/* Current status */}
+            <div className="sub-modal-section sub-modal-status-row">
+              <div className={`sub-modal-status ${hasSub ? 'sub-modal-status--active' : ''}`}>
+                <span className="sub-modal-status-dot" />
+                {hasSub ? 'Subtitles active' : 'No subtitles'}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="lib-sub-btn" onClick={() => void autoPick()} disabled={subAutoLoading}>
+                  {subAutoLoading ? '…' : 'Auto-pick'}
+                </button>
+                {hasSub && (
+                  <button className="lib-sub-btn sub-remove-btn" onClick={() => void removeSub()} disabled={subRemoving}>
+                    {subRemoving ? '…' : 'Remove'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Upload section */}
+            <div className="sub-modal-section">
+              <div className="sub-modal-label">Upload your own</div>
+              <div
+                className="sub-upload-zone"
+                onClick={() => subFileInputRef.current?.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) void uploadSubFile(f); }}
+              >
+                {subUploading ? <span className="spinner" /> : <span>.srt or .vtt — drop here or click to browse</span>}
+              </div>
+              <input
+                ref={subFileInputRef}
+                type="file"
+                accept=".srt,.vtt"
+                style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) void uploadSubFile(f); e.target.value = ''; }}
+              />
+              {subUploadError && <div className="sub-modal-error">{subUploadError}</div>}
+            </div>
+
+            {/* Search section */}
+            <div className="sub-modal-section">
+              <div className="sub-modal-label">Search OpenSubtitles</div>
+              <div className="sub-search-row">
+                <input
+                  className="sub-search-input"
+                  value={subQuery}
+                  autoFocus
+                  onChange={e => setSubQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && void searchSubs()}
+                  placeholder="Movie title…"
+                />
+                <button className="lib-sub-btn" onClick={() => void searchSubs()} disabled={subSearching}>
+                  {subSearching ? '…' : 'Search'}
+                </button>
+              </div>
+              {(hasSub || subResults.length > 0) && (
+                <ul className="sub-modal-results">
+                  {hasSub && (
+                    <li className="sub-modal-result sub-modal-result--active">
+                      <span className="sub-modal-result-label">
+                        {currentFile?.subtitleName ?? 'Subtitle loaded'}
+                      </span>
+                      <span className="sub-modal-result-active-badge">✓ Active</span>
+                    </li>
+                  )}
+                  {subResults.map(r => (
+                    <li key={r.fileId} className="sub-modal-result">
+                      <span className="sub-modal-result-label">{r.label}</span>
+                      <button className="lib-sub-btn" onClick={() => void applySub(subPickerFile, r.fileId, r.label)} disabled={subApplying}>
+                        {subApplying ? '…' : 'Use'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {subResults.length === 0 && !subSearching && subQuery && (
+                <div className="sub-modal-hint">No results found.</div>
+              )}
+              {!hasSub && subResults.length === 0 && !subSearching && !subQuery && (
+                <div className="sub-modal-hint">Search for a subtitle above, or upload your own file.</div>
+              )}
+            </div>
+          </div>
+        </div>
+        );
+      })()}
     </div>
   );
 }
