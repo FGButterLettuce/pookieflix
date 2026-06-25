@@ -5,14 +5,19 @@ A private two-person synchronized video watching app. Upload or drop videos into
 ## Quick start (Docker)
 
 ```bash
-cd watchtogether
-cp .env.example .env
-# Edit APP_BASE_URL to your public domain
 docker compose up --build -d
 open http://localhost:3000
 ```
 
-On first run, the app shows a setup wizard to configure your public URL and set a password.
+On first run the setup wizard walks you through your public URL, optional Cloudflare Tunnel, subtitles API key, and password. Everything is saved to `./data/config.json` inside the volume — no config files to edit.
+
+**Optional `.env` file** — only needed if you want to override settings without the wizard (scripted deploys, non-standard port, Cloudflare tunnel token):
+
+```bash
+cp .env.example .env
+# edit what you need, then:
+docker compose up --build -d
+```
 
 ## How to use
 
