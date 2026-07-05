@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { VideoPlayer } from '../components/VideoPlayer';
+import type { VideoPlayerHandle } from '../components/VideoPlayer';
 import { RoomStatus } from '../components/RoomStatus';
 import { WsClient } from '../lib/wsClient';
 import { rlog } from '../lib/remoteLogger';
@@ -54,8 +55,13 @@ export function Room() {
   const [subSearching, setSubSearching] = useState(false);
   const [subApplying, setSubApplying] = useState(false);
 
+  const [previewMode, setPreviewMode] = useState(false);
+  const previewModeRef = useRef(false);
+  useEffect(() => { previewModeRef.current = previewMode; }, [previewMode]);
+
   const vcRef = useRef<VideoController | null>(null);
   const wsRef = useRef<WsClient | null>(null);
+  const videoPlayerRef = useRef<VideoPlayerHandle>(null);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stallCountRef = useRef(0);       // how many quick re-stalls since last stable run
   const lastPlayStartRef = useRef(0);    // epoch ms when PLAYING was last entered
@@ -202,16 +208,26 @@ export function Room() {
   // ── User action callbacks ──────────────────────────────────────────────────
 
   const handleUserPlay = useCallback(() => {
+    if (previewModeRef.current) return;
     wsRef.current?.send({ type: 'USER_ACTION', data: { action: 'PLAY' } });
   }, []);
 
   const handleUserPause = useCallback(() => {
+    if (previewModeRef.current) return;
     wsRef.current?.send({ type: 'USER_ACTION', data: { action: 'PAUSE' } });
   }, []);
 
   const handleUserSeek = useCallback((time: number) => {
+    if (previewModeRef.current) return;
     wsRef.current?.send({ type: 'USER_ACTION', data: { action: 'SEEK', mediaTime: time } });
   }, []);
+
+  // Exit preview when peer joins — server's PLAY_AT naturally resets position
+  useEffect(() => {
+    if (previewMode && roomState !== 'WAITING_FOR_VIEWERS') {
+      setPreviewMode(false);
+    }
+  }, [roomState, previewMode]);
 
   // ── Peer status ref (avoid closure stale value in heartbeat) ───────────────
   const peerStatusRef = useRef(peerStatus);
@@ -367,6 +383,7 @@ export function Room() {
 
       <div className="room-player">
         <VideoPlayer
+          ref={videoPlayerRef}
           src={roomInfo.hlsUrl && supportsHLS() ? roomInfo.hlsUrl : roomInfo.mediaUrl}
           subtitleUrl={subtitleUrl}
           onControllerReady={handleControllerReady}
@@ -375,7 +392,17 @@ export function Room() {
           onUserSeek={handleUserSeek}
         />
 
-        {(roomState === 'BUFFERING' || roomState === 'WAITING_FOR_VIEWERS' || roomState === 'RESYNCING' || roomState === 'SEEKING') && (
+        {previewMode && (
+          <div className="preview-banner">
+            <span>previewing · pookie's join will reset position</span>
+            <button onClick={() => {
+              videoPlayerRef.current?.videoElement?.pause();
+              setPreviewMode(false);
+            }}>exit preview</button>
+          </div>
+        )}
+
+        {!previewMode && (roomState === 'BUFFERING' || roomState === 'WAITING_FOR_VIEWERS' || roomState === 'RESYNCING' || roomState === 'SEEKING') && (
           <div className="video-overlay">
             <div className="overlay-content">
               {roomState === 'WAITING_FOR_VIEWERS' ? (
@@ -396,6 +423,12 @@ export function Room() {
                     <div className="overlay-url">{roomUrl}</div>
                     <button className="copy-btn-lg" onClick={copyLink}>
                       {copied ? '✓ copied!' : 'copy invite link'}
+                    </button>
+                    <button className="copy-btn preview-btn" onClick={() => {
+                      setPreviewMode(true);
+                      videoPlayerRef.current?.videoElement?.play();
+                    }}>
+                      preview
                     </button>
                   </>
                 )
