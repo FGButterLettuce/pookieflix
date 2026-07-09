@@ -3,6 +3,7 @@
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg';
+  mark?: boolean;
 }
 
 const SIZES = {
@@ -11,8 +12,18 @@ const SIZES = {
   lg: { mark: [160, 38] as [number, number], wordmark: 44 },
 };
 
-export function Logo({ size = 'md' }: LogoProps) {
+export function Logo({ size = 'md', mark: showMark = true }: LogoProps) {
   const { mark, wordmark } = SIZES[size];
+
+  const wordmarkEl = (
+    <span style={{ fontFamily: "'Figtree', sans-serif", fontWeight: 900, fontSize: wordmark, letterSpacing: '-0.035em', lineHeight: 1 }}>
+      <span style={{ color: '#ff7fab' }}>Pookie</span>
+      <span style={{ color: '#fff5ef' }}>Flix</span>
+    </span>
+  );
+
+  if (!showMark) return wordmarkEl;
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: size === 'lg' ? 18 : 12 }}>
       <svg width={mark[0]} height={mark[1]} viewBox="0 0 340 80" aria-hidden="true">
@@ -35,10 +46,7 @@ export function Logo({ size = 'md' }: LogoProps) {
         {/* remaining */}
         <rect x="252" y="36" width="76" height="8" rx="4" fill="rgba(255,245,239,0.16)" />
       </svg>
-      <span style={{ fontFamily: "'Figtree', sans-serif", fontWeight: 900, fontSize: wordmark, letterSpacing: '-0.035em', lineHeight: 1 }}>
-        <span style={{ color: '#ff7fab' }}>Pookie</span>
-        <span style={{ color: '#fff5ef' }}>Flix</span>
-      </span>
+      {wordmarkEl}
     </div>
   );
 }

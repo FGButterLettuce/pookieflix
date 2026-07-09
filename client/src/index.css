@@ -842,10 +842,32 @@ body {
   min-height: 52px;
 }
 
+.room-logo {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-right: 10px;
+}
+
+.room-logo-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.room-logo-full {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .room-logo-icon { display: none; }
+  .room-logo-full { display: block; }
+}
+
 .room-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -855,6 +877,18 @@ body {
 
 .room-header .room-status-pill {
   flex-shrink: 0;
+}
+
+.room-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.room-actions .copy-btn {
+  margin-left: 0;
 }
 
 .copy-btn {

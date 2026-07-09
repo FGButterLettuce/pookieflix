@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { VideoPlayer } from '../components/VideoPlayer';
 import type { VideoPlayerHandle } from '../components/VideoPlayer';
 import { RoomStatus } from '../components/RoomStatus';
+import { Logo } from '../components/Logo';
 import { WsClient } from '../lib/wsClient';
 import { rlog } from '../lib/remoteLogger';
 import type { VideoController } from '../lib/videoController';
@@ -321,22 +322,28 @@ export function Room() {
   return (
     <div className="room-container">
       <div className="room-header">
-        <span className="room-title">{roomInfo.mediaFilename}</span>
+        <span className="room-logo">
+          <img src="/favicon.svg" alt="" className="room-logo-icon" />
+          <span className="room-logo-full"><Logo size="sm" mark={false} /></span>
+        </span>
+        <span className="room-title" title={roomInfo.mediaFilename}>{guessTitle(roomInfo.mediaFilename)}</span>
         <RoomStatus state={roomState} viewerCount={viewerCount || roomInfo.viewerCount} />
-        <button
-          className={`copy-btn sub-btn${subtitleUrl ? ' sub-btn--active' : ''}`}
-          onClick={() => setShowSubPicker(v => !v)}
-          title={subtitleUrl ? 'Subtitles on · click to change' : 'Subtitles off · click to search'}
-        >
-          CC{subtitleUrl ? ' ✓' : ''}
-        </button>
-        <button
-          className="copy-btn"
-          onClick={copyLink}
-          title="Copy invite link"
-        >
-          {copied ? '✓ Copied!' : '⎘ Copy link'}
-        </button>
+        <div className="room-actions">
+          <button
+            className={`copy-btn sub-btn${subtitleUrl ? ' sub-btn--active' : ''}`}
+            onClick={() => setShowSubPicker(v => !v)}
+            title={subtitleUrl ? 'Subtitles on · click to change' : 'Subtitles off · click to search'}
+          >
+            CC{subtitleUrl ? ' ✓' : ''}
+          </button>
+          <button
+            className="copy-btn"
+            onClick={copyLink}
+            title="Copy invite link"
+          >
+            {copied ? '✓ Copied!' : '⎘ Copy link'}
+          </button>
+        </div>
       </div>
 
       {showSubPicker && (
