@@ -51,17 +51,27 @@ cp ~/Videos/movie.mp4 ./data/media/library/
 
 It appears in your library on the next page refresh. Thumbnails and HLS segments generate automatically in the background.
 
-### Recommended video format
+### Converting a video to MP4
 
-```bash
-ffmpeg -i input.mkv \
-  -c:v libx264 -preset medium -crf 20 \
-  -c:a aac -b:a 192k \
-  -movflags +faststart \
-  output.mp4
-```
+Uploads must be MP4 (the server checks both the file extension and content type, and rejects anything else). If your video is in a different format, convert it first.
 
-`-movflags +faststart` moves the moov atom to the front — required for fast browser load. CRF 20 is good quality; use 23–26 for smaller files.
+**Mac** — [Flixify](https://github.com/FGButterLettuce/flixify) is a free drag-and-drop app that does this without a terminal: signed, notarized, hardware-accelerated. If you'd rather use the command line, or you're on Windows or Linux, ffmpeg does the same conversion everywhere:
+
+1. Install ffmpeg, if you don't already have it:
+   - **Mac**: `brew install ffmpeg` ([Homebrew](https://brew.sh))
+   - **Windows**: `winget install ffmpeg` (or download from [ffmpeg.org](https://ffmpeg.org/download.html#build-windows) and add it to your `PATH`)
+   - **Linux**: `sudo apt install ffmpeg` (Debian/Ubuntu), `sudo dnf install ffmpeg` (Fedora), or `sudo pacman -S ffmpeg` (Arch)
+2. Run the conversion, pointing at your source file:
+   ```bash
+   ffmpeg -i input.mkv \
+     -c:v libx264 -preset medium -crf 20 \
+     -c:a aac -b:a 192k \
+     -movflags +faststart \
+     output.mp4
+   ```
+3. Upload `output.mp4` (or drop it into `./data/media/library/`, per above).
+
+What the flags do: `-c:v libx264` re-encodes video to H.264 (broadly compatible); `-crf 20` sets quality (lower is better/larger, 18–28 is a reasonable range, 23–26 for smaller files); `-c:a aac` re-encodes audio to AAC; `-movflags +faststart` moves file metadata to the front of the file, which is required for the video to start playing before the whole file has downloaded.
 
 ## Authentication
 
