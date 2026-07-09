@@ -4,7 +4,20 @@ A private two-person synchronized video watching app. Upload or drop videos into
 
 ## Quick start (Docker)
 
+**Option A — prebuilt image, no clone needed:**
+
 ```bash
+docker run -d --name watchtogether -p 3000:3000 \
+  -v "$(pwd)/data:/data" \
+  ghcr.io/fgbutterlettuce/watchtogether:latest
+open http://localhost:3000
+```
+
+**Option B — build from source:**
+
+```bash
+git clone https://github.com/FGButterLettuce/watchtogether.git
+cd watchtogether
 docker compose up --build -d
 open http://localhost:3000
 ```
@@ -188,3 +201,7 @@ watchtogether/
 | `SUBTITLE_LANG` | `en` | Language code for subtitle search (e.g. `fr`, `de`, `ja`) |
 | `PASSWORD_HASH` | — | `scrypt` hash of the app password (set via setup wizard) |
 | `SESSION_SECRET` | — | HMAC secret for session tokens (auto-generated at setup) |
+
+## License
+
+MIT — see [LICENSE](LICENSE).
