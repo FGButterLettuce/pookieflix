@@ -455,7 +455,7 @@ export function Home() {
                   ) : (
                     <div
                       className="lib-name"
-                      title={`${f.filename} — click to rename`}
+                      title={`Click to rename ${f.filename}`}
                       onClick={() => startRename(f.filename)}
                     >
                       {f.filename}
@@ -541,7 +541,7 @@ export function Home() {
                 onDragOver={e => e.preventDefault()}
                 onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) void uploadSubFile(f); }}
               >
-                {subUploading ? <span className="spinner" /> : <span>.srt or .vtt — drop here or click to browse</span>}
+                {subUploading ? <span className="spinner" /> : <span>Drop a .srt or .vtt here, or click to browse</span>}
               </div>
               <input
                 ref={subFileInputRef}

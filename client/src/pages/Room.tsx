@@ -201,7 +201,7 @@ export function Room() {
     startHeartbeat();
     vc.on((event) => {
       if (event === 'error') {
-        setFatalError('This browser cannot play the video — the codec may not be supported (e.g. H.265/HEVC). Try a different browser or ask the host to re-encode to H.264.');
+        setFatalError('This browser cannot play the video. The codec may not be supported (e.g. H.265/HEVC); try a different browser or ask the host to re-encode to H.264.');
       }
     });
   }, [startHeartbeat]);
@@ -383,7 +383,7 @@ export function Room() {
             </ul>
           )}
           {subResults.length === 0 && !subSearching && subQuery && (
-            <p className="sub-no-results">No results yet — hit Search</p>
+            <p className="sub-no-results">No results yet, hit Search</p>
           )}
         </div>
       )}
@@ -415,7 +415,7 @@ export function Room() {
               {roomState === 'WAITING_FOR_VIEWERS' ? (
                 peerEverJoinedRef.current ? (
                   <>
-                    <div className="overlay-title">they disconnected — paused until they're back</div>
+                    <div className="overlay-title">they disconnected, paused until they're back</div>
                     <div className="overlay-sub">send them this link if they need to rejoin:</div>
                     <div className="overlay-url">{roomUrl}</div>
                     <button className="copy-btn-lg" onClick={copyLink}>
@@ -449,9 +449,9 @@ export function Room() {
                       : (() => {
                           const peerLow = peerStatus.bufferedAhead >= 0 && peerStatus.bufferedAhead < 0.5;
                           const stalls = stallCountRef.current;
-                          if (peerLow) return stalls >= 2 ? 'their connection is a bit slow — giving them extra time to load' : 'waiting for them to load up 🍿';
-                          if (stalls >= 3) return 'slow connection detected — we\'re buffering a bit more so it plays smoothly';
-                          if (stalls >= 1) return 'had a couple of hiccups — building up a bit more buffer';
+                          if (peerLow) return stalls >= 2 ? 'their connection is a bit slow, giving them extra time to load' : 'waiting for them to load up 🍿';
+                          if (stalls >= 3) return 'slow connection detected, buffering a bit more so it plays smoothly';
+                          if (stalls >= 1) return 'had a couple of hiccups, building up a bit more buffer';
                           return 'almost ready…';
                         })()}
                   </div>

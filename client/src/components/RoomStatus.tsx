@@ -7,11 +7,11 @@ interface Props {
 
 const STATE_LABELS: Record<RoomState, string> = {
   WAITING_FOR_VIEWERS: 'Waiting for the other viewer…',
-  READY_CHECK: 'Both viewers connected — buffering…',
+  READY_CHECK: 'Both viewers connected, buffering…',
   PLAYING: 'Playing',
   USER_PAUSED: 'Paused',
-  BUFFERING: 'Buffering — waiting for both viewers…',
-  SEEKING: 'Seeking — syncing…',
+  BUFFERING: 'Buffering, waiting for both viewers…',
+  SEEKING: 'Seeking, syncing…',
   RESYNCING: 'Re-syncing…',
   ENDED: 'Video ended',
 };
