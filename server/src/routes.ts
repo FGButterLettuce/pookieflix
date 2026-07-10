@@ -33,7 +33,7 @@ const LOG_VIEWER_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WatchTogether Logs</title>
+<title>PookieFlix Logs</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0f1117;color:#e2e8f0;font-family:monospace;font-size:13px;display:flex;flex-direction:column;height:100vh}

@@ -116,7 +116,7 @@ async function main() {
   });
 
   await app.listen({ port: config.port, host: config.host });
-  console.log(`WatchTogether running at http://${config.host}:${config.port}`);
+  console.log(`PookieFlix running at http://${config.host}:${config.port}`);
   console.log(`Media directory: ${config.mediaDir}`);
   console.log(`Database: ${config.dbPath}`);
 }

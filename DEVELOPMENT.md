@@ -1,4 +1,4 @@
-# WatchTogether — Development History
+# PookieFlix — Development History
 
 Private 2-person sync video app. Node 26 + node:sqlite, React/Vite, server-authoritative sync over WebSocket.
 

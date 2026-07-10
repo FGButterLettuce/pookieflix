@@ -2,7 +2,7 @@ import fs from 'fs';
 import { config } from './config';
 
 const OS_API = 'https://api.opensubtitles.com/api/v1';
-const UA = 'WatchTogether v1.0';
+const UA = 'PookieFlix v1.0';
 
 // Track in-progress fetches to avoid duplicates
 const inFlight = new Set<string>();

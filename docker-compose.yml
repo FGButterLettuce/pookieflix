@@ -1,5 +1,5 @@
 services:
-  watchtogether:
+  pookieflix:
     build: .
     restart: unless-stopped
     ports:
@@ -32,6 +32,6 @@ services:
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:-placeholder}
     depends_on:
-      - watchtogether
+      - pookieflix
     profiles:
       - tunnel

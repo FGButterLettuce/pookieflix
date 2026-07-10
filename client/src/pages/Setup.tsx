@@ -225,7 +225,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               <div className="setup-icon">🌐</div>
               <h1 className="setup-title">Add a public hostname</h1>
               <p className="setup-desc">
-                Now tell Cloudflare what web address to use for WatchTogether.
+                Now tell Cloudflare what web address to use for PookieFlix.
               </p>
               <ol className="setup-instructions">
                 <li>Back in the Cloudflare dashboard, go to the <strong>Public Hostname</strong> tab</li>
@@ -305,7 +305,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               <span style={{ opacity: 0.4, fontSize: '0.55em', fontWeight: 400 }}>optional</span>
             </h1>
             <p className="setup-desc">
-              WatchTogether can automatically fetch subtitles when you upload a video.
+              PookieFlix can automatically fetch subtitles when you upload a video.
               Skip this for now — you can always add it later in Settings.
             </p>
             <ol className="setup-instructions">
