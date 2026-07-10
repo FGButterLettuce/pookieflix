@@ -1,4 +1,4 @@
-# WatchTogether
+# PookieFlix
 
 A private two-person synchronized video watching app. Upload or drop videos into your library, create a room, share the link, watch in perfect sync. Buffer-aware pausing, adaptive thresholds, and HLS streaming for mobile.
 
@@ -7,17 +7,17 @@ A private two-person synchronized video watching app. Upload or drop videos into
 **Option A — prebuilt image, no clone needed:**
 
 ```bash
-docker run -d --name watchtogether -p 3000:3000 \
+docker run -d --name pookieflix -p 3000:3000 \
   -v "$(pwd)/data:/data" \
-  ghcr.io/fgbutterlettuce/watchtogether:latest
+  ghcr.io/fgbutterlettuce/pookieflix:latest
 open http://localhost:3000
 ```
 
 **Option B — build from source:**
 
 ```bash
-git clone https://github.com/FGButterLettuce/watchtogether.git
-cd watchtogether
+git clone https://github.com/FGButterLettuce/pookieflix.git
+cd pookieflix
 docker compose up --build -d
 open http://localhost:3000
 ```
@@ -38,7 +38,7 @@ docker compose up --build -d
 
 1. Open the app and sign in with your password.
 2. Drop an MP4 into the upload zone or click to browse.
-3. After upload, click **Watch on WatchTogether →** to get the room URL.
+3. After upload, click **Watch on PookieFlix →** to get the room URL.
 4. Share the room URL — your partner opens it, no account needed.
 
 ### Use a video already on the server
@@ -117,11 +117,11 @@ yay -S cloudflared   # or brew install cloudflare/cloudflare/cloudflared
 cloudflared tunnel login
 
 # Create tunnel
-cloudflared tunnel create watchtogether
-cloudflared tunnel route dns watchtogether watch.yourdomain.com
+cloudflared tunnel create pookieflix
+cloudflared tunnel route dns pookieflix watch.yourdomain.com
 
 # Run (or add to systemd)
-cloudflared tunnel run --url http://localhost:3000 watchtogether
+cloudflared tunnel run --url http://localhost:3000 pookieflix
 ```
 
 Set `APP_BASE_URL=https://watch.yourdomain.com` in `.env` and rebuild.
@@ -149,7 +149,7 @@ cd client && npm install && npm run dev
 ## Architecture
 
 ```
-watchtogether/
+pookieflix/
 ├── server/src/
 │   ├── index.ts              — Fastify + WebSocket bootstrap
 │   ├── config.ts             — env-var config (reads data/config.json)
