@@ -5,6 +5,15 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+# Two merges close together previously raced: both runs computed a bump
+# from the same starting version and only one could win the push, leaving
+# the other's release notes silently dropped. Serializing runs in this
+# group means the second run always starts from the first run's already-
+# pushed commit, so its own bump/changelog reflects reality.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 permissions:
   contents: write
   packages: write

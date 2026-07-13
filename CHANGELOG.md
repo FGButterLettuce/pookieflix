@@ -1,6 +1,7 @@
 ## v1.2.0 - 2026-07-13
 
-- Robustly extract the tunnel token from whatever users paste ([#5](https://github.com/FGButterLettuce/pookieflix/pull/5))
+- Robustly extract the tunnel token from whatever users paste ([#5](https://github.com/FGButterLettuce/pookieflix/pull/5)) - handles the full install/run command from any OS/Docker tab, adds a visual guide for which tab to pick, and a "Remove tunnel" action in Settings
+- Pre-fill the base URL field with its required http(s):// scheme ([#4](https://github.com/FGButterLettuce/pookieflix/pull/4))
 
 ## v1.1.0 - 2026-07-13
 
