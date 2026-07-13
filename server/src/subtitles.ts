@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { spawn } from 'child_process';
 import { config } from './config';
 
 const OS_API = 'https://api.opensubtitles.com/api/v1';
@@ -100,6 +101,92 @@ async function downloadOs(fileId: number): Promise<string | null> {
 export function srtToVtt(content: string): string {
   if (content.trimStart().startsWith('WEBVTT')) return content;
   return 'WEBVTT\n\n' + content.trim().replace(/\r\n/g, '\n').replace(/(\d+:\d+(?::\d+)?),(\d+)/g, '$1.$2');
+}
+
+export function vttToSrt(content: string): string {
+  const normalized = content.replace(/^﻿/, '').replace(/\r\n/g, '\n').trim();
+  const withoutHeader = normalized.replace(/^WEBVTT[^\n]*\n+/, '');
+  const blocks = withoutHeader.split(/\n\n+/).map(b => b.trim()).filter(Boolean);
+  let index = 0;
+
+  const toSrtTimestamp = (ts: string): string => {
+    const [time, ms] = ts.split('.');
+    const parts = time.split(':');
+    const [h, m, s] = parts.length === 3 ? parts : ['00', ...parts];
+    return `${h.padStart(2, '0')}:${m}:${s},${ms}`;
+  };
+
+  const srtBlocks = blocks.flatMap(block => {
+    const lines = block.split('\n');
+    const cueLineIdx = lines.findIndex(l => l.includes('-->'));
+    if (cueLineIdx === -1) return [];
+    index += 1;
+    const [startTs, , endTs] = lines[cueLineIdx].split(' ');
+    const timeLine = `${toSrtTimestamp(startTs)} --> ${toSrtTimestamp(endTs)}`;
+    const textLines = lines.slice(cueLineIdx + 1);
+    return [`${index}\n${timeLine}\n${textLines.join('\n')}`];
+  });
+  return srtBlocks.join('\n\n') + '\n';
+}
+
+// ── Subtitle sync (alass) ─────────────────────────────────────────────────────
+
+const syncInFlight = new Set<string>();
+const SYNC_TIMEOUT_MS = 2 * 60 * 1000; // 2 min — alass is normally ~30s for a full movie
+
+function backupPath(videoPath: string): string {
+  return subtitlePath(videoPath) + '.presync.bak';
+}
+
+function runAlass(referencePath: string, inputSrt: string, outputSrt: string): Promise<boolean> {
+  return new Promise(resolve => {
+    const proc = spawn('alass', [referencePath, inputSrt, outputSrt]);
+    const timer = setTimeout(() => { try { proc.kill(); } catch {} resolve(false); }, SYNC_TIMEOUT_MS);
+    proc.on('close', code => { clearTimeout(timer); resolve(code === 0); });
+    proc.on('error', () => { clearTimeout(timer); resolve(false); });
+  });
+}
+
+export async function syncSubtitles(videoPath: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const vttPath = subtitlePath(videoPath);
+  if (!fs.existsSync(vttPath)) return { ok: false, error: 'No subtitles to sync' };
+  if (syncInFlight.has(videoPath)) return { ok: false, error: 'Sync already in progress' };
+
+  syncInFlight.add(videoPath);
+  const tmpSrtIn = vttPath + '.sync-in.srt';
+  const tmpSrtOut = vttPath + '.sync-out.srt';
+  const tmpVtt = vttPath + '.new.vtt';
+  try {
+    const vttContent = fs.readFileSync(vttPath, 'utf8');
+    fs.writeFileSync(tmpSrtIn, vttToSrt(vttContent), 'utf8');
+
+    const ok = await runAlass(videoPath, tmpSrtIn, tmpSrtOut);
+    if (!ok) return { ok: false, error: 'alass failed to align subtitles' };
+
+    // Back up the pre-sync content only now that we know the sync succeeded —
+    // backing this up unconditionally at the top would let a *failed* re-sync
+    // overwrite a still-valid backup from an earlier successful sync.
+    const srtContent = fs.readFileSync(tmpSrtOut, 'utf8');
+    fs.writeFileSync(tmpVtt, srtToVtt(srtContent), 'utf8');
+    fs.copyFileSync(vttPath, backupPath(videoPath));
+    fs.renameSync(tmpVtt, vttPath);
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Unexpected error during sync' };
+  } finally {
+    syncInFlight.delete(videoPath);
+    try { fs.rmSync(tmpSrtIn); } catch { /* ignore */ }
+    try { fs.rmSync(tmpSrtOut); } catch { /* ignore */ }
+    try { fs.rmSync(tmpVtt); } catch { /* ignore */ }
+  }
+}
+
+export function undoSync(videoPath: string): boolean {
+  const backup = backupPath(videoPath);
+  if (!fs.existsSync(backup)) return false;
+  fs.copyFileSync(backup, subtitlePath(videoPath));
+  fs.rmSync(backup);
+  return true;
 }
 
 // ── Public entry points ───────────────────────────────────────────────────────
