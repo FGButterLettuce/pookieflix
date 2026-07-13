@@ -111,6 +111,7 @@ export async function generateHLS(videoPath: string): Promise<boolean> {
       '-c', 'copy',
       '-hls_time', '4',
       '-hls_list_size', '0',
+      '-hls_playlist_type', 'vod',
       '-hls_segment_filename', path.join(dir, 'seg%04d.ts'),
       '-y', manifest,
     ]);
