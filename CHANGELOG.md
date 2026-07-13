@@ -1,3 +1,7 @@
+## v1.4.0 - 2026-07-13
+
+- Add mandatory wizard password step and live tunnel status card ([#9](https://github.com/FGButterLettuce/pookieflix/pull/9))
+
 ## v1.3.0 - 2026-07-13
 
 - Add advanced port setting to the tunnel setup step ([#7](https://github.com/FGButterLettuce/pookieflix/pull/7))
