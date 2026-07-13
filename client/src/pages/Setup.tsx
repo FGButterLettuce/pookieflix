@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Logo } from '../components/Logo';
 import { PasswordInput } from '../components/PasswordInput';
+import { PasteableInput } from '../components/PasteableInput';
 import { useTheme } from '../theme/ThemeContext';
 import { generateDomainSuggestions } from '../lib/domainSuggestions';
 
@@ -228,17 +229,15 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               <div className="setup-icon">💌</div>
               <h1 className="setup-title">who's watching?</h1>
               <p className="setup-desc">two names, and we'll suggest some domain ideas just for you two.</p>
-              <input
+              <PasteableInput
                 className="setup-input"
-                type="text"
                 placeholder="your name"
                 value={userName}
                 onChange={e => setUserName(e.target.value)}
                 autoFocus
               />
-              <input
+              <PasteableInput
                 className="setup-input"
-                type="text"
                 placeholder="their name"
                 value={partnerName}
                 onChange={e => setPartnerName(e.target.value)}
@@ -384,9 +383,8 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               <p className="setup-instructions-label">
                 3. …and paste it here (the whole thing, don't bother editing it down — pookieflix will find the token in it automatically):
               </p>
-              <input
+              <PasteableInput
                 className="setup-input"
-                type="text"
                 placeholder="paste the whole docker command (or just the token)"
                 value={tunnelToken}
                 onChange={e => setTunnelToken(e.target.value)}
@@ -451,9 +449,8 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                     PookieFlix itself.
                   </p>
                   <label className="settings-label">Container port</label>
-                  <input
+                  <PasteableInput
                     className="setup-input"
-                    type="text"
                     inputMode="numeric"
                     placeholder="3000"
                     value={containerPort}
@@ -461,7 +458,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                   />
                 </div>
               )}
-              <input
+              <PasteableInput
                 className="setup-input"
                 type="url"
                 placeholder="https://watch.yourdomain.com"
@@ -511,7 +508,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               <li>forward external port <strong>3000</strong> to <code>{window.location.hostname}</code> port <strong>3000</strong></li>
               <li>your public URL will be <em>http://yourname.duckdns.org:3000</em>. paste it below</li>
             </ol>
-            <input
+            <PasteableInput
               className="setup-input"
               type="url"
               placeholder="http://yourname.duckdns.org:3000"
@@ -581,9 +578,8 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               <li>go to your profile → <strong>API Access</strong> and copy your key</li>
               <li>paste it below</li>
             </ol>
-            <input
+            <PasteableInput
               className="setup-input"
-              type="text"
               placeholder="paste api key here, or leave blank to skip"
               value={subsKey}
               onChange={e => setSubsKey(e.target.value)}

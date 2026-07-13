@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PasswordInput } from '../components/PasswordInput';
+import { PasteableInput } from '../components/PasteableInput';
 
 
 interface TunnelStatus {
@@ -140,7 +141,7 @@ export function Settings() {
         <h1 className="setup-title" style={{ marginBottom: 24 }}>Settings</h1>
 
         <label className="settings-label">Public domain</label>
-        <input
+        <PasteableInput
           className="setup-input"
           type="url"
           placeholder="https://watch.yourdomain.com"
@@ -150,9 +151,8 @@ export function Settings() {
         <div className="setup-hint" style={{ marginBottom: 20 }}>Used to generate room invite links</div>
 
         <label className="settings-label">Your name</label>
-        <input
+        <PasteableInput
           className="setup-input"
-          type="text"
           placeholder="e.g. Niranjan"
           value={values.USER_NAME}
           onChange={set('USER_NAME')}
@@ -160,9 +160,8 @@ export function Settings() {
         <div className="setup-hint" style={{ marginBottom: 20 }}>Used for personalized domain suggestions if you set up a Cloudflare Tunnel</div>
 
         <label className="settings-label">Partner's name</label>
-        <input
+        <PasteableInput
           className="setup-input"
-          type="text"
           placeholder="e.g. Anu"
           value={values.PARTNER_NAME}
           onChange={set('PARTNER_NAME')}
@@ -170,7 +169,7 @@ export function Settings() {
         <div className="setup-hint" style={{ marginBottom: 20 }}>Same, also used for domain suggestions</div>
 
         <label className="settings-label">Local network URL <span className="settings-optional">(optional)</span></label>
-        <input
+        <PasteableInput
           className="setup-input"
           type="url"
           placeholder="http://192.168.0.91:3000"
@@ -180,9 +179,8 @@ export function Settings() {
         <div className="setup-hint" style={{ marginBottom: 20 }}>Direct upload path bypassing Cloudflare</div>
 
         <label className="settings-label">OpenSubtitles API key <span className="settings-optional">(optional)</span></label>
-        <input
+        <PasteableInput
           className="setup-input"
-          type="text"
           placeholder="Your API key"
           value={values.OPENSUBTITLES_API_KEY}
           onChange={set('OPENSUBTITLES_API_KEY')}
@@ -212,9 +210,8 @@ export function Settings() {
           >
             open dash.cloudflare.com ↗
           </a>
-          <input
+          <PasteableInput
             className="setup-input"
-            type="text"
             placeholder={values.TUNNEL_CONFIGURED ? 'Paste a new token to replace this tunnel' : 'Paste a token to enable a tunnel'}
             value={tunnelToken}
             onChange={e => setTunnelToken(e.target.value)}
