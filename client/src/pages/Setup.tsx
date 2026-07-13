@@ -115,13 +115,13 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               <Logo size="lg" variant={theme === 'dark' ? 'dark' : 'light'} />
             </div>
             <p className="setup-desc">
-              Watch movies in perfect sync with someone. Your files, your server, completely
+              watch movies in perfect sync with someone. your files, your server, completely
               private, and free to use however you want.
             </p>
             <p className="setup-desc" style={{ opacity: 0.55, fontSize: '0.88em', marginTop: 0 }}>
-              Takes about 2–5 minutes to set up.
+              takes about 2–5 minutes to set up.
             </p>
-            <button className="primary-btn setup-btn" onClick={() => setStep(1)}>Let's go →</button>
+            <button className="primary-btn setup-btn" onClick={() => setStep(1)}>let's go →</button>
           </div>
         )}
 
@@ -337,20 +337,30 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
 
             {tunnelSubStep === 2 && (<>
               <div className="setup-icon">🌐</div>
-              <h1 className="setup-title">Add a public hostname</h1>
+              <h1 className="setup-title">add a public hostname</h1>
               <p className="setup-desc">
-                Now tell Cloudflare what web address to use for PookieFlix. This only works for a
-                domain whose nameservers are already set up in this Cloudflare account — if your
-                domain lives elsewhere (Namecheap, GoDaddy, etc. without being added to Cloudflare),
-                add it to Cloudflare first.
+                now tell cloudflare what web address to use for pookieflix. this only works for a
+                domain whose nameservers are already set up in this cloudflare account — if your
+                domain lives elsewhere, add it to cloudflare first.
+              </p>
+              <div className="cf-mockup">
+                <div className="cf-mockup-caption">your tunnel → Routes tab</div>
+                <div className="cf-mockup-route-row">
+                  <span className="cf-mockup-route-btn">Add route</span>
+                  <div className="cf-mockup-pointer">👆 click this</div>
+                </div>
+                <div className="cf-mockup-route-options">
+                  <span className="cf-mockup-tab cf-mockup-tab--pick">Published application</span>
+                  <span className="cf-mockup-tab cf-mockup-tab--dim">Private Network</span>
+                </div>
+              </div>
+              <p className="setup-hint" style={{ marginBottom: 12 }}>
+                (not "Private Network" — that needs the Cloudflare WARP client and won't let you just share a link)
               </p>
               <ol className="setup-instructions">
-                <li>Back in the Cloudflare dashboard, go to your tunnel's <strong>Routes</strong> tab</li>
-                <li>Click <strong>Add route</strong>, then choose <strong>Published application</strong> (not "Private Network" — that requires the Cloudflare WARP client and won't let you just share a link)</li>
-                <li>Choose a subdomain (e.g. <em>watch</em>) and select a domain you have in Cloudflare</li>
-                <li>Set <strong>Service URL</strong> to <code>http://localhost:{containerPort || '3000'}</code> — plain <code>http://</code>, not <code>https://</code>: Cloudflare's edge handles the public HTTPS side, PookieFlix itself only speaks HTTP internally</li>
-                <li>Save the route</li>
-                <li>Your public URL will look like <em>https://watch.yourdomain.com</em>. Paste it below</li>
+                <li>choose a subdomain (e.g. <em>watch</em>) and select a domain you have in cloudflare</li>
+                <li>set <strong>Service URL</strong> to <code>http://localhost:{containerPort || '3000'}</code> — plain <code>http://</code>, not <code>https://</code>: cloudflare's edge handles the public HTTPS side</li>
+                <li>save the route — your public URL will look like <em>https://watch.yourdomain.com</em>. paste it below</li>
               </ol>
 
               <button
@@ -410,17 +420,18 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {step === 2 && mode === 'ddns' && (
           <div className="setup-step">
             <div className="setup-icon">🔗</div>
-            <h1 className="setup-title">Set up DDNS + port forwarding</h1>
+            <h1 className="setup-title">set up ddns + port forwarding</h1>
             <p className="setup-desc">
-              This gives your server a hostname that always follows your home IP address, even when it changes.
+              this gives your server a hostname that always follows your home IP address, even
+              when it changes.
             </p>
             <ol className="setup-instructions">
-              <li>Go to <strong>duckdns.org</strong> and sign in with Google or GitHub (it's free)</li>
-              <li>Pick a subdomain name. You'll get <em>yourname.duckdns.org</em></li>
-              <li>Install the DuckDNS updater on this computer so it keeps your IP current (instructions on their site for Linux/Mac/Windows)</li>
-              <li>Log into your <strong>router</strong> (usually at 192.168.0.1 or 192.168.1.1) and find <strong>Port Forwarding</strong></li>
-              <li>Forward external port <strong>3000</strong> to <code>{window.location.hostname}</code> port <strong>3000</strong></li>
-              <li>Your public URL will be <em>http://yourname.duckdns.org:3000</em>. Paste it below</li>
+              <li>go to <strong>duckdns.org</strong> and sign in with google or github (it's free)</li>
+              <li>pick a subdomain name. you'll get <em>yourname.duckdns.org</em></li>
+              <li>install the duckdns updater on this computer so it keeps your IP current (instructions on their site for linux/mac/windows)</li>
+              <li>log into your <strong>router</strong> (usually at 192.168.0.1 or 192.168.1.1) and find <strong>port forwarding</strong></li>
+              <li>forward external port <strong>3000</strong> to <code>{window.location.hostname}</code> port <strong>3000</strong></li>
+              <li>your public URL will be <em>http://yourname.duckdns.org:3000</em>. paste it below</li>
             </ol>
             <input
               className="setup-input"
@@ -448,11 +459,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {step === 3 && (
           <div className="setup-step">
             <div className="setup-icon">🔒</div>
-            <h1 className="setup-title">Set your password</h1>
+            <h1 className="setup-title">set your password</h1>
             <p className="setup-desc">
               {mode === 'local'
-                ? 'Required before you finish, even for a home-only setup — anyone on your Wi-Fi could otherwise open the app with no login at all.'
-                : 'Required before you finish — without one, PookieFlix would be wide open to anyone who finds the URL, tunnel or not.'}
+                ? "required before you finish, even for a home-only setup — anyone on your wifi could otherwise open the app with no login at all."
+                : "required before you finish — without one, pookieflix would be wide open to anyone who finds the URL, tunnel or not."}
             </p>
             <input
               className="setup-input"
@@ -475,11 +486,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             <hr style={{ margin: '4px 0 20px', borderColor: 'var(--border)' }} />
 
             <h2 className="settings-label" style={{ fontSize: 15, marginBottom: 8 }}>
-              Auto subtitles <span className="settings-optional">(optional)</span>
+              auto subtitles <span className="settings-optional">(optional)</span>
             </h2>
             <p className="setup-desc" style={{ textAlign: 'left', marginBottom: 12 }}>
-              PookieFlix can automatically fetch subtitles when you upload a video, or you can
-              skip this for now and add it later in Settings.
+              pookieflix can automatically fetch subtitles when you upload a video, or you can
+              skip this for now and add it later in settings.
             </p>
             <ol className="setup-instructions">
               <li>Go to <strong>opensubtitles.com</strong> and create a free account</li>
@@ -515,13 +526,13 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {step === 4 && (
           <div className="setup-step">
             <div className="setup-icon">✓</div>
-            <h1 className="setup-title">You're all set!</h1>
+            <h1 className="setup-title">you're all set!</h1>
             <p className="setup-desc">
               {mode === 'local'
-                ? `PookieFlix is ready. Share ${localUrl} with whoever you're watching with. They need to be on the same Wi-Fi.`
+                ? `pookieflix is ready. share ${localUrl} with whoever you're watching with. they need to be on the same wifi.`
                 : mode === 'tunnel'
-                ? `PookieFlix is live at ${baseUrl}. Upload a video, share the room link, and enjoy.`
-                : `PookieFlix is ready at ${baseUrl}. Upload a video and share the room link.`}
+                ? `pookieflix is live at ${baseUrl}. upload a video, share the room link, and enjoy.`
+                : `pookieflix is ready at ${baseUrl}. upload a video and share the room link.`}
             </p>
             {mode === 'tunnel' && tunnelToken && (
               <p className="setup-desc" style={{ fontSize: '0.85em', opacity: 0.6, marginTop: 0 }}>
