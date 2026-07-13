@@ -24,14 +24,7 @@ services:
       # UPLOAD_URL: "http://192.168.0.91:3000"
       # OPENSUBTITLES_API_KEY: "your-key-here"
       # MAX_UPLOAD_BYTES: "10737418240"
-
-  # Optional: Cloudflare Tunnel — remove this block if you're using a different method.
-  # Set TUNNEL_TOKEN to your token from the Cloudflare dashboard.
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:-placeholder}
-    depends_on:
-      - pookieflix
-    profiles:
-      - tunnel
+      # cloudflared is bundled in the image and managed by the server itself
+      # once a token is set (via the wizard, Settings, or here) — no separate
+      # tunnel container/profile needed.
+      # TUNNEL_TOKEN: "your-token-here"

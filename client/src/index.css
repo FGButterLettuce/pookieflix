@@ -228,45 +228,6 @@ body {
   margin-bottom: 6px;
 }
 
-.setup-os-tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.setup-os-tab {
-  flex: 1;
-  padding: 7px 10px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: 13px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-.setup-os-tab.active {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.setup-code-block {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  margin-bottom: 4px;
-}
-.setup-code-block code {
-  flex: 1;
-  font-family: monospace;
-  font-size: 12px;
-  color: var(--accent-hover);
-  word-break: break-all;
-}
 
 .copy-btn {
   flex-shrink: 0;

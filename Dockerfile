@@ -36,9 +36,19 @@ RUN cargo build --release --locked --package alass-cli
 # ── Stage 3: Production runtime ───────────────────────────────────────────────
 FROM node:26-alpine AS runtime
 
-RUN apk add --no-cache ffmpeg
+ARG TARGETARCH
+ARG CLOUDFLARED_VERSION=2026.7.1
+
+RUN apk add --no-cache ffmpeg curl
 COPY --from=alass-build /build/target/release/alass-cli /usr/local/bin/alass
 RUN chmod +x /usr/local/bin/alass
+
+# cloudflared - static binary, no build needed. The server spawns and
+# manages this itself once a TUNNEL_TOKEN is configured (see server/src/tunnel.ts) -
+# no separate container or manual terminal step required to expose the app.
+RUN curl -fsSL -o /usr/local/bin/cloudflared \
+      "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${TARGETARCH}" \
+    && chmod +x /usr/local/bin/cloudflared
 
 WORKDIR /app
 

@@ -11,6 +11,8 @@ import { registerRoutes } from './routes';
 import { setupWebSocketServer, startTickLoop, stopTickLoop } from './roomManager';
 import { getDb } from './db';
 import { generateHLSAsync, hasHLS } from './ffmpeg';
+import { readPersistedConfig } from './persistedConfig';
+import { startTunnel, stopTunnel } from './tunnel';
 
 async function main() {
   // Ensure data directories exist
@@ -95,6 +97,12 @@ async function main() {
   setupWebSocketServer(wss);
   startTickLoop();
 
+  // Start the Cloudflare Tunnel connector if a token is already configured
+  // (e.g. on restart) - the setup wizard/settings save also start it live.
+  const persisted = readPersistedConfig();
+  const tunnelToken = process.env.TUNNEL_TOKEN ?? persisted.TUNNEL_TOKEN;
+  if (tunnelToken) startTunnel(tunnelToken);
+
   // Kick off HLS generation for any existing library files that don't have it yet
   const libraryDir = path.join(config.mediaDir, 'library');
   for (const f of fs.readdirSync(libraryDir)) {
@@ -105,11 +113,13 @@ async function main() {
 
   // Graceful shutdown
   process.on('SIGTERM', async () => {
+    stopTunnel();
     stopTickLoop();
     await app.close();
     process.exit(0);
   });
   process.on('SIGINT', async () => {
+    stopTunnel();
     stopTickLoop();
     await app.close();
     process.exit(0);

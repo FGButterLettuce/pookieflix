@@ -109,27 +109,16 @@ iOS Safari receives HLS (`.m3u8` + `.ts` segments, generated at upload time) ins
 
 ## Expose via Cloudflare Tunnel
 
-```bash
-# Install cloudflared
-yay -S cloudflared   # or brew install cloudflare/cloudflare/cloudflared
+`cloudflared` is bundled in the image — PookieFlix runs and manages the connector itself once you
+give it a token. No separate container, no terminal command on the host.
 
-# One-time login
-cloudflared tunnel login
+1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) → **Networking → Tunnels → Create a tunnel**, choose **Cloudflared**, name it anything.
+2. Copy the token shown under **"Install connector"** (the long string in the command they show you — you don't need to run that command).
+3. In the Cloudflare dashboard's **Public Hostname** tab, add a hostname (e.g. `watch.yourdomain.com`) pointing at `localhost:3000`.
+4. Paste the token into PookieFlix's setup wizard (or **Settings → Cloudflare Tunnel token** if you've already finished setup) and set your public URL to `https://watch.yourdomain.com`.
 
-# Create tunnel
-cloudflared tunnel create pookieflix
-cloudflared tunnel route dns pookieflix watch.yourdomain.com
-
-# Run (or add to systemd)
-cloudflared tunnel run --url http://localhost:3000 pookieflix
-```
-
-Set `APP_BASE_URL=https://watch.yourdomain.com` in `.env` and rebuild.
-
-For a quick throwaway URL:
-```bash
-cloudflared tunnel --url http://localhost:3000
-```
+That's it — the tunnel connects immediately and reconnects automatically across restarts. The token
+is stored in `./data/config.json`, same as everything else the wizard saves.
 
 ## LAN upload (bypasses Cloudflare file size limit)
 

@@ -6,6 +6,7 @@ interface SettingsData {
   APP_BASE_URL: string;
   UPLOAD_URL: string;
   OPENSUBTITLES_API_KEY: string;
+  TUNNEL_CONFIGURED: boolean;
 }
 
 export function Settings() {
@@ -14,7 +15,9 @@ export function Settings() {
     APP_BASE_URL: '',
     UPLOAD_URL: '',
     OPENSUBTITLES_API_KEY: '',
+    TUNNEL_CONFIGURED: false,
   });
+  const [tunnelToken, setTunnelToken] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -45,9 +48,13 @@ export function Settings() {
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, TUNNEL_TOKEN: tunnelToken.trim() || undefined }),
       });
       if (!res.ok) throw new Error('Failed to save');
+      if (tunnelToken.trim()) {
+        setValues(v => ({ ...v, TUNNEL_CONFIGURED: true }));
+        setTunnelToken('');
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch {
@@ -114,6 +121,21 @@ export function Settings() {
           onChange={set('OPENSUBTITLES_API_KEY')}
         />
         <div className="setup-hint" style={{ marginBottom: 24 }}>Auto-fetch subtitles on upload</div>
+
+        <label className="settings-label">
+          Cloudflare Tunnel token <span className="settings-optional">({values.TUNNEL_CONFIGURED ? 'configured' : 'not set'})</span>
+        </label>
+        <input
+          className="setup-input"
+          type="text"
+          placeholder={values.TUNNEL_CONFIGURED ? 'Leave blank to keep current tunnel' : 'Paste a token to enable a tunnel'}
+          value={tunnelToken}
+          onChange={e => setTunnelToken(e.target.value)}
+        />
+        <div className="setup-hint" style={{ marginBottom: 24 }}>
+          From your tunnel's "Install connector" step at dash.cloudflare.com. PookieFlix runs and manages
+          the tunnel itself — no separate container or install needed.
+        </div>
 
         {error && <div className="home-error" style={{ marginBottom: 12 }}>{error}</div>}
 
