@@ -1180,6 +1180,10 @@ body {
   right: 0;
   background: rgba(0,0,0,0.6);
   padding: 8px 16px;
+  /* Extra left padding reserves space for the fixed-position .theme-toggle-wrap
+     (bottom:16px left:16px, ~88px wide), which would otherwise sit over this
+     banner's text on the room player's preview screen. */
+  padding-left: 132px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1273,10 +1277,16 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 /* ── Theme toggle ─────────────────────────────────────────────────────────── */
+/* Bottom-left (not top-right) — the top-right corner is already claimed by
+   per-page controls (Home's settings gear, Room's copy-link/CC buttons),
+   and reserving space for the toggle there doesn't work cleanly on narrow
+   Room headers, which already run edge-to-edge. Bottom-left is clear on
+   every page except Room's preview-banner, which reserves space for it
+   (see .preview-banner padding-left below). */
 .theme-toggle-wrap {
   position: fixed;
-  top: 16px;
-  right: 16px;
+  bottom: 16px;
+  left: 16px;
   z-index: 100;
 }
 .theme-toggle-pill {
