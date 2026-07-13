@@ -215,3 +215,6 @@ pookieflix/
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+The Docker image also bundles one GPL-3.0 third-party binary (`alass`, for
+subtitle sync) — see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
