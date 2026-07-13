@@ -1,3 +1,7 @@
+## v1.3.0 - 2026-07-13
+
+- Add advanced port setting to the tunnel setup step ([#7](https://github.com/FGButterLettuce/pookieflix/pull/7))
+
 ## v1.2.1 - 2026-07-13
 
 - Fix mockup pointer alignment and stale Cloudflare route instructions ([#6](https://github.com/FGButterLettuce/pookieflix/pull/6))
