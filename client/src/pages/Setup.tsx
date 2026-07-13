@@ -165,9 +165,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                   <span className="cf-mockup-tab">macOS</span>
                   <span className="cf-mockup-tab">Debian</span>
                   <span className="cf-mockup-tab">Red Hat</span>
-                  <span className="cf-mockup-tab cf-mockup-tab--pick">Docker</span>
+                  <div className="cf-mockup-pick-wrap">
+                    <span className="cf-mockup-tab cf-mockup-tab--pick">Docker</span>
+                    <div className="cf-mockup-pointer">👆 click this one</div>
+                  </div>
                 </div>
-                <div className="cf-mockup-pointer">👆 click this one</div>
               </div>
 
               <p className="setup-instructions-label" style={{ marginTop: 16 }}>
@@ -184,7 +186,6 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                 onChange={e => setTunnelToken(e.target.value)}
                 autoFocus
               />
-              <div className="setup-hint">Any of the OS/architecture commands work too, if that's what you copied — we'll pull the token out either way.</div>
 
               <div className="setup-nav">
                 <button className="setup-back" onClick={() => setTunnelSubStep(0)}>← Back</button>
@@ -208,11 +209,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                 add it to Cloudflare first.
               </p>
               <ol className="setup-instructions">
-                <li>Back in the Cloudflare dashboard, go to the <strong>Public Hostname</strong> tab</li>
-                <li>Click <strong>Add a public hostname</strong></li>
+                <li>Back in the Cloudflare dashboard, go to your tunnel's <strong>Routes</strong> tab</li>
+                <li>Click <strong>Add route</strong>, then choose <strong>Published application</strong> (not "Private Network" — that requires the Cloudflare WARP client and won't let you just share a link)</li>
                 <li>Choose a subdomain (e.g. <em>watch</em>) and select a domain you have in Cloudflare</li>
-                <li>Set <strong>Type</strong> to <em>HTTP</em> and <strong>URL</strong> to <code>localhost:3000</code></li>
-                <li>Click <strong>Save hostname</strong></li>
+                <li>Set <strong>Service URL</strong> to <code>http://localhost:3000</code> — plain <code>http://</code>, not <code>https://</code>: Cloudflare's edge handles the public HTTPS side, PookieFlix itself only speaks HTTP internally</li>
+                <li>Save the route</li>
                 <li>Your public URL will look like <em>https://watch.yourdomain.com</em>. Paste it below</li>
               </ol>
               <input
