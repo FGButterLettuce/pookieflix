@@ -12,6 +12,8 @@ interface SettingsData {
   APP_BASE_URL: string;
   UPLOAD_URL: string;
   OPENSUBTITLES_API_KEY: string;
+  USER_NAME: string;
+  PARTNER_NAME: string;
   TUNNEL_CONFIGURED: boolean;
   TUNNEL_STATUS: TunnelStatus;
 }
@@ -29,6 +31,8 @@ export function Settings() {
     APP_BASE_URL: '',
     UPLOAD_URL: '',
     OPENSUBTITLES_API_KEY: '',
+    USER_NAME: '',
+    PARTNER_NAME: '',
     TUNNEL_CONFIGURED: false,
     TUNNEL_STATUS: { state: 'stopped' },
   });
@@ -143,6 +147,26 @@ export function Settings() {
           onChange={set('APP_BASE_URL')}
         />
         <div className="setup-hint" style={{ marginBottom: 20 }}>Used to generate room invite links</div>
+
+        <label className="settings-label">Your name</label>
+        <input
+          className="setup-input"
+          type="text"
+          placeholder="e.g. Niranjan"
+          value={values.USER_NAME}
+          onChange={set('USER_NAME')}
+        />
+        <div className="setup-hint" style={{ marginBottom: 20 }}>Used to suggest personalized domain names during setup</div>
+
+        <label className="settings-label">Partner's name</label>
+        <input
+          className="setup-input"
+          type="text"
+          placeholder="e.g. Anu"
+          value={values.PARTNER_NAME}
+          onChange={set('PARTNER_NAME')}
+        />
+        <div className="setup-hint" style={{ marginBottom: 20 }}>Same as above</div>
 
         <label className="settings-label">Local network URL <span className="settings-optional">(optional)</span></label>
         <input
