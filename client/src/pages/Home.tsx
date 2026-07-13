@@ -366,7 +366,7 @@ export function Home() {
   return (
     <div className="home-root">
       <header className="home-topbar">
-        <span className="home-logo"><Logo size="sm" variant={theme === 'dark' ? 'dark' : 'light'} /></span>
+        <span className="home-logo"><Logo size="sm" variant={theme} /></span>
         <Link to="/settings" className="settings-link" title="Settings">⚙</Link>
       </header>
 

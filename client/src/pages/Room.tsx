@@ -380,7 +380,7 @@ export function Room() {
       <div className="room-header">
         <span className="room-logo">
           <img src="/favicon.svg" alt="" className="room-logo-icon" />
-          <span className="room-logo-full"><Logo size="sm" mark={false} variant={theme === 'dark' ? 'dark' : 'light'} /></span>
+          <span className="room-logo-full"><Logo size="sm" mark={false} variant={theme} /></span>
         </span>
         <span className="room-title" title={roomInfo.mediaFilename}>{guessTitle(roomInfo.mediaFilename)}</span>
         <RoomStatus state={roomState} viewerCount={viewerCount || roomInfo.viewerCount} />

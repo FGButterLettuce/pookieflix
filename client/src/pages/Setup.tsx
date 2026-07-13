@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Logo } from '../components/Logo';
 import { useTheme } from '../theme/ThemeContext';
 import { generateDomainSuggestions } from '../lib/domainSuggestions';
@@ -52,6 +52,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const domainSuggestions = useMemo(
+    () => generateDomainSuggestions(userName, partnerName),
+    [userName, partnerName]
+  );
 
   const localUrl = `${window.location.protocol}//${window.location.host}`;
 
@@ -141,7 +146,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {step === 0 && (
           <div className="setup-step">
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
-              <Logo size="lg" variant={theme === 'dark' ? 'dark' : 'light'} />
+              <Logo size="lg" variant={theme} />
             </div>
             <p className="setup-desc">
               watch movies in perfect sync with someone. your files, your server, completely
@@ -257,7 +262,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                 streaming subscription. pick one, buy it, then come back and continue below.
               </p>
               <div className="domain-suggestion-list">
-                {generateDomainSuggestions(userName, partnerName).map(s => (
+                {domainSuggestions.map(s => (
                   <div
                     key={s.domain}
                     className={`domain-suggestion-card${s.featured ? ' domain-suggestion-card--featured' : ''}`}
