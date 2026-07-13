@@ -149,20 +149,40 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               <h1 className="setup-title">Connect the tunnel</h1>
               <p className="setup-desc">
                 PookieFlix runs and manages the connector itself — no separate install or terminal
-                command needed.
+                command needed. Cloudflare's page shows you a command to run on your own computer,
+                but you can skip that entirely.
+              </p>
+
+              <p className="setup-instructions-label">
+                1. On the "Install cloudflared connector" page, under <strong>Select Operating System</strong>, click <strong>Docker</strong> (not Windows/macOS/Debian/Red Hat):
+              </p>
+              <div className="cf-mockup">
+                <div className="cf-mockup-caption">Select Operating System</div>
+                <div className="cf-mockup-tabs">
+                  <span className="cf-mockup-tab">Windows</span>
+                  <span className="cf-mockup-tab">macOS</span>
+                  <span className="cf-mockup-tab">Debian</span>
+                  <span className="cf-mockup-tab">Red Hat</span>
+                  <span className="cf-mockup-tab cf-mockup-tab--pick">Docker</span>
+                </div>
+                <div className="cf-mockup-pointer">👆 click this one</div>
+              </div>
+
+              <p className="setup-instructions-label" style={{ marginTop: 16 }}>
+                2. It'll show one command starting with <code>docker run cloudflare/cloudflared…</code>. Copy that entire line —
               </p>
               <p className="setup-instructions-label">
-                Back in the Cloudflare dashboard, copy the token shown under <strong>"Install connector"</strong> (it's the long string in the command they show you), then paste it here:
+                3. …and paste it here (the whole thing, don't bother editing it down — PookieFlix will find the token in it automatically):
               </p>
               <input
                 className="setup-input"
                 type="text"
-                placeholder="Paste your tunnel token here"
+                placeholder="Paste the whole Docker command (or just the token)"
                 value={tunnelToken}
                 onChange={e => setTunnelToken(e.target.value)}
                 autoFocus
               />
-              <div className="setup-hint">Looks like: eyJhIjoiYWJjZGVm… (very long string)</div>
+              <div className="setup-hint">Any of the OS/architecture commands work too, if that's what you copied — we'll pull the token out either way.</div>
 
               <div className="setup-nav">
                 <button className="setup-back" onClick={() => setTunnelSubStep(0)}>← Back</button>
@@ -180,7 +200,10 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               <div className="setup-icon">🌐</div>
               <h1 className="setup-title">Add a public hostname</h1>
               <p className="setup-desc">
-                Now tell Cloudflare what web address to use for PookieFlix.
+                Now tell Cloudflare what web address to use for PookieFlix. This only works for a
+                domain whose nameservers are already set up in this Cloudflare account — if your
+                domain lives elsewhere (Namecheap, GoDaddy, etc. without being added to Cloudflare),
+                add it to Cloudflare first.
               </p>
               <ol className="setup-instructions">
                 <li>Back in the Cloudflare dashboard, go to the <strong>Public Hostname</strong> tab</li>

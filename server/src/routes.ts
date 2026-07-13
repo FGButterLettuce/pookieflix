@@ -13,7 +13,7 @@ import {
 import { generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir } from './ffmpeg';
 import { getRuntimeByToken } from './roomManager';
 import { fetchSubtitles, subtitlePath, searchSubtitles, extractTitle, srtToVtt, syncSubtitles, undoSync } from './subtitles';
-import { startTunnel } from './tunnel';
+import { startTunnel, stopTunnel } from './tunnel';
 
 // ── Remote log buffer ─────────────────────────────────────────────────────────
 interface LogEntry { ts: number; device: string; level: string; msg: string; }
@@ -278,6 +278,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       setupComplete: true,
     });
     if (newTunnelToken) startTunnel(newTunnelToken);
+    return reply.send({ ok: true });
+  });
+
+  app.delete('/api/settings/tunnel', { preHandler: requireAdmin }, async (_req, reply) => {
+    stopTunnel();
+    writePersistedConfig({ TUNNEL_TOKEN: undefined });
     return reply.send({ ok: true });
   });
 

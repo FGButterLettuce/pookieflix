@@ -4,6 +4,20 @@ import { spawn, ChildProcess } from 'child_process';
 // exposing PookieFlix publicly is just "paste a token" - no separate
 // container, no terminal command, no manual OS-native install.
 
+// Real Cloudflare tunnel tokens are 150+ characters of unbroken base64url
+// text. Cloudflare's dashboard shows a different install/run command per
+// OS/Docker/architecture, and users paste the whole thing rather than just
+// the token - extracting the longest token-shaped substring handles any of
+// those formats without needing to match each one specifically.
+const TOKEN_LIKE = /[A-Za-z0-9_-]{40,}/g;
+
+export function extractTunnelToken(input: string): string {
+  const trimmed = input.trim();
+  const matches = trimmed.match(TOKEN_LIKE);
+  if (!matches) return trimmed;
+  return matches.reduce((longest, m) => (m.length > longest.length ? m : longest), '');
+}
+
 let proc: ChildProcess | null = null;
 let currentToken: string | null = null;
 let stopped = true;
@@ -36,7 +50,8 @@ function spawnTunnel(token: string): void {
   });
 }
 
-export function startTunnel(token: string): void {
+export function startTunnel(rawToken: string): void {
+  const token = extractTunnelToken(rawToken);
   if (!stopped && currentToken === token && proc) return; // already running with this token
   killCurrent();
   currentToken = token;
