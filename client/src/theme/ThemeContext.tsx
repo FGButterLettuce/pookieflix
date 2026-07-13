@@ -23,9 +23,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme]);
 
   useEffect(() => {
-    if (localStorage.getItem(STORAGE_KEY)) return; // user already made an explicit choice
     const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = (e: MediaQueryListEvent) => setThemeState(e.matches ? 'dark' : 'light');
+    const onChange = (e: MediaQueryListEvent) => {
+      if (localStorage.getItem(STORAGE_KEY)) return; // user has since made an explicit choice — stop following
+      setThemeState(e.matches ? 'dark' : 'light');
+    };
     mql.addEventListener('change', onChange);
     return () => mql.removeEventListener('change', onChange);
   }, []);
