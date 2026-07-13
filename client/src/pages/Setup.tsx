@@ -25,6 +25,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
 
   const chooseTunnel = () => {
     setMode('tunnel');
+    setBaseUrl('https://');
     setUploadUrl(localUrl);
     setTunnelSubStep(0);
     setStep(2);
@@ -32,6 +33,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
 
   const chooseDDNS = () => {
     setMode('ddns');
+    setBaseUrl('http://');
     setUploadUrl(localUrl);
     setStep(2);
   };
