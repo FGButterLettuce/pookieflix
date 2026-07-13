@@ -113,8 +113,8 @@ iOS Safari receives HLS (`.m3u8` + `.ts` segments, generated at upload time) ins
 give it a token. No separate container, no terminal command on the host.
 
 1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) → **Networking → Tunnels → Create a tunnel**, choose **Cloudflared**, name it anything.
-2. Copy the token shown under **"Install connector"** (the long string in the command they show you — you don't need to run that command).
-3. In the Cloudflare dashboard's **Public Hostname** tab, add a hostname (e.g. `watch.yourdomain.com`) pointing at `localhost:3000`.
+2. Copy the token shown under **"Install connector"** (the long string in the command they show you — paste the whole command, or just the token, into the wizard; PookieFlix extracts the token either way, and you don't need to run that command anywhere).
+3. On the tunnel's **Routes** tab, click **Add route** → **Published application** (not "Private Network", which requires the Cloudflare WARP client). Choose a subdomain/domain and set **Service URL** to `http://localhost:3000` — plain `http://`, not `https://` (Cloudflare's edge handles the public HTTPS side; PookieFlix only speaks HTTP internally).
 4. Paste the token into PookieFlix's setup wizard (or **Settings → Cloudflare Tunnel token** if you've already finished setup) and set your public URL to `https://watch.yourdomain.com`.
 
 That's it — the tunnel connects immediately and reconnects automatically across restarts. The token
