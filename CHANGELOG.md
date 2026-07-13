@@ -1,3 +1,7 @@
+## v1.5.0 - 2026-07-13
+
+- Redesign onboarding wizard: light/dark theme, visual steps, domain helper ([#10](https://github.com/FGButterLettuce/pookieflix/pull/10))
+
 ## v1.4.0 - 2026-07-13
 
 - Add mandatory wizard password step and live tunnel status card ([#9](https://github.com/FGButterLettuce/pookieflix/pull/9))
