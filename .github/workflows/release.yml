@@ -74,7 +74,8 @@ jobs:
           git add server/package.json client/package.json CHANGELOG.md
           git commit -m "chore: release v${{ steps.bump.outputs.version }}"
           git tag "test-v${{ steps.bump.outputs.version }}"
-          git push origin HEAD:release-test-scratch --follow-tags
+          git push origin HEAD:release-test-scratch
+          git push origin "test-v${{ steps.bump.outputs.version }}"
 
       - name: Create GitHub Release
         env:
