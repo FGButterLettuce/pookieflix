@@ -125,7 +125,6 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         throw new Error(d.error ?? 'Failed to save');
       }
       setStep(4);
-      onComplete();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save settings');
       setSaving(false);
