@@ -167,9 +167,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                   <span className="cf-mockup-tab">macOS</span>
                   <span className="cf-mockup-tab">Debian</span>
                   <span className="cf-mockup-tab">Red Hat</span>
-                  <span className="cf-mockup-tab cf-mockup-tab--pick">Docker</span>
+                  <div className="cf-mockup-pick-wrap">
+                    <span className="cf-mockup-tab cf-mockup-tab--pick">Docker</span>
+                    <div className="cf-mockup-pointer">👆 click this one</div>
+                  </div>
                 </div>
-                <div className="cf-mockup-pointer">👆 click this one</div>
               </div>
 
               <p className="setup-instructions-label" style={{ marginTop: 16 }}>
@@ -186,7 +188,6 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                 onChange={e => setTunnelToken(e.target.value)}
                 autoFocus
               />
-              <div className="setup-hint">Any of the OS/architecture commands work too, if that's what you copied — we'll pull the token out either way.</div>
 
               <div className="setup-nav">
                 <button className="setup-back" onClick={() => setTunnelSubStep(0)}>← Back</button>

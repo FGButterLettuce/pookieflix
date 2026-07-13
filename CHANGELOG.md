@@ -1,3 +1,7 @@
+## v1.2.1 - 2026-07-13
+
+- Fix mockup pointer alignment and stale Cloudflare route instructions ([#6](https://github.com/FGButterLettuce/pookieflix/pull/6))
+
 ## v1.2.0 - 2026-07-13
 
 - Robustly extract the tunnel token from whatever users paste ([#5](https://github.com/FGButterLettuce/pookieflix/pull/5)) - handles the full install/run command from any OS/Docker tab, adds a visual guide for which tab to pick, and a "Remove tunnel" action in Settings
