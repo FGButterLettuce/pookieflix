@@ -120,6 +120,13 @@ give it a token. No separate container, no terminal command on the host.
 That's it — the tunnel connects immediately and reconnects automatically across restarts. The token
 is stored in `./data/config.json`, same as everything else the wizard saves.
 
+**If port 3000 was already taken on your machine**, you likely just remapped the outside port
+(`docker run -p 8080:3000 ...`) — the Service URL above is unaffected, since `cloudflared` runs
+inside the same container as PookieFlix and always talks to its internal port (3000 by default),
+regardless of what host port you mapped it to externally. This only matters if you *also* set a
+custom `PORT` environment variable for PookieFlix itself — in that case, use that port instead of
+3000 in the Service URL.
+
 ## LAN upload (bypasses Cloudflare file size limit)
 
 Set `UPLOAD_URL=http://<server-lan-ip>:3000` in `.env`. The upload zone will use the LAN address directly for large file transfers.
