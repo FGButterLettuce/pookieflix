@@ -233,48 +233,77 @@ body {
 }
 .setup-nav .setup-btn { margin-top: 0; flex: 1; }
 
-.setup-back {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0;
-}
-.setup-back:hover { color: var(--text); }
-
-.setup-choice-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 24px;
-}
-
-.setup-choice {
+.setup-back, .secondary-btn {
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 16px;
-  text-align: left;
+  color: var(--text);
   cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 14px 20px;
+  border-radius: 999px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.setup-back:hover, .secondary-btn:hover { border-color: var(--accent); color: var(--accent-hover); }
+.secondary-btn { width: 100%; }
+
+/* Real clickable button to an external destination (Cloudflare, a registrar,
+   etc.) instead of a bare domain name in a sentence. */
+.external-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.3);
+  margin: 4px 0 16px;
+}
+.external-cta-btn:hover { background: var(--accent-hover); }
+
+/* A small visual step-flow (numbered icon chain) used in place of a bare
+   text list wherever a screen has no other visual aid. */
+.step-flow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+.step-flow-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  transition: border-color 0.15s;
-  width: 100%;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
 }
-.setup-choice:hover { border-color: var(--accent); }
-
-.setup-choice-title {
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--text);
+.step-flow-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
 }
-
-.setup-choice-desc {
-  font-size: 13px;
+.step-flow-label {
+  font-size: 12px;
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: 1.4;
+}
+.step-flow-arrow {
+  color: var(--text-subtle);
+  font-size: 18px;
+  padding-top: 8px;
+  flex-shrink: 0;
 }
 
 .setup-instructions {
@@ -345,6 +374,39 @@ body {
   display: block;
 }
 .settings-optional { font-weight: 400; color: var(--text-muted); }
+
+/* ── Responsive scale-up for large desktop viewports ─────────────────────
+   .setup-card's base sizing (max-width 520px, 15px body copy) is tuned for
+   phone/small-laptop screens. On a large monitor (~1920px+ / ~2000px) that
+   leaves the card small and centered with huge empty margins, and the text
+   reads as disproportionately tiny even though the raw pixel values are
+   reasonable for a small screen. Scale the card and its type up above
+   900px; the base rules above are untouched, so phone/small-laptop sizing
+   is unaffected. */
+@media (min-width: 900px) {
+  .setup-card {
+    max-width: 620px;
+    padding: 52px;
+  }
+  .setup-card.settings-card {
+    max-width: 600px;
+  }
+  .setup-card .setup-dots { margin-bottom: 40px; }
+  .setup-card .setup-icon { font-size: 42px; }
+  .setup-card .setup-title { font-size: 26px; }
+  .setup-card .setup-desc { font-size: 16px; }
+  .setup-card .setup-input { font-size: 15px; padding: 12px 16px; }
+  .setup-card .setup-hint { font-size: 13px; }
+  .setup-card .setup-choice { padding: 18px; }
+  .setup-card .setup-choice-title { font-size: 16px; }
+  .setup-card .setup-choice-desc { font-size: 14px; }
+  .setup-card .setup-instructions { font-size: 16px; }
+  .setup-card .setup-instructions-label { font-size: 14px; }
+  .setup-card .setup-advanced-toggle { font-size: 14px; }
+  .setup-card .settings-label { font-size: 14px; }
+  .setup-card .setup-back { font-size: 15px; }
+  .setup-card .primary-btn { font-size: 16px; padding: 16px 20px; }
+}
 
 .tunnel-card {
   background: var(--surface2);

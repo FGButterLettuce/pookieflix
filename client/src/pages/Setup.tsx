@@ -213,8 +213,8 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                 that's normal — they're cheap and we can help you pick one.
               </p>
               <div className="domain-check-choices">
-                <button className="setup-choice" onClick={() => setTunnelPhase('cloudflare')}>
-                  <span className="setup-choice-title">yep, i've got one →</span>
+                <button className="secondary-btn" onClick={() => setTunnelPhase('cloudflare')}>
+                  yep, i've got one →
                 </button>
                 <button className="primary-btn setup-btn" onClick={() => setTunnelPhase('domain-names')}>
                   nope, help me get one 🛍️
@@ -306,33 +306,62 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
 
             {tunnelSubStep === 0 && (<>
               <div className="setup-icon">☁️</div>
-              <h1 className="setup-title">Create a Cloudflare Tunnel</h1>
+              <h1 className="setup-title">create a cloudflare tunnel</h1>
               <p className="setup-desc">
-                A Cloudflare Tunnel gives your server a public web address, with no static IP or port forwarding needed. It's free.
+                a cloudflare tunnel gives your server a public web address, with no static IP or port forwarding needed. it's free.
               </p>
+              <div className="step-flow">
+                <div className="step-flow-item">
+                  <div className="step-flow-icon">1️⃣</div>
+                  <div className="step-flow-label">sign in to cloudflare</div>
+                </div>
+                <div className="step-flow-arrow">→</div>
+                <div className="step-flow-item">
+                  <div className="step-flow-icon">2️⃣</div>
+                  <div className="step-flow-label">networking → tunnels</div>
+                </div>
+                <div className="step-flow-arrow">→</div>
+                <div className="step-flow-item">
+                  <div className="step-flow-icon">3️⃣</div>
+                  <div className="step-flow-label">create a tunnel</div>
+                </div>
+                <div className="step-flow-arrow">→</div>
+                <div className="step-flow-item">
+                  <div className="step-flow-icon">4️⃣</div>
+                  <div className="step-flow-label">save it</div>
+                </div>
+              </div>
+              <a
+                className="external-cta-btn"
+                href="https://dash.cloudflare.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                open dash.cloudflare.com ↗
+              </a>
               <ol className="setup-instructions">
-                <li>Go to <strong>dash.cloudflare.com</strong> and sign in (or create a free account)</li>
-                <li>In the left sidebar, click <strong>Networking → Tunnels</strong></li>
-                <li>Click <strong>Create a tunnel</strong>, choose <strong>Cloudflared</strong>, and give it any name (e.g. "home")</li>
-                <li>Click <strong>Save tunnel</strong>. Don't close this page, you'll need it next</li>
+                <li>sign in (or create a free account)</li>
+                <li>in the left sidebar, click <strong>Networking → Tunnels</strong></li>
+                <li>click <strong>Create a tunnel</strong>, choose <strong>Cloudflared</strong>, and give it any name (e.g. "home")</li>
+                <li>click <strong>Save tunnel</strong>. don't close this page, you'll need it next</li>
               </ol>
               <div className="setup-nav">
-                <button className="setup-back" onClick={() => setTunnelPhase('domain-check')}>← Back</button>
-                <button className="primary-btn setup-btn" onClick={() => setTunnelSubStep(1)}>Done, next →</button>
+                <button className="setup-back" onClick={() => setTunnelPhase('domain-check')}>← back</button>
+                <button className="primary-btn setup-btn" onClick={() => setTunnelSubStep(1)}>done, next →</button>
               </div>
             </>)}
 
             {tunnelSubStep === 1 && (<>
               <div className="setup-icon">🔑</div>
-              <h1 className="setup-title">Connect the tunnel</h1>
+              <h1 className="setup-title">connect the tunnel</h1>
               <p className="setup-desc">
-                PookieFlix runs and manages the connector itself — no separate install or terminal
-                command needed. Cloudflare's page shows you a command to run on your own computer,
+                pookieflix runs and manages the connector itself — no separate install or terminal
+                command needed. cloudflare's page shows you a command to run on your own computer,
                 but you can skip that entirely.
               </p>
 
               <p className="setup-instructions-label">
-                1. On the "Install cloudflared connector" page, under <strong>Select Operating System</strong>, click <strong>Docker</strong> (not Windows/macOS/Debian/Red Hat):
+                1. on the "install cloudflared connector" page, under <strong>Select Operating System</strong>, click <strong>Docker</strong> (not Windows/macOS/Debian/Red Hat):
               </p>
               <div className="cf-mockup">
                 <div className="cf-mockup-caption">Select Operating System</div>
@@ -349,28 +378,28 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               </div>
 
               <p className="setup-instructions-label" style={{ marginTop: 16 }}>
-                2. It'll show one command starting with <code>docker run cloudflare/cloudflared…</code>. Copy that entire line —
+                2. it'll show one command starting with <code>docker run cloudflare/cloudflared…</code>. copy that entire line —
               </p>
               <p className="setup-instructions-label">
-                3. …and paste it here (the whole thing, don't bother editing it down — PookieFlix will find the token in it automatically):
+                3. …and paste it here (the whole thing, don't bother editing it down — pookieflix will find the token in it automatically):
               </p>
               <input
                 className="setup-input"
                 type="text"
-                placeholder="Paste the whole Docker command (or just the token)"
+                placeholder="paste the whole docker command (or just the token)"
                 value={tunnelToken}
                 onChange={e => setTunnelToken(e.target.value)}
                 autoFocus
               />
 
               <div className="setup-nav">
-                <button className="setup-back" onClick={() => setTunnelSubStep(0)}>← Back</button>
+                <button className="setup-back" onClick={() => setTunnelSubStep(0)}>← back</button>
                 <button
                   className="primary-btn setup-btn"
                   onClick={() => setTunnelSubStep(2)}
                   disabled={!tunnelToken.trim()}
                 >
-                  Next →
+                  next →
                 </button>
               </div>
             </>)}
@@ -439,15 +468,15 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                 onChange={e => setBaseUrl(e.target.value)}
                 autoFocus
               />
-              <div className="setup-hint">Must start with https://</div>
+              <div className="setup-hint">must start with https://</div>
               <div className="setup-nav">
-                <button className="setup-back" onClick={() => setTunnelSubStep(1)}>← Back</button>
+                <button className="setup-back" onClick={() => setTunnelSubStep(1)}>← back</button>
                 <button
                   className="primary-btn setup-btn"
                   onClick={() => setStep(3)}
                   disabled={!baseUrl.trim().startsWith('https://')}
                 >
-                  Next →
+                  next →
                 </button>
               </div>
             </>)}
@@ -465,8 +494,16 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               this gives your server a hostname that always follows your home IP address, even
               when it changes.
             </p>
+            <a
+              className="external-cta-btn"
+              href="https://www.duckdns.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              open duckdns.org ↗
+            </a>
             <ol className="setup-instructions">
-              <li>go to <strong>duckdns.org</strong> and sign in with google or github (it's free)</li>
+              <li>sign in with google or github (it's free)</li>
               <li>pick a subdomain name. you'll get <em>yourname.duckdns.org</em></li>
               <li>install the duckdns updater on this computer so it keeps your IP current (instructions on their site for linux/mac/windows)</li>
               <li>log into your <strong>router</strong> (usually at 192.168.0.1 or 192.168.1.1) and find <strong>port forwarding</strong></li>
@@ -481,15 +518,15 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               onChange={e => setBaseUrl(e.target.value)}
               autoFocus
             />
-            <div className="setup-hint">Include the port number unless you set up HTTPS separately</div>
+            <div className="setup-hint">include the port number unless you set up HTTPS separately</div>
             <div className="setup-nav">
-              <button className="setup-back" onClick={() => setStep(1)}>← Back</button>
+              <button className="setup-back" onClick={() => setStep(1)}>← back</button>
               <button
                 className="primary-btn setup-btn"
                 onClick={() => setStep(3)}
                 disabled={!baseUrl.trim().startsWith('http')}
               >
-                Next →
+                next →
               </button>
             </div>
           </div>
@@ -508,7 +545,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             <input
               className="setup-input"
               type="password"
-              placeholder="At least 6 characters"
+              placeholder="at least 6 characters"
               value={password}
               onChange={e => setPassword(e.target.value)}
               autoFocus
@@ -516,12 +553,12 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             <input
               className="setup-input"
               type="password"
-              placeholder="Confirm password"
+              placeholder="confirm password"
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && void finish()}
             />
-            <div className="setup-hint">You can change this later in Settings</div>
+            <div className="setup-hint">you can change this later in settings</div>
 
             <hr style={{ margin: '4px 0 20px', borderColor: 'var(--border)' }} />
 
@@ -532,15 +569,23 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               pookieflix can automatically fetch subtitles when you upload a video, or you can
               skip this for now and add it later in settings.
             </p>
+            <a
+              className="external-cta-btn"
+              href="https://www.opensubtitles.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              open opensubtitles.com ↗
+            </a>
             <ol className="setup-instructions">
-              <li>go to <strong>opensubtitles.com</strong> and create a free account</li>
+              <li>create a free account</li>
               <li>go to your profile → <strong>API Access</strong> and copy your key</li>
               <li>paste it below</li>
             </ol>
             <input
               className="setup-input"
               type="text"
-              placeholder="Paste API key here, or leave blank to skip"
+              placeholder="paste api key here, or leave blank to skip"
               value={subsKey}
               onChange={e => setSubsKey(e.target.value)}
             />
@@ -550,13 +595,13 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                 if (mode === 'local') setStep(1);
                 else if (mode === 'tunnel') { setStep(2); setTunnelSubStep(2); }
                 else setStep(2);
-              }}>← Back</button>
+              }}>← back</button>
               <button
                 className="primary-btn setup-btn"
                 onClick={() => { void finish(); }}
                 disabled={saving || password.length < 6 || password !== confirmPassword}
               >
-                {saving ? 'Saving…' : 'Finish →'}
+                {saving ? 'saving…' : 'finish →'}
               </button>
             </div>
           </div>
@@ -581,7 +626,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               </p>
             )}
             <button className="primary-btn setup-btn" onClick={onComplete}>
-              Go to library →
+              go to library →
             </button>
           </div>
         )}

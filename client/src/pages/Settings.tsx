@@ -132,7 +132,7 @@ export function Settings() {
 
   return (
     <div className="setup-root">
-      <div className="setup-card" style={{ maxWidth: 480 }}>
+      <div className="setup-card settings-card" style={{ maxWidth: 480 }}>
         <button className="setup-back" style={{ marginBottom: 16 }} onClick={() => navigate('/')}>
           ← Back to library
         </button>
@@ -203,6 +203,14 @@ export function Settings() {
             )}
           </div>
 
+          <a
+            className="external-cta-btn"
+            href="https://dash.cloudflare.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            open dash.cloudflare.com ↗
+          </a>
           <input
             className="setup-input"
             type="text"
@@ -211,9 +219,9 @@ export function Settings() {
             onChange={e => setTunnelToken(e.target.value)}
           />
           <div className="setup-hint" style={{ marginBottom: 12 }}>
-            From your tunnel's "Install connector" step at dash.cloudflare.com — paste the whole
-            command shown there, we'll find the token in it. PookieFlix runs and manages the tunnel
-            itself, no separate container or install needed.
+            From your tunnel's "Install connector" step — paste the whole command shown there,
+            we'll find the token in it. PookieFlix runs and manages the tunnel itself, no separate
+            container or install needed.
           </div>
           {values.TUNNEL_CONFIGURED && (
             <button
