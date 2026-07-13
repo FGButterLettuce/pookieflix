@@ -107,9 +107,14 @@ require reordering, not just new CSS:
    - 5b. *(if no)* Collect two names (their name, partner's name) — plain text inputs, no
      visual complexity needed here.
    - 5c. *(if no)* Personalized suggestion screen (validated in `domain-helper.html`):
-     ~6-8 generated domain ideas as cards, each with a "check on Spaceship" CTA button that
-     opens `spaceship.com`'s search prefilled with that name in a new tab. Upfront framing
-     states real cheap pricing (~$3-12/year) to make the ask feel low-friction (requirement 5).
+     ~6-8 generated domain ideas as cards. Spaceship does not publicly document a prefill query
+     parameter for its domain-search page (checked directly — their search page 403s automated
+     fetches, and no API docs mention one), so rather than fabricate a deep link that might not
+     work, each card gets a "copy name" button (reusing the app's existing `.copy-btn` pattern)
+     next to a "search on Spaceship" CTA button that opens `spaceship.com/domain-search/` in a
+     new tab — still a real clickable CTA per requirement 3, just honest about what's actually
+     prefillable. Upfront framing states real cheap pricing (~$3-12/year) to make the ask feel
+     low-friction (requirement 5).
    - 5d. Existing Cloudflare tunnel instructions (steps that are today's `tunnelSubStep`
      0/1/2), restyled with the typography/color fixes and the new "Add route" mockup.
 6. **Password + subtitles** — same logic as today, restyled.
