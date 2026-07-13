@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Logo } from '../components/Logo';
 import { useTheme } from '../theme/ThemeContext';
+import { generateDomainSuggestions } from '../lib/domainSuggestions';
 
 type Mode = 'local' | 'tunnel' | 'ddns' | null;
 
@@ -11,6 +12,9 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   const [tunnelSubStep, setTunnelSubStep] = useState(0);
   const [baseUrl, setBaseUrl] = useState('');
   const [tunnelToken, setTunnelToken] = useState('');
+  const [tunnelPhase, setTunnelPhase] = useState<'domain-check' | 'domain-names' | 'domain-suggestions' | 'cloudflare'>('domain-check');
+  const [userName, setUserName] = useState('');
+  const [partnerName, setPartnerName] = useState('');
   const [showAdvancedPort, setShowAdvancedPort] = useState(false);
   const [containerPort, setContainerPort] = useState(() => window.location.port || '3000');
   const [uploadUrl, setUploadUrl] = useState('');
@@ -34,6 +38,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
     setBaseUrl('https://');
     setUploadUrl(localUrl);
     setTunnelSubStep(0);
+    setTunnelPhase('domain-check');
     setStep(2);
   };
 
@@ -76,6 +81,8 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
           UPLOAD_URL: uploadUrl.trim() || undefined,
           OPENSUBTITLES_API_KEY: subsKey.trim() || undefined,
           TUNNEL_TOKEN: tunnelToken.trim() || undefined,
+          USER_NAME: userName.trim() || undefined,
+          PARTNER_NAME: partnerName.trim() || undefined,
         }),
       });
       if (!res.ok) {
@@ -164,6 +171,99 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {step === 2 && mode === 'tunnel' && (
           <div className="setup-step">
 
+            {tunnelPhase === 'domain-check' && (<>
+              <div className="setup-icon">🌐</div>
+              <h1 className="setup-title">quick check — got a domain already?</h1>
+              <p className="setup-desc">
+                the tunnel needs a domain name pointed at cloudflare. if you don't have one yet,
+                that's normal — they're cheap and we can help you pick one.
+              </p>
+              <div className="domain-check-choices">
+                <button className="setup-choice" onClick={() => setTunnelPhase('cloudflare')}>
+                  <span className="setup-choice-title">yep, i've got one →</span>
+                </button>
+                <button className="primary-btn setup-btn" onClick={() => setTunnelPhase('domain-names')}>
+                  nope, help me get one 🛍️
+                </button>
+              </div>
+              <button className="setup-back" onClick={() => setStep(1)}>← back</button>
+            </>)}
+
+            {tunnelPhase === 'domain-names' && (<>
+              <div className="setup-icon">💌</div>
+              <h1 className="setup-title">who's watching?</h1>
+              <p className="setup-desc">two names, and we'll suggest some domain ideas just for you two.</p>
+              <input
+                className="setup-input"
+                type="text"
+                placeholder="your name"
+                value={userName}
+                onChange={e => setUserName(e.target.value)}
+                autoFocus
+              />
+              <input
+                className="setup-input"
+                type="text"
+                placeholder="their name"
+                value={partnerName}
+                onChange={e => setPartnerName(e.target.value)}
+              />
+              <div className="setup-nav">
+                <button className="setup-back" onClick={() => setTunnelPhase('domain-check')}>← back</button>
+                <button
+                  className="primary-btn setup-btn"
+                  onClick={() => setTunnelPhase('domain-suggestions')}
+                  disabled={!userName.trim() || !partnerName.trim()}
+                >
+                  show me ideas →
+                </button>
+              </div>
+            </>)}
+
+            {tunnelPhase === 'domain-suggestions' && (<>
+              <div className="setup-icon">🛍️</div>
+              <h1 className="setup-title">{userName} &amp; {partnerName}, here's a few ideas</h1>
+              <p className="setup-desc">
+                domains like this run about <strong>$3–12/year</strong> — cheaper than one
+                streaming subscription. pick one, buy it, then come back and continue below.
+              </p>
+              <div className="domain-suggestion-list">
+                {generateDomainSuggestions(userName, partnerName).map(s => (
+                  <div
+                    key={s.domain}
+                    className={`domain-suggestion-card${s.featured ? ' domain-suggestion-card--featured' : ''}`}
+                  >
+                    <span className="domain-suggestion-name">{s.domain}</span>
+                    <div className="domain-suggestion-actions">
+                      <button
+                        type="button"
+                        className="copy-btn"
+                        onClick={() => { void navigator.clipboard.writeText(s.domain); }}
+                      >
+                        copy
+                      </button>
+                      <a
+                        className="domain-suggestion-cta"
+                        href="https://www.spaceship.com/domain-search/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        search on spaceship →
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="setup-nav">
+                <button className="setup-back" onClick={() => setTunnelPhase('domain-names')}>← back</button>
+                <button className="primary-btn setup-btn" onClick={() => setTunnelPhase('cloudflare')}>
+                  got one, continue →
+                </button>
+              </div>
+            </>)}
+
+            {tunnelPhase === 'cloudflare' && (<>
+
             {tunnelSubStep === 0 && (<>
               <div className="setup-icon">☁️</div>
               <h1 className="setup-title">Create a Cloudflare Tunnel</h1>
@@ -177,7 +277,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                 <li>Click <strong>Save tunnel</strong>. Don't close this page, you'll need it next</li>
               </ol>
               <div className="setup-nav">
-                <button className="setup-back" onClick={() => setStep(1)}>← Back</button>
+                <button className="setup-back" onClick={() => setTunnelPhase('domain-check')}>← Back</button>
                 <button className="primary-btn setup-btn" onClick={() => setTunnelSubStep(1)}>Done, next →</button>
               </div>
             </>)}
@@ -300,6 +400,8 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                   Next →
                 </button>
               </div>
+            </>)}
+
             </>)}
           </div>
         )}
