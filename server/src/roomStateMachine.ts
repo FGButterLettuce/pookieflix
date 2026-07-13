@@ -34,7 +34,11 @@ function allViewers(room: RoomRuntime): ViewerRuntime[] {
 function isBuffering(hb: ClientHeartbeat): boolean {
   if (hb.serverCommandPending) return false;
   if (hb.waiting) return true;                 // video literally stalled — always act
-  if (hb.readyState >= 4) return false;        // browser says HAVE_ENOUGH_DATA — trust it
+  // readyState>=4 (HAVE_ENOUGH_DATA) only means "the current instant is covered" — it
+  // stays true right up until the buffer actually empties, so trusting it unconditionally
+  // let a slow bandwidth bleed drain all the way to ~0s without ever triggering a
+  // protective pause (confirmed live: buf 53s -> 0.1s over 90s with readyState==4 the
+  // whole way). Always check the margin instead.
   return hb.bufferedAhead < config.bufferPauseThreshold;
 }
 
@@ -44,7 +48,10 @@ function isSeeking(hb: ClientHeartbeat): boolean {
 
 function isReadyToPlay(hb: ClientHeartbeat, threshold: number = config.bufferResumeThreshold): boolean {
   if (hb.serverCommandPending || hb.seeking || hb.waiting) return false;
-  return hb.readyState >= 4 || hb.bufferedAhead >= threshold;
+  // Same readyState>=4 pitfall as isBuffering above: it means "covered for this instant,"
+  // not "has a real cushion" — trusting it here let a viewer resume with almost no
+  // buffer margin at all. The bufferedAhead threshold is the actual signal.
+  return hb.bufferedAhead >= threshold;
 }
 
 function canonicalTimeNow(room: RoomRuntime): number {
@@ -154,6 +161,26 @@ function handleDrift(room: RoomRuntime, active: ViewerRuntime[]): DispatchItem[]
     const now = Date.now();
     if (now - (room.lastResyncAt ?? 0) < 5000) return [];
     room.lastResyncAt = now;
+
+    // A resync shortly after the last resume means the drift is chronic (usually
+    // one side has a sustained bandwidth/decode deficit), not a one-off blip —
+    // a seek alone doesn't fix that, and immediately resuming at the same low
+    // buffer bar just repeats the cycle. Raise the bar before letting anyone
+    // resume again, the same way a quick re-stall raises it during BUFFERING;
+    // decay it back down after a long stable stretch, same as that branch too.
+    const playedMs = now - (room.lastPlayStartAt ?? 0);
+    if (playedMs < config.bufferQuickStallMs) {
+      room.adaptiveResumeThreshold = Math.min(
+        room.adaptiveResumeThreshold + 1,
+        config.bufferResumeThresholdMax
+      );
+    } else if (playedMs > config.bufferStableMs) {
+      room.adaptiveResumeThreshold = Math.max(
+        room.adaptiveResumeThreshold - 0.5,
+        config.bufferResumeThreshold
+      );
+    }
+
     setRoomState(room, 'RESYNCING');
     room.wasPlayingBeforeInterruption = true;
     const targetTime = Math.min(host.heartbeat.mediaTime, peer.heartbeat.mediaTime);

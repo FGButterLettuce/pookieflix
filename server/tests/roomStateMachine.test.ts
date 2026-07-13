@@ -346,14 +346,37 @@ describe('Room State Machine', () => {
       assert.ok(rateAdjusts.length > 0);
     });
 
-    it('triggers RESYNCING for drift > 1500ms', () => {
+    it('triggers RESYNCING for drift > driftRateThreshold (5s)', () => {
       const room = makeRoom({ state: 'PLAYING' });
       addViewer(room, makeViewer('v1', true, { mediaTime: 100.0, bufferedAhead: 15, paused: false }));
-      addViewer(room, makeViewer('v2', false, { mediaTime: 102.0, bufferedAhead: 12, paused: false })); // 2s ahead
+      addViewer(room, makeViewer('v2', false, { mediaTime: 106.0, bufferedAhead: 12, paused: false })); // 6s ahead
       const result = tick(room);
       assert.equal(room.state, 'RESYNCING');
       const types = getDispatchTypes(result);
       assert.ok(types.includes('SEEK'));
+    });
+
+    it('raises adaptiveResumeThreshold when resyncs repeat shortly after resuming', () => {
+      // Simulate a chronic (not transient) drift problem: playback only just
+      // resumed, and drift is already past threshold again — the same pattern
+      // BUFFERING's quick-re-stall detection uses, applied to resync storms.
+      const room = makeRoom({ state: 'PLAYING', lastPlayStartAt: Date.now() - 500, adaptiveResumeThreshold: 1.5 });
+      const before = room.adaptiveResumeThreshold;
+      addViewer(room, makeViewer('v1', true, { mediaTime: 100.0, bufferedAhead: 15, paused: false }));
+      addViewer(room, makeViewer('v2', false, { mediaTime: 106.0, bufferedAhead: 12, paused: false }));
+      tick(room);
+      assert.equal(room.state, 'RESYNCING');
+      assert.ok(room.adaptiveResumeThreshold > before);
+    });
+
+    it('does not raise adaptiveResumeThreshold when a resync follows a long stable stretch', () => {
+      const room = makeRoom({ state: 'PLAYING', lastPlayStartAt: Date.now() - 120_000 });
+      room.adaptiveResumeThreshold = 5;
+      addViewer(room, makeViewer('v1', true, { mediaTime: 100.0, bufferedAhead: 15, paused: false }));
+      addViewer(room, makeViewer('v2', false, { mediaTime: 106.0, bufferedAhead: 12, paused: false }));
+      tick(room);
+      assert.equal(room.state, 'RESYNCING');
+      assert.ok(room.adaptiveResumeThreshold < 5);
     });
   });
 });
