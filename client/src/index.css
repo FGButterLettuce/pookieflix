@@ -386,6 +386,12 @@ body {
   font-size: 13px;
 }
 
+.home-error a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .admin-key-banner {
   display: flex;
   align-items: center;

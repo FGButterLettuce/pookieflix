@@ -51,6 +51,7 @@ export function Home() {
   const [uploadingName, setUploadingName] = useState('');
   const [uploadedRoomUrl, setUploadedRoomUrl] = useState('');
   const [error, setError] = useState('');
+  const [lanLink, setLanLink] = useState('');
   const [deletingFile, setDeletingFile] = useState<string | null>(null);
   const [thumbErrors, setThumbErrors] = useState<Set<string>>(new Set());
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
@@ -122,12 +123,22 @@ export function Home() {
 
   const uploadFile = async (file: File) => {
     setError('');
+    setLanLink('');
     if (!file.name.toLowerCase().endsWith('.mp4') && file.type !== 'video/mp4') {
       setError('Only MP4 files are supported.');
       return;
     }
 
-    if (uploadUrl) {
+    const onUploadOrigin = !!uploadUrl && new URL(uploadUrl).origin === window.location.origin;
+
+    if (uploadUrl && !onUploadOrigin) {
+      if (window.location.protocol === 'https:' && uploadUrl.startsWith('http://')) {
+        // Browsers block HTTPS pages from reaching plain-HTTP servers (mixed content) —
+        // no fetch will ever get through here even when on the same LAN.
+        setError('Your browser blocks this HTTPS page from reaching the LAN server directly. Open the link below to upload from there instead.');
+        setLanLink(uploadUrl);
+        return;
+      }
       try {
         await fetch(`${uploadUrl}/api/config`, { signal: AbortSignal.timeout(3000) });
       } catch {
@@ -146,7 +157,7 @@ export function Home() {
 
       const result = await new Promise<{ roomToken: string; roomUrl: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', uploadUrl ? `${uploadUrl}/api/upload` : '/api/upload');
+        xhr.open('POST', uploadUrl && !onUploadOrigin ? `${uploadUrl}/api/upload` : '/api/upload');
         xhr.withCredentials = true;
         xhr.upload.addEventListener('progress', e => {
           if (e.lengthComputable) setUploadProgress(Math.round(e.loaded / e.total * 100));
@@ -394,7 +405,17 @@ export function Home() {
       </div>
       <input ref={fileInputRef} type="file" accept="video/mp4,.mp4" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); }} />
-      {error && <div className="home-error">{error}</div>}
+      {error && (
+        <div className="home-error">
+          {error}
+          {lanLink && (
+            <>
+              {' '}
+              <a href={lanLink} target="_blank" rel="noreferrer">Open LAN link to upload →</a>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Library grid */}
       {library.length === 0 && !uploading ? (

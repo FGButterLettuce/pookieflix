@@ -22,9 +22,19 @@ function guessTitle(filename: string): string {
 
 const HEARTBEAT_INTERVAL = 500;
 
+// Chrome has added experimental native HLS support and now passes canPlayType
+// for it too, but its segment queue doesn't reliably survive a long paused/
+// suspended buffer before playback starts (as this app's sync-then-PLAY_AT
+// flow does) — DEMUXER_ERROR_COULD_NOT_PARSE fires the moment playback
+// actually begins. Safari's native HLS is the mature, battle-tested one, so
+// restrict this path to real Safari and let everything else use direct MP4.
+function isSafari(): boolean {
+  return /^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent);
+}
+
 function supportsHLS(): boolean {
   const v = document.createElement('video');
-  return v.canPlayType('application/vnd.apple.mpegurl') !== '';
+  return isSafari() && v.canPlayType('application/vnd.apple.mpegurl') !== '';
 }
 
 interface RoomInfo {
