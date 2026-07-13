@@ -3,6 +3,31 @@ import { Logo } from '../components/Logo';
 import { useTheme } from '../theme/ThemeContext';
 import { generateDomainSuggestions } from '../lib/domainSuggestions';
 
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fall through to the execCommand fallback below
+    }
+  }
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 type Mode = 'local' | 'tunnel' | 'ddns' | null;
 
 export function Setup({ onComplete }: { onComplete: () => void }) {
@@ -15,6 +40,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   const [tunnelPhase, setTunnelPhase] = useState<'domain-check' | 'domain-names' | 'domain-suggestions' | 'cloudflare'>('domain-check');
   const [userName, setUserName] = useState('');
   const [partnerName, setPartnerName] = useState('');
+  const [copiedDomain, setCopiedDomain] = useState<string | null>(null);
   const [showAdvancedPort, setShowAdvancedPort] = useState(false);
   const [containerPort, setContainerPort] = useState(() => window.location.port || '3000');
   const [uploadUrl, setUploadUrl] = useState('');
@@ -238,9 +264,15 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                       <button
                         type="button"
                         className="copy-btn"
-                        onClick={() => { void navigator.clipboard.writeText(s.domain); }}
+                        onClick={async () => {
+                          const ok = await copyToClipboard(s.domain);
+                          if (ok) {
+                            setCopiedDomain(s.domain);
+                            setTimeout(() => setCopiedDomain(d => (d === s.domain ? null : d)), 2000);
+                          }
+                        }}
                       >
-                        copy
+                        {copiedDomain === s.domain ? 'copied!' : 'copy'}
                       </button>
                       <a
                         className="domain-suggestion-cta"
