@@ -18,6 +18,7 @@ export function Settings() {
     TUNNEL_CONFIGURED: false,
   });
   const [tunnelToken, setTunnelToken] = useState('');
+  const [removingTunnel, setRemovingTunnel] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -61,6 +62,19 @@ export function Settings() {
       setError('Failed to save settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const removeTunnel = async () => {
+    setRemovingTunnel(true);
+    try {
+      const res = await fetch('/api/settings/tunnel', { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+      setValues(v => ({ ...v, TUNNEL_CONFIGURED: false }));
+    } catch {
+      setError('Failed to remove tunnel');
+    } finally {
+      setRemovingTunnel(false);
     }
   };
 
@@ -132,10 +146,22 @@ export function Settings() {
           value={tunnelToken}
           onChange={e => setTunnelToken(e.target.value)}
         />
-        <div className="setup-hint" style={{ marginBottom: 24 }}>
-          From your tunnel's "Install connector" step at dash.cloudflare.com. PookieFlix runs and manages
-          the tunnel itself — no separate container or install needed.
+        <div className="setup-hint">
+          From your tunnel's "Install connector" step at dash.cloudflare.com — paste the whole
+          command shown there, we'll find the token in it. PookieFlix runs and manages the tunnel
+          itself, no separate container or install needed.
         </div>
+        {values.TUNNEL_CONFIGURED && (
+          <button
+            className="setup-back"
+            style={{ color: 'var(--danger)', marginBottom: 24 }}
+            onClick={() => void removeTunnel()}
+            disabled={removingTunnel}
+          >
+            {removingTunnel ? 'Removing…' : 'Remove tunnel'}
+          </button>
+        )}
+        {!values.TUNNEL_CONFIGURED && <div style={{ marginBottom: 24 }} />}
 
         {error && <div className="home-error" style={{ marginBottom: 12 }}>{error}</div>}
 

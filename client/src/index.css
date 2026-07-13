@@ -148,6 +148,52 @@ body {
   margin-bottom: 24px;
 }
 
+/* Mockup of a third-party (Cloudflare) UI element, used to point users at
+   exactly what to click on a page we don't control. Deliberately styled
+   distinct from our own controls so it reads as "a picture of their screen",
+   not an interactive part of this app. */
+.cf-mockup {
+  background: #f4f4f6;
+  border: 1px solid #d8d8dc;
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  margin-bottom: 6px;
+}
+.cf-mockup-caption {
+  font-size: 12px;
+  color: #6b6b74;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.cf-mockup-tabs {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.cf-mockup-tab {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #d8d8dc;
+  background: #fff;
+  color: #33333a;
+  font-size: 13px;
+}
+.cf-mockup-tab--pick {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+.cf-mockup-pointer {
+  text-align: center;
+  font-size: 12px;
+  color: #2563eb;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
 .setup-btn { width: 100%; margin-top: 8px; }
 
 .setup-nav {
