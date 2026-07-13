@@ -970,6 +970,9 @@ body {
   margin: 0;
 }
 
+.sub-sync-status { font-size: 0.85rem; color: var(--text-muted); padding: 4px 0; }
+.sub-sync-undo { background: none; border: none; color: var(--accent); text-decoration: underline; cursor: pointer; padding: 0; font-size: inherit; }
+
 .room-player {
   flex: 1;
   position: relative;

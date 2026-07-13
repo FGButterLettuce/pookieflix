@@ -12,7 +12,7 @@ import {
 } from './db';
 import { generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir } from './ffmpeg';
 import { getRuntimeByToken } from './roomManager';
-import { fetchSubtitles, subtitlePath, searchSubtitles, extractTitle, srtToVtt } from './subtitles';
+import { fetchSubtitles, subtitlePath, searchSubtitles, extractTitle, srtToVtt, syncSubtitles, undoSync } from './subtitles';
 
 // ── Remote log buffer ─────────────────────────────────────────────────────────
 interface LogEntry { ts: number; device: string; level: string; msg: string; }
@@ -406,6 +406,36 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const vtt = subtitlePath(filePath);
     if (fs.existsSync(vtt)) fs.unlinkSync(vtt);
     setSubtitleName(filename, null);
+    return reply.send({ ok: true });
+  });
+
+  // ── Subtitle sync (alass) ──────────────────────────────────────────────────
+  app.post('/api/library/:filename/subtitles/sync', {
+    config: { rateLimit: { max: 5, timeWindow: '1m' } },
+    preHandler: requireAdmin,
+  }, async (req, reply) => {
+    const { filename } = req.params as { filename: string };
+    if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send({ error: 'Invalid filename' });
+    let filePath: string;
+    try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
+    if (!fs.existsSync(filePath)) return reply.status(404).send({ error: 'Not found' });
+
+    const result = await syncSubtitles(filePath);
+    if (!result.ok) return reply.status(422).send({ error: result.error });
+    return reply.send({ ok: true });
+  });
+
+  app.post('/api/library/:filename/subtitles/sync/undo', {
+    config: { rateLimit: { max: 10, timeWindow: '1m' } },
+    preHandler: requireAdmin,
+  }, async (req, reply) => {
+    const { filename } = req.params as { filename: string };
+    if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send({ error: 'Invalid filename' });
+    let filePath: string;
+    try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
+
+    const restored = undoSync(filePath);
+    if (!restored) return reply.status(404).send({ error: 'Nothing to undo' });
     return reply.send({ ok: true });
   });
 

@@ -23,10 +23,22 @@ COPY server/ ./
 RUN npm run build
 
 
+# ── Stage: Build alass (subtitle sync tool) ───────────────────────────────────
+FROM rust:1-alpine AS alass-build
+
+RUN apk add --no-cache musl-dev build-base git
+
+WORKDIR /build
+RUN git clone --depth 1 --branch v2.0.0 https://github.com/kaegi/alass.git .
+RUN cargo build --release --locked --package alass-cli
+
+
 # ── Stage 3: Production runtime ───────────────────────────────────────────────
 FROM node:26-alpine AS runtime
 
 RUN apk add --no-cache ffmpeg
+COPY --from=alass-build /build/target/release/alass-cli /usr/local/bin/alass
+RUN chmod +x /usr/local/bin/alass
 
 WORKDIR /app
 

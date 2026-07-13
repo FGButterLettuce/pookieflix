@@ -55,6 +55,10 @@ export function Room() {
   const [subResults, setSubResults] = useState<{ fileId: number; label: string }[]>([]);
   const [subSearching, setSubSearching] = useState(false);
   const [subApplying, setSubApplying] = useState(false);
+  const [subSyncing, setSubSyncing] = useState(false);
+  const [subSynced, setSubSynced] = useState(false);
+  const [subSyncError, setSubSyncError] = useState('');
+  const [subUndoing, setSubUndoing] = useState(false);
 
   const [previewMode, setPreviewMode] = useState(false);
   const previewModeRef = useRef(false);
@@ -260,6 +264,8 @@ export function Room() {
       });
       // Cache-bust so the track element re-fetches the new VTT
       setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
+      setSubSynced(false);
+      setSubSyncError('');
       setShowSubPicker(false);
       setSubResults([]);
     } finally {
@@ -271,7 +277,45 @@ export function Room() {
     setSubtitleUrl(undefined);
     setShowSubPicker(false);
     setSubResults([]);
+    setSubSynced(false);
+    setSubSyncError('');
   }, []);
+
+  const syncSubs = useCallback(async () => {
+    if (!roomInfo) return;
+    setSubSyncing(true);
+    setSubSyncError('');
+    try {
+      const res = await fetch(`/api/library/${encodeURIComponent(roomInfo.mediaFilename)}/subtitles/sync`, {
+        method: 'POST',
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setSubSyncError(data.error ?? 'Sync failed');
+        return;
+      }
+      setSubSynced(true);
+      setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
+    } catch {
+      setSubSyncError('Sync failed');
+    } finally {
+      setSubSyncing(false);
+    }
+  }, [roomInfo, token]);
+
+  const undoSyncSubs = useCallback(async () => {
+    if (!roomInfo) return;
+    setSubUndoing(true);
+    try {
+      await fetch(`/api/library/${encodeURIComponent(roomInfo.mediaFilename)}/subtitles/sync/undo`, {
+        method: 'POST',
+      });
+    } finally {
+      setSubSynced(false);
+      setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
+      setSubUndoing(false);
+    }
+  }, [roomInfo, token]);
 
   // ── Copy room link ─────────────────────────────────────────────────────────
 
@@ -361,11 +405,22 @@ export function Room() {
               {subSearching ? '…' : 'Search'}
             </button>
             {subtitleUrl && (
-              <button className="copy-btn sub-remove-btn" onClick={removeSubs} title="Turn off subtitles">
+              <button className="copy-btn sub-remove-btn" onClick={removeSubs} disabled={subSyncing || subUndoing} title="Turn off subtitles">
                 Off
               </button>
             )}
+            {subtitleUrl && (
+              <button className="copy-btn" onClick={() => void syncSubs()} disabled={subSyncing || subUndoing}>
+                {subSyncing ? 'Syncing…' : 'Sync subtitles'}
+              </button>
+            )}
           </div>
+          {subSynced && (
+            <p className="sub-sync-status">
+              Synced. <button className="sub-sync-undo" onClick={() => void undoSyncSubs()} disabled={subSyncing || subUndoing}>Undo</button>
+            </p>
+          )}
+          {subSyncError && <p className="sub-no-results">{subSyncError}</p>}
           {subResults.length > 0 && (
             <ul className="sub-results">
               {subResults.map(r => (
