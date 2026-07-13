@@ -5,7 +5,7 @@ import path from 'path';
 import { pipeline } from 'stream/promises';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { config } from './config';
-import { isSetupComplete, readPersistedConfig, writePersistedConfig } from './persistedConfig';
+import { isSetupComplete, readPersistedConfig, writePersistedConfig, getPasswordHash, getSessionSecret } from './persistedConfig';
 import {
   createRoom, getRoomByToken, listLibraryFiles,
   purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile, setSubtitleName,
@@ -122,13 +122,14 @@ function generateToken(): string { return crypto.randomBytes(32).toString('hex')
 function generateId(): string    { return crypto.randomBytes(16).toString('hex'); }
 
 async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  if (!config.passwordHash) return;
-  if (!config.sessionSecret) {
+  if (!getPasswordHash()) return;
+  const sessionSecret = getSessionSecret();
+  if (!sessionSecret) {
     await reply.status(503).send({ error: 'Server misconfigured: SESSION_SECRET not set' });
     return;
   }
   const token = getSessionToken(req.headers.cookie);
-  if (!token || !verifySession(token, config.sessionSecret)) {
+  if (!token || !verifySession(token, sessionSecret)) {
     await reply.status(401).send({ error: 'Unauthorized' });
   }
 }
@@ -160,19 +161,22 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   app.get('/api/auth/me', async (req, reply) => {
-    if (!config.passwordHash) return reply.send({ authed: true });
-    if (!config.sessionSecret) return reply.send({ authed: false });
+    if (!getPasswordHash()) return reply.send({ authed: true });
+    const sessionSecret = getSessionSecret();
+    if (!sessionSecret) return reply.send({ authed: false });
     const token = getSessionToken(req.headers.cookie);
-    return reply.send({ authed: token ? verifySession(token, config.sessionSecret) : false });
+    return reply.send({ authed: token ? verifySession(token, sessionSecret) : false });
   });
 
   app.post('/api/auth/login', async (req, reply) => {
     const { password } = req.body as { password?: string };
-    if (!password || !config.passwordHash || !verifyPassword(password, config.passwordHash)) {
+    const passwordHash = getPasswordHash();
+    if (!password || !passwordHash || !verifyPassword(password, passwordHash)) {
       return reply.status(401).send({ error: 'Wrong password' });
     }
-    if (!config.sessionSecret) return reply.status(503).send({ error: 'Server misconfigured: SESSION_SECRET not set' });
-    const token = signSession(config.sessionSecret);
+    const sessionSecret = getSessionSecret();
+    if (!sessionSecret) return reply.status(503).send({ error: 'Server misconfigured: SESSION_SECRET not set' });
+    const token = signSession(sessionSecret);
     reply.header('Set-Cookie', makeSessionCookie(token));
     return reply.send({ ok: true });
   });
@@ -185,11 +189,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/auth/change-password', { preHandler: requireAdmin }, async (req, reply) => {
     const { newPassword } = req.body as { newPassword?: string };
     if (!newPassword || newPassword.length < 6) return reply.status(400).send({ error: 'Password must be at least 6 characters' });
-    const persisted = readPersistedConfig();
     const newSecret = crypto.randomBytes(32).toString('hex');
-    (persisted as Record<string, string>).PASSWORD_HASH = hashPassword(newPassword);
-    (persisted as Record<string, string>).SESSION_SECRET = newSecret;
-    writePersistedConfig(persisted);
+    writePersistedConfig({ PASSWORD_HASH: hashPassword(newPassword), SESSION_SECRET: newSecret });
     const token = signSession(newSecret);
     reply.header('Set-Cookie', makeSessionCookie(token));
     return reply.send({ ok: true });
