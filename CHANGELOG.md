@@ -1,3 +1,7 @@
+## v1.2.0 - 2026-07-13
+
+- Robustly extract the tunnel token from whatever users paste ([#5](https://github.com/FGButterLettuce/pookieflix/pull/5))
+
 ## v1.1.0 - 2026-07-13
 
 - Bundle and self-manage cloudflared ([#3](https://github.com/FGButterLettuce/pookieflix/pull/3))
