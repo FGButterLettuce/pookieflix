@@ -385,27 +385,35 @@ body {
    is unaffected. */
 @media (min-width: 900px) {
   .setup-card {
-    max-width: 620px;
-    padding: 52px;
+    max-width: 720px;
+    padding: 56px;
   }
   .setup-card.settings-card {
-    max-width: 600px;
+    max-width: 680px;
   }
   .setup-card .setup-dots { margin-bottom: 40px; }
-  .setup-card .setup-icon { font-size: 42px; }
-  .setup-card .setup-title { font-size: 26px; }
-  .setup-card .setup-desc { font-size: 16px; }
-  .setup-card .setup-input { font-size: 15px; padding: 12px 16px; }
-  .setup-card .setup-hint { font-size: 13px; }
-  .setup-card .setup-choice { padding: 18px; }
-  .setup-card .setup-choice-title { font-size: 16px; }
-  .setup-card .setup-choice-desc { font-size: 14px; }
-  .setup-card .setup-instructions { font-size: 16px; }
-  .setup-card .setup-instructions-label { font-size: 14px; }
-  .setup-card .setup-advanced-toggle { font-size: 14px; }
-  .setup-card .settings-label { font-size: 14px; }
-  .setup-card .setup-back { font-size: 15px; }
-  .setup-card .primary-btn { font-size: 16px; padding: 16px 20px; }
+  .setup-card .setup-icon { font-size: 44px; }
+  .setup-card .setup-title { font-size: 28px; }
+  .setup-card .setup-desc { font-size: 17px; }
+  .setup-card .setup-input { font-size: 16px; padding: 14px 18px; }
+  .setup-card .setup-hint { font-size: 14px; }
+  .setup-card .setup-instructions { font-size: 17px; }
+  .setup-card .setup-instructions-label { font-size: 15px; }
+  .setup-card .setup-advanced-toggle { font-size: 15px; }
+  .setup-card .settings-label { font-size: 15px; }
+  .setup-card .primary-btn, .setup-card .secondary-btn, .setup-card .setup-back {
+    font-size: 16px;
+    padding: 16px 22px;
+  }
+  .setup-card .external-cta-btn { font-size: 14px; padding: 10px 18px; }
+  .setup-card .mode-card { padding: 26px 20px; }
+  .setup-card .mode-card-icon { font-size: 38px; }
+  .setup-card .mode-card-title { font-size: 20px; }
+  .setup-card .mode-card-desc { font-size: 15px; }
+  .setup-card .mode-prereq-pill { font-size: 13px; padding: 5px 14px; }
+  .setup-card .mode-choose-btn { font-size: 15px; padding: 13px; }
+  .setup-card .step-flow-icon { width: 48px; height: 48px; font-size: 20px; }
+  .setup-card .step-flow-label { font-size: 13px; }
 }
 
 .tunnel-card {
@@ -1382,31 +1390,31 @@ body {
   margin-bottom: 20px;
 }
 .mode-card {
-  flex: 1 1 140px;
-  min-width: 140px;
+  flex: 1 1 160px;
+  min-width: 160px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 22px 18px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 4px;
+  gap: 6px;
 }
 .mode-card--featured {
   border: 1.5px solid var(--accent);
   box-shadow: 0 8px 24px rgba(var(--accent-rgb), 0.15);
 }
-.mode-card-icon { font-size: 26px; }
+.mode-card-icon { font-size: 34px; }
 .mode-card-title {
   font-family: 'Figtree', sans-serif;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 18px;
   color: var(--text);
 }
 .mode-card-desc {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-muted);
   line-height: 1.5;
   flex: 1;
@@ -1414,30 +1422,31 @@ body {
 .mode-prereq-pills {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
+  width: 100%;
 }
 .mode-prereq-pill {
   background: rgba(var(--accent-rgb), 0.1);
   color: var(--accent-hover);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
-  padding: 3px 10px;
+  padding: 5px 12px;
   border-radius: 999px;
-  white-space: nowrap;
+  max-width: 100%;
 }
 .mode-prereq-pill--ok {
   background: rgba(74,222,128,0.12);
   color: var(--success);
 }
 .mode-choose-btn {
-  margin-top: 8px;
+  margin-top: 10px;
   width: 100%;
   background: var(--surface2);
   border: none;
   border-radius: 999px;
-  padding: 9px;
-  font-size: 12px;
+  padding: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text);
   cursor: pointer;
