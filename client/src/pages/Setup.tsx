@@ -493,9 +493,9 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               skip this for now and add it later in settings.
             </p>
             <ol className="setup-instructions">
-              <li>Go to <strong>opensubtitles.com</strong> and create a free account</li>
-              <li>Go to your profile → <strong>API Access</strong> and copy your key</li>
-              <li>Paste it below</li>
+              <li>go to <strong>opensubtitles.com</strong> and create a free account</li>
+              <li>go to your profile → <strong>API Access</strong> and copy your key</li>
+              <li>paste it below</li>
             </ol>
             <input
               className="setup-input"
@@ -536,7 +536,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             </p>
             {mode === 'tunnel' && tunnelToken && (
               <p className="setup-desc" style={{ fontSize: '0.85em', opacity: 0.6, marginTop: 0 }}>
-                The tunnel connector is already running — no further setup needed. It'll reconnect
+                the tunnel connector is already running — no further setup needed. it'll reconnect
                 automatically on restart, and you can update the token anytime in Settings.
               </p>
             )}
