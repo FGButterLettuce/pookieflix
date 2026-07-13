@@ -1,3 +1,7 @@
+## v1.5.1 - 2026-07-13
+
+- Hide theme toggle on Room page ([#11](https://github.com/FGButterLettuce/pookieflix/pull/11))
+
 ## v1.5.0 - 2026-07-13
 
 - Redesign onboarding wizard: light/dark theme, visual steps, domain helper ([#10](https://github.com/FGButterLettuce/pookieflix/pull/10))
