@@ -18,9 +18,23 @@ export function extractTunnelToken(input: string): string {
   return matches.reduce((longest, m) => (m.length > longest.length ? m : longest), '');
 }
 
+export type TunnelState = 'stopped' | 'starting' | 'connected' | 'error';
+export interface TunnelStatus {
+  state: TunnelState;
+  message?: string;
+  connectedAt?: number;
+}
+
 let proc: ChildProcess | null = null;
 let currentToken: string | null = null;
 let stopped = true;
+let status: TunnelStatus = { state: 'stopped' };
+const recentOutput: string[] = [];
+const MAX_RECENT_LINES = 5;
+
+export function getTunnelStatus(): TunnelStatus {
+  return status;
+}
 
 function killCurrent(): void {
   if (proc) {
@@ -30,19 +44,36 @@ function killCurrent(): void {
   }
 }
 
+function trackOutput(chunk: Buffer): void {
+  const text = chunk.toString().trim();
+  if (!text) return;
+  console.log(`[cloudflared] ${text}`);
+  for (const line of text.split('\n')) {
+    recentOutput.push(line);
+    if (recentOutput.length > MAX_RECENT_LINES) recentOutput.shift();
+  }
+  if (text.includes('Registered tunnel connection')) {
+    status = { state: 'connected', connectedAt: Date.now() };
+  }
+}
+
 function spawnTunnel(token: string): void {
+  status = { state: 'starting' };
+  recentOutput.length = 0;
   const child = spawn('cloudflared', ['tunnel', '--no-autoupdate', 'run', '--token', token], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   proc = child;
 
-  child.stdout?.on('data', d => console.log(`[cloudflared] ${d.toString().trim()}`));
-  child.stderr?.on('data', d => console.log(`[cloudflared] ${d.toString().trim()}`));
+  child.stdout?.on('data', trackOutput);
+  child.stderr?.on('data', trackOutput);
 
   child.on('exit', (code, signal) => {
     if (proc !== child) return; // already superseded by a newer spawn
     proc = null;
-    if (stopped) return;
+    if (stopped) { status = { state: 'stopped' }; return; }
+    const lastLine = recentOutput.filter(Boolean).at(-1);
+    status = { state: 'error', message: lastLine || `cloudflared exited unexpectedly (code=${code} signal=${signal})` };
     console.log(`[cloudflared] exited unexpectedly (code=${code} signal=${signal}) - restarting in 5s`);
     setTimeout(() => {
       if (!stopped && currentToken) spawnTunnel(currentToken);
@@ -62,6 +93,7 @@ export function startTunnel(rawToken: string): void {
 export function stopTunnel(): void {
   stopped = true;
   currentToken = null;
+  status = { state: 'stopped' };
   killCurrent();
 }
 

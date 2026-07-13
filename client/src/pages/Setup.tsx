@@ -13,6 +13,8 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   const [containerPort, setContainerPort] = useState(() => window.location.port || '3000');
   const [uploadUrl, setUploadUrl] = useState('');
   const [subsKey, setSubsKey] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -41,9 +43,29 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   };
 
   const finish = async () => {
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords don't match");
+      return;
+    }
     setSaving(true);
     setError('');
     try {
+      // Set the password first - it issues the session cookie the
+      // following /api/setup call needs once a password exists.
+      const pwRes = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: password }),
+      });
+      if (!pwRes.ok) {
+        const d = await pwRes.json() as { error?: string };
+        throw new Error(d.error ?? 'Failed to set password');
+      }
+
       const res = await fetch('/api/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -308,15 +330,40 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
           </div>
         )}
 
-        {/* Step 3 — Subtitles */}
+        {/* Step 3 — Password + Subtitles */}
         {step === 3 && (
           <div className="setup-step">
-            <div className="setup-icon">CC</div>
-            <h1 className="setup-title">
-              Auto subtitles{' '}
-              <span style={{ opacity: 0.4, fontSize: '0.55em', fontWeight: 400 }}>optional</span>
-            </h1>
+            <div className="setup-icon">🔒</div>
+            <h1 className="setup-title">Set your password</h1>
             <p className="setup-desc">
+              {mode === 'local'
+                ? 'Required before you finish, even for a home-only setup — anyone on your Wi-Fi could otherwise open the app with no login at all.'
+                : 'Required before you finish — without one, PookieFlix would be wide open to anyone who finds the URL, tunnel or not.'}
+            </p>
+            <input
+              className="setup-input"
+              type="password"
+              placeholder="At least 6 characters"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoFocus
+            />
+            <input
+              className="setup-input"
+              type="password"
+              placeholder="Confirm password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && void finish()}
+            />
+            <div className="setup-hint">You can change this later in Settings</div>
+
+            <hr style={{ margin: '4px 0 20px', borderColor: 'var(--border)' }} />
+
+            <h2 className="settings-label" style={{ fontSize: 15, marginBottom: 8 }}>
+              Auto subtitles <span className="settings-optional">(optional)</span>
+            </h2>
+            <p className="setup-desc" style={{ textAlign: 'left', marginBottom: 12 }}>
               PookieFlix can automatically fetch subtitles when you upload a video, or you can
               skip this for now and add it later in Settings.
             </p>
@@ -342,7 +389,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               <button
                 className="primary-btn setup-btn"
                 onClick={() => { void finish(); }}
-                disabled={saving}
+                disabled={saving || password.length < 6 || password !== confirmPassword}
               >
                 {saving ? 'Saving…' : 'Finish →'}
               </button>

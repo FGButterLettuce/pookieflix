@@ -2,12 +2,26 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 
+interface TunnelStatus {
+  state: 'stopped' | 'starting' | 'connected' | 'error';
+  message?: string;
+  connectedAt?: number;
+}
+
 interface SettingsData {
   APP_BASE_URL: string;
   UPLOAD_URL: string;
   OPENSUBTITLES_API_KEY: string;
   TUNNEL_CONFIGURED: boolean;
+  TUNNEL_STATUS: TunnelStatus;
 }
+
+const TUNNEL_STATUS_LABEL: Record<TunnelStatus['state'], string> = {
+  stopped: 'Not connected',
+  starting: 'Connecting…',
+  connected: 'Connected',
+  error: 'Connection error',
+};
 
 export function Settings() {
   const navigate = useNavigate();
@@ -16,6 +30,7 @@ export function Settings() {
     UPLOAD_URL: '',
     OPENSUBTITLES_API_KEY: '',
     TUNNEL_CONFIGURED: false,
+    TUNNEL_STATUS: { state: 'stopped' },
   });
   const [tunnelToken, setTunnelToken] = useState('');
   const [removingTunnel, setRemovingTunnel] = useState(false);
@@ -35,6 +50,19 @@ export function Settings() {
       .catch(() => {});
   }, []);
 
+  // Poll tunnel status live while a tunnel is configured, so "Connecting…"
+  // resolves to "Connected"/"Connection error" without a manual refresh.
+  useEffect(() => {
+    if (!values.TUNNEL_CONFIGURED) return;
+    const interval = setInterval(() => {
+      fetch('/api/settings')
+        .then(r => r.json())
+        .then((d: SettingsData) => setValues(v => ({ ...v, TUNNEL_CONFIGURED: d.TUNNEL_CONFIGURED, TUNNEL_STATUS: d.TUNNEL_STATUS })))
+        .catch(() => {});
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [values.TUNNEL_CONFIGURED]);
+
   const set = (key: keyof SettingsData) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setValues(v => ({ ...v, [key]: e.target.value }));
 
@@ -53,7 +81,7 @@ export function Settings() {
       });
       if (!res.ok) throw new Error('Failed to save');
       if (tunnelToken.trim()) {
-        setValues(v => ({ ...v, TUNNEL_CONFIGURED: true }));
+        setValues(v => ({ ...v, TUNNEL_CONFIGURED: true, TUNNEL_STATUS: { state: 'starting' } }));
         setTunnelToken('');
       }
       setSaved(true);
@@ -70,7 +98,7 @@ export function Settings() {
     try {
       const res = await fetch('/api/settings/tunnel', { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed');
-      setValues(v => ({ ...v, TUNNEL_CONFIGURED: false }));
+      setValues(v => ({ ...v, TUNNEL_CONFIGURED: false, TUNNEL_STATUS: { state: 'stopped' } }));
     } catch {
       setError('Failed to remove tunnel');
     } finally {
@@ -136,32 +164,45 @@ export function Settings() {
         />
         <div className="setup-hint" style={{ marginBottom: 24 }}>Auto-fetch subtitles on upload</div>
 
-        <label className="settings-label">
-          Cloudflare Tunnel token <span className="settings-optional">({values.TUNNEL_CONFIGURED ? 'configured' : 'not set'})</span>
-        </label>
-        <input
-          className="setup-input"
-          type="text"
-          placeholder={values.TUNNEL_CONFIGURED ? 'Leave blank to keep current tunnel' : 'Paste a token to enable a tunnel'}
-          value={tunnelToken}
-          onChange={e => setTunnelToken(e.target.value)}
-        />
-        <div className="setup-hint">
-          From your tunnel's "Install connector" step at dash.cloudflare.com — paste the whole
-          command shown there, we'll find the token in it. PookieFlix runs and manages the tunnel
-          itself, no separate container or install needed.
+        <label className="settings-label">Cloudflare Tunnel</label>
+        <div className="tunnel-card">
+          <div className="tunnel-card-header">
+            <span
+              className={`tunnel-status-dot tunnel-status-dot--${values.TUNNEL_CONFIGURED ? values.TUNNEL_STATUS.state : 'stopped'}`}
+              title={values.TUNNEL_STATUS.message || undefined}
+            />
+            <span className="tunnel-status-label">
+              {values.TUNNEL_CONFIGURED ? TUNNEL_STATUS_LABEL[values.TUNNEL_STATUS.state] : 'Not configured'}
+            </span>
+            {values.TUNNEL_STATUS.state === 'error' && values.TUNNEL_STATUS.message && (
+              <span className="tunnel-status-detail" title={values.TUNNEL_STATUS.message}>ⓘ</span>
+            )}
+          </div>
+
+          <input
+            className="setup-input"
+            type="text"
+            placeholder={values.TUNNEL_CONFIGURED ? 'Paste a new token to replace this tunnel' : 'Paste a token to enable a tunnel'}
+            value={tunnelToken}
+            onChange={e => setTunnelToken(e.target.value)}
+          />
+          <div className="setup-hint" style={{ marginBottom: 12 }}>
+            From your tunnel's "Install connector" step at dash.cloudflare.com — paste the whole
+            command shown there, we'll find the token in it. PookieFlix runs and manages the tunnel
+            itself, no separate container or install needed.
+          </div>
+          {values.TUNNEL_CONFIGURED && (
+            <button
+              className="setup-back"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => void removeTunnel()}
+              disabled={removingTunnel}
+            >
+              {removingTunnel ? 'Removing…' : 'Remove tunnel'}
+            </button>
+          )}
         </div>
-        {values.TUNNEL_CONFIGURED && (
-          <button
-            className="setup-back"
-            style={{ color: 'var(--danger)', marginBottom: 24 }}
-            onClick={() => void removeTunnel()}
-            disabled={removingTunnel}
-          >
-            {removingTunnel ? 'Removing…' : 'Remove tunnel'}
-          </button>
-        )}
-        {!values.TUNNEL_CONFIGURED && <div style={{ marginBottom: 24 }} />}
+        <div style={{ marginBottom: 24 }} />
 
         {error && <div className="home-error" style={{ marginBottom: 12 }}>{error}</div>}
 
