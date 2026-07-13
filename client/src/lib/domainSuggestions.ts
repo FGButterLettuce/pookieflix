@@ -13,8 +13,8 @@ export function generateDomainSuggestions(userName: string, partnerName: string)
   const blend = `${you}${pookie}`;
 
   const candidates: DomainSuggestion[] = [
-    { domain: `${blend}.com` },
-    { domain: `our.movienight.app`, featured: true },
+    { domain: `${blend}.com`, featured: true },
+    { domain: `our.movienight.app` },
     { domain: `${blend}watch.xyz` },
     { domain: `watch.with${pookie}.com` },
     { domain: `${blend}.app` },
