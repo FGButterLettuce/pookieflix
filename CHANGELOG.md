@@ -1,3 +1,7 @@
+## v1.5.2 - 2026-07-13
+
+- Fix sync buffer-safety bypass and live-stream-looking HLS output ([#12](https://github.com/FGButterLettuce/pookieflix/pull/12))
+
 ## v1.5.1 - 2026-07-13
 
 - Hide theme toggle on Room page ([#11](https://github.com/FGButterLettuce/pookieflix/pull/11))
