@@ -11,6 +11,8 @@ export interface PersistedConfig {
   TUNNEL_TOKEN?: string;
   PASSWORD_HASH?: string;
   SESSION_SECRET?: string;
+  USER_NAME?: string;
+  PARTNER_NAME?: string;
   setupComplete?: boolean;
 }
 
