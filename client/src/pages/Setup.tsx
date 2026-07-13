@@ -3,39 +3,10 @@ import { Logo } from '../components/Logo';
 
 type Mode = 'local' | 'tunnel' | 'ddns' | null;
 
-function detectOS(): 'windows' | 'mac' | 'linux' {
-  const ua = navigator.userAgent;
-  if (ua.includes('Windows')) return 'windows';
-  if (ua.includes('Mac')) return 'mac';
-  return 'linux';
-}
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    void navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-  return (
-    <button className="copy-btn" onClick={copy}>{copied ? '✓ Copied' : 'Copy'}</button>
-  );
-}
-
-function CodeBlock({ code }: { code: string }) {
-  return (
-    <div className="setup-code-block">
-      <code>{code}</code>
-      <CopyButton text={code} />
-    </div>
-  );
-}
-
 export function Setup({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<Mode>(null);
   const [tunnelSubStep, setTunnelSubStep] = useState(0);
-  const [os, setOs] = useState(detectOS());
   const [baseUrl, setBaseUrl] = useState('');
   const [tunnelToken, setTunnelToken] = useState('');
   const [uploadUrl, setUploadUrl] = useState('');
@@ -92,12 +63,6 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   };
 
   const dotStep = step === 0 ? 0 : step === 1 ? 1 : step <= 3 ? 2 : 3;
-
-  const installCmd = {
-    linux: 'curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb && sudo dpkg -i cloudflared.deb',
-    mac: 'brew install cloudflare/cloudflare/cloudflared',
-    windows: 'winget install --id Cloudflare.cloudflared',
-  }[os];
 
   return (
     <div className="setup-root">
@@ -180,25 +145,14 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             </>)}
 
             {tunnelSubStep === 1 && (<>
-              <div className="setup-icon">⚙️</div>
-              <h1 className="setup-title">Install the connector</h1>
+              <div className="setup-icon">🔑</div>
+              <h1 className="setup-title">Connect the tunnel</h1>
               <p className="setup-desc">
-                Cloudflare needs a small program running on this computer to route traffic. Install it now.
+                PookieFlix runs and manages the connector itself — no separate install or terminal
+                command needed.
               </p>
-
-              <div className="setup-os-tabs">
-                {(['linux', 'mac', 'windows'] as const).map(o => (
-                  <button key={o} className={`setup-os-tab ${os === o ? 'active' : ''}`} onClick={() => setOs(o)}>
-                    {o === 'linux' ? '🐧 Linux' : o === 'mac' ? '🍎 Mac' : '🪟 Windows'}
-                  </button>
-                ))}
-              </div>
-
-              <p className="setup-instructions-label">1. Install cloudflared:</p>
-              <CodeBlock code={installCmd} />
-
-              <p className="setup-instructions-label" style={{ marginTop: 16 }}>
-                2. Back in the Cloudflare dashboard, copy the token shown under <strong>"Install connector"</strong> (it's the long string in the command they show you), then paste it here:
+              <p className="setup-instructions-label">
+                Back in the Cloudflare dashboard, copy the token shown under <strong>"Install connector"</strong> (it's the long string in the command they show you), then paste it here:
               </p>
               <input
                 className="setup-input"
@@ -206,6 +160,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                 placeholder="Paste your tunnel token here"
                 value={tunnelToken}
                 onChange={e => setTunnelToken(e.target.value)}
+                autoFocus
               />
               <div className="setup-hint">Looks like: eyJhIjoiYWJjZGVm… (very long string)</div>
 
@@ -352,7 +307,8 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             </p>
             {mode === 'tunnel' && tunnelToken && (
               <p className="setup-desc" style={{ fontSize: '0.85em', opacity: 0.6, marginTop: 0 }}>
-                To make the tunnel start automatically, add <code style={{ background: 'var(--surface2)', padding: '1px 4px', borderRadius: 3 }}>TUNNEL_TOKEN</code> to your docker-compose environment and run with the <code style={{ background: 'var(--surface2)', padding: '1px 4px', borderRadius: 3 }}>tunnel</code> profile.
+                The tunnel connector is already running — no further setup needed. It'll reconnect
+                automatically on restart, and you can update the token anytime in Settings.
               </p>
             )}
             <button className="primary-btn setup-btn" onClick={onComplete}>

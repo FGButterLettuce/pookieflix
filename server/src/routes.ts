@@ -13,6 +13,7 @@ import {
 import { generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir } from './ffmpeg';
 import { getRuntimeByToken } from './roomManager';
 import { fetchSubtitles, subtitlePath, searchSubtitles, extractTitle, srtToVtt, syncSubtitles, undoSync } from './subtitles';
+import { startTunnel } from './tunnel';
 
 // ── Remote log buffer ─────────────────────────────────────────────────────────
 interface LogEntry { ts: number; device: string; level: string; msg: string; }
@@ -254,23 +255,29 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/settings', { preHandler: requireAdmin }, async (_req, reply) => {
     const persisted = readPersistedConfig();
     const osKey = process.env.OPENSUBTITLES_API_KEY ?? persisted.OPENSUBTITLES_API_KEY ?? '';
+    const tunnelToken = process.env.TUNNEL_TOKEN ?? persisted.TUNNEL_TOKEN ?? '';
     return reply.send({
       APP_BASE_URL: process.env.APP_BASE_URL ?? persisted.APP_BASE_URL ?? '',
       UPLOAD_URL: process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? '',
       OPENSUBTITLES_API_KEY: osKey ? '••••••••' : '',  // mask — never expose key over HTTP
-      TUNNEL_TOKEN: process.env.TUNNEL_TOKEN ?? persisted.TUNNEL_TOKEN ?? '',
+      TUNNEL_CONFIGURED: !!tunnelToken,  // write-only field — never expose the token itself
     });
   });
 
   app.post('/api/settings', { preHandler: requireAdmin }, async (req, reply) => {
     const body = req.body as Record<string, string>;
+    const newTunnelToken = body.TUNNEL_TOKEN?.trim();
     writePersistedConfig({
       APP_BASE_URL: body.APP_BASE_URL?.trim() || undefined,
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
       OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
-      TUNNEL_TOKEN: body.TUNNEL_TOKEN?.trim() || undefined,
+      // Omit entirely (rather than sending undefined) when blank, so an
+      // unrelated settings save can never clobber an already-configured
+      // tunnel token — this field is write-only and blank means "no change".
+      ...(newTunnelToken ? { TUNNEL_TOKEN: newTunnelToken } : {}),
       setupComplete: true,
     });
+    if (newTunnelToken) startTunnel(newTunnelToken);
     return reply.send({ ok: true });
   });
 
@@ -279,13 +286,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!body.APP_BASE_URL?.trim()) {
       return reply.status(400).send({ error: 'APP_BASE_URL is required' });
     }
+    const tunnelToken = body.TUNNEL_TOKEN?.trim() || undefined;
     writePersistedConfig({
       APP_BASE_URL: body.APP_BASE_URL.trim(),
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
       OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
-      TUNNEL_TOKEN: body.TUNNEL_TOKEN?.trim() || undefined,
+      TUNNEL_TOKEN: tunnelToken,
       setupComplete: true,
     });
+    if (tunnelToken) startTunnel(tunnelToken);
     return reply.send({ ok: true });
   });
 
