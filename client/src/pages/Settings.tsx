@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PasswordInput } from '../components/PasswordInput';
+import { PasteableInput } from '../components/PasteableInput';
 
 
 interface TunnelStatus {
@@ -12,6 +14,8 @@ interface SettingsData {
   APP_BASE_URL: string;
   UPLOAD_URL: string;
   OPENSUBTITLES_API_KEY: string;
+  USER_NAME: string;
+  PARTNER_NAME: string;
   TUNNEL_CONFIGURED: boolean;
   TUNNEL_STATUS: TunnelStatus;
 }
@@ -29,6 +33,8 @@ export function Settings() {
     APP_BASE_URL: '',
     UPLOAD_URL: '',
     OPENSUBTITLES_API_KEY: '',
+    USER_NAME: '',
+    PARTNER_NAME: '',
     TUNNEL_CONFIGURED: false,
     TUNNEL_STATUS: { state: 'stopped' },
   });
@@ -128,14 +134,14 @@ export function Settings() {
 
   return (
     <div className="setup-root">
-      <div className="setup-card" style={{ maxWidth: 480 }}>
+      <div className="setup-card settings-card">
         <button className="setup-back" style={{ marginBottom: 16 }} onClick={() => navigate('/')}>
           ← Back to library
         </button>
         <h1 className="setup-title" style={{ marginBottom: 24 }}>Settings</h1>
 
         <label className="settings-label">Public domain</label>
-        <input
+        <PasteableInput
           className="setup-input"
           type="url"
           placeholder="https://watch.yourdomain.com"
@@ -144,8 +150,26 @@ export function Settings() {
         />
         <div className="setup-hint" style={{ marginBottom: 20 }}>Used to generate room invite links</div>
 
+        <label className="settings-label">Your name</label>
+        <PasteableInput
+          className="setup-input"
+          placeholder="e.g. Niranjan"
+          value={values.USER_NAME}
+          onChange={set('USER_NAME')}
+        />
+        <div className="setup-hint" style={{ marginBottom: 20 }}>Used for personalized domain suggestions if you set up a Cloudflare Tunnel</div>
+
+        <label className="settings-label">Partner's name</label>
+        <PasteableInput
+          className="setup-input"
+          placeholder="e.g. Anu"
+          value={values.PARTNER_NAME}
+          onChange={set('PARTNER_NAME')}
+        />
+        <div className="setup-hint" style={{ marginBottom: 20 }}>Same, also used for domain suggestions</div>
+
         <label className="settings-label">Local network URL <span className="settings-optional">(optional)</span></label>
-        <input
+        <PasteableInput
           className="setup-input"
           type="url"
           placeholder="http://192.168.0.91:3000"
@@ -155,9 +179,8 @@ export function Settings() {
         <div className="setup-hint" style={{ marginBottom: 20 }}>Direct upload path bypassing Cloudflare</div>
 
         <label className="settings-label">OpenSubtitles API key <span className="settings-optional">(optional)</span></label>
-        <input
+        <PasteableInput
           className="setup-input"
-          type="text"
           placeholder="Your API key"
           value={values.OPENSUBTITLES_API_KEY}
           onChange={set('OPENSUBTITLES_API_KEY')}
@@ -179,17 +202,24 @@ export function Settings() {
             )}
           </div>
 
-          <input
+          <a
+            className="external-cta-btn"
+            href="https://dash.cloudflare.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            open dash.cloudflare.com ↗
+          </a>
+          <PasteableInput
             className="setup-input"
-            type="text"
             placeholder={values.TUNNEL_CONFIGURED ? 'Paste a new token to replace this tunnel' : 'Paste a token to enable a tunnel'}
             value={tunnelToken}
             onChange={e => setTunnelToken(e.target.value)}
           />
           <div className="setup-hint" style={{ marginBottom: 12 }}>
-            From your tunnel's "Install connector" step at dash.cloudflare.com — paste the whole
-            command shown there, we'll find the token in it. PookieFlix runs and manages the tunnel
-            itself, no separate container or install needed.
+            From your tunnel's "Install connector" step — paste the whole command shown there,
+            we'll find the token in it. PookieFlix runs and manages the tunnel itself, no separate
+            container or install needed.
           </div>
           {values.TUNNEL_CONFIGURED && (
             <button
@@ -214,18 +244,16 @@ export function Settings() {
         <h2 className="settings-label" style={{ fontSize: 15, marginBottom: 16 }}>Change password</h2>
 
         <label className="settings-label">New password</label>
-        <input
+        <PasswordInput
           className="setup-input"
-          type="password"
           placeholder="At least 6 characters"
           value={newPassword}
           onChange={e => setNewPassword(e.target.value)}
         />
 
         <label className="settings-label" style={{ marginTop: 12 }}>Confirm password</label>
-        <input
+        <PasswordInput
           className="setup-input"
-          type="password"
           placeholder="Repeat new password"
           value={confirmPassword}
           onChange={e => setConfirmPassword(e.target.value)}

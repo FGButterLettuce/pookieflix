@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import { App } from './App';
+import { ThemeProvider } from './theme/ThemeContext';
 
 if (new URLSearchParams(window.location.search).has('debug')) {
   const s = document.createElement('script');
@@ -12,6 +13,8 @@ if (new URLSearchParams(window.location.search).has('debug')) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </StrictMode>
 );

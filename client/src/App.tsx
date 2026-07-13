@@ -4,6 +4,7 @@ import { Home } from './pages/Home';
 import { Room } from './pages/Room';
 import { Setup } from './pages/Setup';
 import { Settings } from './pages/Settings';
+import { ThemeToggle } from './components/ThemeToggle';
 
 export function App() {
   const [setupComplete, setSetupComplete] = useState<boolean | null>(null);
@@ -17,18 +18,21 @@ export function App() {
 
   if (setupComplete === null) return null; // loading
 
-  if (!setupComplete) {
-    return <Setup onComplete={() => setSetupComplete(true)} />;
-  }
-
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/room/:token" element={<Room />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <>
+      <ThemeToggle />
+      {!setupComplete ? (
+        <Setup onComplete={() => setSetupComplete(true)} />
+      ) : (
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/room/:token" element={<Room />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      )}
+    </>
   );
 }

@@ -261,6 +261,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       APP_BASE_URL: process.env.APP_BASE_URL ?? persisted.APP_BASE_URL ?? '',
       UPLOAD_URL: process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? '',
       OPENSUBTITLES_API_KEY: osKey ? '••••••••' : '',  // mask — never expose key over HTTP
+      USER_NAME: persisted.USER_NAME ?? '',
+      PARTNER_NAME: persisted.PARTNER_NAME ?? '',
       TUNNEL_CONFIGURED: !!tunnelToken,  // write-only field — never expose the token itself
       TUNNEL_STATUS: getTunnelStatus(),
     });
@@ -273,6 +275,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       APP_BASE_URL: body.APP_BASE_URL?.trim() || undefined,
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
       OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
+      USER_NAME: body.USER_NAME?.trim() || undefined,
+      PARTNER_NAME: body.PARTNER_NAME?.trim() || undefined,
       // Omit entirely (rather than sending undefined) when blank, so an
       // unrelated settings save can never clobber an already-configured
       // tunnel token — this field is write-only and blank means "no change".
@@ -299,6 +303,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       APP_BASE_URL: body.APP_BASE_URL.trim(),
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
       OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
+      USER_NAME: body.USER_NAME?.trim() || undefined,
+      PARTNER_NAME: body.PARTNER_NAME?.trim() || undefined,
       TUNNEL_TOKEN: tunnelToken,
       setupComplete: true,
     });
