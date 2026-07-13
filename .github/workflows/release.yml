@@ -73,9 +73,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add server/package.json client/package.json CHANGELOG.md
           git commit -m "chore: release v${{ steps.bump.outputs.version }}"
-          git tag "test-v${{ steps.bump.outputs.version }}"
-          git push origin HEAD:release-test-scratch
-          git push origin "test-v${{ steps.bump.outputs.version }}"
+          git tag "v${{ steps.bump.outputs.version }}"
+          git push origin HEAD:main
+          git push origin "v${{ steps.bump.outputs.version }}"
 
       - name: Create GitHub Release
         env:
@@ -85,10 +85,9 @@ jobs:
           if [ -n "${{ steps.pr.outputs.number }}" ]; then
             NOTES="$NOTES (#${{ steps.pr.outputs.number }})"
           fi
-          gh release create "test-v${{ steps.bump.outputs.version }}" \
-            --title "TEST release - safe to delete: v${{ steps.bump.outputs.version }}" \
-            --notes "$NOTES" \
-            --prerelease
+          gh release create "v${{ steps.bump.outputs.version }}" \
+            --title "v${{ steps.bump.outputs.version }}" \
+            --notes "$NOTES"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -103,10 +102,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=test-latest
-            type=raw,value=test-v${{ steps.bump.outputs.version }}
-            type=raw,value=test-${{ steps.bump.outputs.major_minor }}
-            type=sha,prefix=test-sha-
+            type=raw,value=latest
+            type=raw,value=v${{ steps.bump.outputs.version }}
+            type=raw,value=${{ steps.bump.outputs.major_minor }}
+            type=sha,prefix=sha-
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
