@@ -156,7 +156,7 @@ export function Settings() {
           value={values.USER_NAME}
           onChange={set('USER_NAME')}
         />
-        <div className="setup-hint" style={{ marginBottom: 20 }}>Used to suggest personalized domain names during setup</div>
+        <div className="setup-hint" style={{ marginBottom: 20 }}>Used for personalized domain suggestions if you set up a Cloudflare Tunnel</div>
 
         <label className="settings-label">Partner's name</label>
         <input
@@ -166,7 +166,7 @@ export function Settings() {
           value={values.PARTNER_NAME}
           onChange={set('PARTNER_NAME')}
         />
-        <div className="setup-hint" style={{ marginBottom: 20 }}>Same as above</div>
+        <div className="setup-hint" style={{ marginBottom: 20 }}>Same, also used for domain suggestions</div>
 
         <label className="settings-label">Local network URL <span className="settings-optional">(optional)</span></label>
         <input
