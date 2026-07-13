@@ -4,6 +4,7 @@ import { VideoPlayer } from '../components/VideoPlayer';
 import type { VideoPlayerHandle } from '../components/VideoPlayer';
 import { RoomStatus } from '../components/RoomStatus';
 import { Logo } from '../components/Logo';
+import { useTheme } from '../theme/ThemeContext';
 import { WsClient } from '../lib/wsClient';
 import { rlog } from '../lib/remoteLogger';
 import type { VideoController } from '../lib/videoController';
@@ -52,6 +53,7 @@ export function Room() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
 
+  const { theme } = useTheme();
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [roomState, setRoomState] = useState<RoomState>('WAITING_FOR_VIEWERS');
   const [viewerCount, setViewerCount] = useState(0);
@@ -378,7 +380,7 @@ export function Room() {
       <div className="room-header">
         <span className="room-logo">
           <img src="/favicon.svg" alt="" className="room-logo-icon" />
-          <span className="room-logo-full"><Logo size="sm" mark={false} /></span>
+          <span className="room-logo-full"><Logo size="sm" mark={false} variant={theme === 'dark' ? 'dark' : 'light'} /></span>
         </span>
         <span className="room-title" title={roomInfo.mediaFilename}>{guessTitle(roomInfo.mediaFilename)}</span>
         <RoomStatus state={roomState} viewerCount={viewerCount || roomInfo.viewerCount} />

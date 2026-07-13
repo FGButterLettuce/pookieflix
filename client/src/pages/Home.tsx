@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Logo } from '../components/Logo';
+import { useTheme } from '../theme/ThemeContext';
 import type { LibraryFile } from '../types';
 
 
@@ -43,6 +44,7 @@ export function Home() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const { theme } = useTheme();
   const [library, setLibrary] = useState<LibraryFile[]>([]);
   const [uploadUrl, setUploadUrl] = useState('');
   const [subtitleLang, setSubtitleLang] = useState('en');
@@ -364,7 +366,7 @@ export function Home() {
   return (
     <div className="home-root">
       <header className="home-topbar">
-        <span className="home-logo"><Logo size="sm" /></span>
+        <span className="home-logo"><Logo size="sm" variant={theme === 'dark' ? 'dark' : 'light'} /></span>
         <Link to="/settings" className="settings-link" title="Settings">⚙</Link>
       </header>
 

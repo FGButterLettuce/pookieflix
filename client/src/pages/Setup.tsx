@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Logo } from '../components/Logo';
+import { useTheme } from '../theme/ThemeContext';
 
 type Mode = 'local' | 'tunnel' | 'ddns' | null;
 
 export function Setup({ onComplete }: { onComplete: () => void }) {
+  const { theme } = useTheme();
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<Mode>(null);
   const [tunnelSubStep, setTunnelSubStep] = useState(0);
@@ -103,7 +105,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {step === 0 && (
           <div className="setup-step">
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
-              <Logo size="lg" />
+              <Logo size="lg" variant={theme === 'dark' ? 'dark' : 'light'} />
             </div>
             <p className="setup-desc">
               Watch movies in perfect sync with someone. Your files, your server, completely
