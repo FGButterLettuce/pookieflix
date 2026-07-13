@@ -122,31 +122,41 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {step === 1 && (
           <div className="setup-step">
             <div className="setup-icon">📍</div>
-            <h1 className="setup-title">Where will you watch from?</h1>
-            <p className="setup-desc">Pick the option that fits your situation.</p>
-            <div className="setup-choice-group">
-              <button className="setup-choice" onClick={chooseLocal}>
-                <span className="setup-choice-title">🏠 Only at home</span>
-                <span className="setup-choice-desc">
-                  You and the other person share the same Wi-Fi. Quickest setup, works right away, no accounts needed.
-                </span>
-              </button>
-              <button className="setup-choice" onClick={chooseTunnel}>
-                <span className="setup-choice-title">☁️ From anywhere: Cloudflare Tunnel</span>
-                <span className="setup-choice-desc">
-                  Best option for remote watching. Free, secure, no port forwarding needed.
-                  Requires a Cloudflare account and a domain name you own.
-                </span>
-              </button>
-              <button className="setup-choice" onClick={chooseDDNS}>
-                <span className="setup-choice-title">🔗 From anywhere: DDNS</span>
-                <span className="setup-choice-desc">
-                  Good if you don't have a domain. Uses a free hostname (e.g. myname.duckdns.org).
-                  Requires opening a port on your router.
-                </span>
-              </button>
+            <h1 className="setup-title">where will you two be watching from?</h1>
+            <p className="setup-desc">pick what fits — you can change this later</p>
+            <div className="mode-columns">
+              <div className="mode-card">
+                <div className="mode-card-icon">🏠</div>
+                <div className="mode-card-title">home only</div>
+                <div className="mode-card-desc">same wifi as your partner</div>
+                <div className="mode-prereq-pills">
+                  <span className="mode-prereq-pill mode-prereq-pill--ok">nothing needed</span>
+                </div>
+                <button className="mode-choose-btn" onClick={chooseLocal}>choose</button>
+              </div>
+
+              <div className="mode-card mode-card--featured">
+                <div className="mode-card-icon">☁️</div>
+                <div className="mode-card-title">tunnel</div>
+                <div className="mode-card-desc">watch from anywhere, free and secure</div>
+                <div className="mode-prereq-pills">
+                  <span className="mode-prereq-pill">needs a domain</span>
+                  <span className="mode-prereq-pill">needs a free cloudflare account</span>
+                </div>
+                <button className="mode-choose-btn mode-choose-btn--primary" onClick={chooseTunnel}>choose</button>
+              </div>
+
+              <div className="mode-card">
+                <div className="mode-card-icon">🔗</div>
+                <div className="mode-card-title">ddns</div>
+                <div className="mode-card-desc">watch from anywhere, no domain needed</div>
+                <div className="mode-prereq-pills">
+                  <span className="mode-prereq-pill">needs router access</span>
+                </div>
+                <button className="mode-choose-btn" onClick={chooseDDNS}>choose</button>
+              </div>
             </div>
-            <button className="setup-back" onClick={() => setStep(0)}>← Back</button>
+            <button className="setup-back" onClick={() => setStep(0)}>← back</button>
           </div>
         )}
 
