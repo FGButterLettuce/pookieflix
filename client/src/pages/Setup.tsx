@@ -9,6 +9,8 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   const [tunnelSubStep, setTunnelSubStep] = useState(0);
   const [baseUrl, setBaseUrl] = useState('');
   const [tunnelToken, setTunnelToken] = useState('');
+  const [showAdvancedPort, setShowAdvancedPort] = useState(false);
+  const [containerPort, setContainerPort] = useState(() => window.location.port || '3000');
   const [uploadUrl, setUploadUrl] = useState('');
   const [subsKey, setSubsKey] = useState('');
   const [saving, setSaving] = useState(false);
@@ -208,13 +210,42 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                 add it to Cloudflare first.
               </p>
               <ol className="setup-instructions">
-                <li>Back in the Cloudflare dashboard, go to the <strong>Public Hostname</strong> tab</li>
-                <li>Click <strong>Add a public hostname</strong></li>
+                <li>Back in the Cloudflare dashboard, go to your tunnel's <strong>Routes</strong> tab</li>
+                <li>Click <strong>Add route</strong>, then choose <strong>Published application</strong> (not "Private Network" — that requires the Cloudflare WARP client and won't let you just share a link)</li>
                 <li>Choose a subdomain (e.g. <em>watch</em>) and select a domain you have in Cloudflare</li>
-                <li>Set <strong>Type</strong> to <em>HTTP</em> and <strong>URL</strong> to <code>localhost:3000</code></li>
-                <li>Click <strong>Save hostname</strong></li>
+                <li>Set <strong>Service URL</strong> to <code>http://localhost:{containerPort || '3000'}</code> — plain <code>http://</code>, not <code>https://</code>: Cloudflare's edge handles the public HTTPS side, PookieFlix itself only speaks HTTP internally</li>
+                <li>Save the route</li>
                 <li>Your public URL will look like <em>https://watch.yourdomain.com</em>. Paste it below</li>
               </ol>
+
+              <button
+                type="button"
+                className="setup-advanced-toggle"
+                onClick={() => setShowAdvancedPort(v => !v)}
+              >
+                {showAdvancedPort ? '▾' : '▸'} Advanced: PookieFlix isn't on port 3000
+              </button>
+              {showAdvancedPort && (
+                <div className="setup-advanced-panel">
+                  <p className="setup-hint" style={{ marginBottom: 8 }}>
+                    If port 3000 on your machine was already taken by something else, you likely just
+                    remapped the <em>outside</em> port when starting the container (e.g. <code>-p 8080:3000</code>) —
+                    that doesn't change anything here, since the Service URL above refers to PookieFlix's
+                    own port <em>inside</em> its container, which stays 3000 by default either way.{' '}
+                    Only change this if you also set a custom <code>PORT</code> environment variable for
+                    PookieFlix itself.
+                  </p>
+                  <label className="settings-label">Container port</label>
+                  <input
+                    className="setup-input"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="3000"
+                    value={containerPort}
+                    onChange={e => setContainerPort(e.target.value.replace(/[^0-9]/g, ''))}
+                  />
+                </div>
+              )}
               <input
                 className="setup-input"
                 type="url"

@@ -113,12 +113,19 @@ iOS Safari receives HLS (`.m3u8` + `.ts` segments, generated at upload time) ins
 give it a token. No separate container, no terminal command on the host.
 
 1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) → **Networking → Tunnels → Create a tunnel**, choose **Cloudflared**, name it anything.
-2. Copy the token shown under **"Install connector"** (the long string in the command they show you — you don't need to run that command).
-3. In the Cloudflare dashboard's **Public Hostname** tab, add a hostname (e.g. `watch.yourdomain.com`) pointing at `localhost:3000`.
+2. Copy the token shown under **"Install connector"** (the long string in the command they show you — paste the whole command, or just the token, into the wizard; PookieFlix extracts the token either way, and you don't need to run that command anywhere).
+3. On the tunnel's **Routes** tab, click **Add route** → **Published application** (not "Private Network", which requires the Cloudflare WARP client). Choose a subdomain/domain and set **Service URL** to `http://localhost:3000` — plain `http://`, not `https://` (Cloudflare's edge handles the public HTTPS side; PookieFlix only speaks HTTP internally).
 4. Paste the token into PookieFlix's setup wizard (or **Settings → Cloudflare Tunnel token** if you've already finished setup) and set your public URL to `https://watch.yourdomain.com`.
 
 That's it — the tunnel connects immediately and reconnects automatically across restarts. The token
 is stored in `./data/config.json`, same as everything else the wizard saves.
+
+**If port 3000 was already taken on your machine**, you likely just remapped the outside port
+(`docker run -p 8080:3000 ...`) — the Service URL above is unaffected, since `cloudflared` runs
+inside the same container as PookieFlix and always talks to its internal port (3000 by default),
+regardless of what host port you mapped it to externally. This only matters if you *also* set a
+custom `PORT` environment variable for PookieFlix itself — in that case, use that port instead of
+3000 in the Service URL.
 
 ## LAN upload (bypasses Cloudflare file size limit)
 
