@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PasswordInput } from '../components/PasswordInput';
 
 
 interface TunnelStatus {
@@ -246,18 +247,16 @@ export function Settings() {
         <h2 className="settings-label" style={{ fontSize: 15, marginBottom: 16 }}>Change password</h2>
 
         <label className="settings-label">New password</label>
-        <input
+        <PasswordInput
           className="setup-input"
-          type="password"
           placeholder="At least 6 characters"
           value={newPassword}
           onChange={e => setNewPassword(e.target.value)}
         />
 
         <label className="settings-label" style={{ marginTop: 12 }}>Confirm password</label>
-        <input
+        <PasswordInput
           className="setup-input"
-          type="password"
           placeholder="Repeat new password"
           value={confirmPassword}
           onChange={e => setConfirmPassword(e.target.value)}

@@ -168,6 +168,26 @@ body {
 .setup-input:focus { border-color: var(--accent); }
 .setup-input::placeholder { color: var(--text-muted); }
 
+.password-field {
+  position: relative;
+  width: 100%;
+}
+.password-field .setup-input { padding-right: 44px; }
+.password-toggle-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 6px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+.password-toggle-btn:hover { color: var(--text); }
+
 .setup-hint {
   font-size: 13px;
   color: var(--text-muted);
@@ -1407,10 +1427,33 @@ body {
   align-items: center;
   text-align: center;
   gap: 6px;
+  position: relative;
 }
 .mode-card--featured {
+  flex: 1.25 1 200px;
+  min-width: 200px;
+  padding: 30px 22px 26px;
   border: 1.5px solid var(--accent);
   box-shadow: 0 8px 24px rgba(var(--accent-rgb), 0.15);
+}
+.mode-card-badge {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.4);
+  white-space: nowrap;
+}
+.mode-card--featured .mode-prereq-pill {
+  white-space: nowrap;
 }
 .mode-card-icon { font-size: 34px; }
 .mode-card-title {

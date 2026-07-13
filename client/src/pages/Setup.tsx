@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Logo } from '../components/Logo';
+import { PasswordInput } from '../components/PasswordInput';
 import { useTheme } from '../theme/ThemeContext';
 import { generateDomainSuggestions } from '../lib/domainSuggestions';
 
@@ -177,6 +178,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               </div>
 
               <div className="mode-card mode-card--featured">
+                <span className="mode-card-badge">recommended</span>
                 <div className="mode-card-icon">☁️</div>
                 <div className="mode-card-title">tunnel</div>
                 <div className="mode-card-desc">watch from anywhere, free and secure</div>
@@ -542,17 +544,15 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
                 ? "required before you finish, even for a home-only setup — anyone on your wifi could otherwise open the app with no login at all."
                 : "required before you finish — without one, pookieflix would be wide open to anyone who finds the URL, tunnel or not."}
             </p>
-            <input
+            <PasswordInput
               className="setup-input"
-              type="password"
               placeholder="at least 6 characters"
               value={password}
               onChange={e => setPassword(e.target.value)}
               autoFocus
             />
-            <input
+            <PasswordInput
               className="setup-input"
-              type="password"
               placeholder="confirm password"
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}

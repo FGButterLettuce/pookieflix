@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Logo } from '../components/Logo';
+import { PasswordInput } from '../components/PasswordInput';
 import { useTheme } from '../theme/ThemeContext';
 import type { LibraryFile } from '../types';
 
@@ -343,9 +344,8 @@ export function Home() {
         <div className="setup-card" style={{ maxWidth: 360, width: '100%' }}>
           <div className="overlay-icon" style={{ fontSize: 32, marginBottom: 12 }}>🎬</div>
           <h1 className="setup-title" style={{ marginBottom: 20 }}>PookieFlix</h1>
-          <input
+          <PasswordInput
             className="setup-input"
-            type="password"
             placeholder="Password"
             value={loginPassword}
             autoFocus
