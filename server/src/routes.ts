@@ -13,7 +13,7 @@ import {
 import { generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir } from './ffmpeg';
 import { getRuntimeByToken } from './roomManager';
 import { fetchSubtitles, subtitlePath, searchSubtitles, extractTitle, srtToVtt, syncSubtitles, undoSync } from './subtitles';
-import { startTunnel, stopTunnel } from './tunnel';
+import { startTunnel, stopTunnel, getTunnelStatus } from './tunnel';
 
 // ── Remote log buffer ─────────────────────────────────────────────────────────
 interface LogEntry { ts: number; device: string; level: string; msg: string; }
@@ -261,6 +261,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       UPLOAD_URL: process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? '',
       OPENSUBTITLES_API_KEY: osKey ? '••••••••' : '',  // mask — never expose key over HTTP
       TUNNEL_CONFIGURED: !!tunnelToken,  // write-only field — never expose the token itself
+      TUNNEL_STATUS: getTunnelStatus(),
     });
   });
 
