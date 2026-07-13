@@ -9,6 +9,8 @@ export interface PersistedConfig {
   UPLOAD_URL?: string;
   OPENSUBTITLES_API_KEY?: string;
   TUNNEL_TOKEN?: string;
+  PASSWORD_HASH?: string;
+  SESSION_SECRET?: string;
   setupComplete?: boolean;
 }
 
@@ -29,4 +31,17 @@ export function writePersistedConfig(data: PersistedConfig): void {
 export function isSetupComplete(): boolean {
   const c = readPersistedConfig();
   return !!(c.setupComplete && c.APP_BASE_URL);
+}
+
+// Auth gating must reflect changes made while the server is already running
+// (setup wizard, Settings -> Change password) - unlike most other config
+// values, these are read fresh on every call rather than cached at boot,
+// since a stale in-memory copy would mean a newly-set password never
+// actually took effect until the process restarted.
+export function getPasswordHash(): string {
+  return process.env.PASSWORD_HASH ?? readPersistedConfig().PASSWORD_HASH ?? '';
+}
+
+export function getSessionSecret(): string {
+  return process.env.SESSION_SECRET ?? readPersistedConfig().SESSION_SECRET ?? '';
 }
