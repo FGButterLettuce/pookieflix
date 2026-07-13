@@ -132,7 +132,7 @@ export function Settings() {
 
   return (
     <div className="setup-root">
-      <div className="setup-card settings-card" style={{ maxWidth: 480 }}>
+      <div className="setup-card settings-card">
         <button className="setup-back" style={{ marginBottom: 16 }} onClick={() => navigate('/')}>
           ← Back to library
         </button>
