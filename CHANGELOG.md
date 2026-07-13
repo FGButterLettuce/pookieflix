@@ -1,3 +1,7 @@
+## v1.1.0 - 2026-07-13
+
+- Bundle and self-manage cloudflared ([#3](https://github.com/FGButterLettuce/pookieflix/pull/3))
+
 ## v1.0.1 - 2026-07-13
 
 First versioned release.
