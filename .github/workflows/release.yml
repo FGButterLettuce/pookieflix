@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, 'chore: release')"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine bump type from merged PR
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+            });
+            const pr = data.find(p => p.merged_at) || data[0];
+            const labels = pr ? pr.labels.map(l => l.name) : [];
+            const bump = labels.includes('major') ? 'major' : labels.includes('minor') ? 'minor' : 'patch';
+            const title = pr ? pr.title : (context.payload.head_commit ? context.payload.head_commit.message.split('\n')[0] : 'Release');
+            core.setOutput('bump', bump);
+            core.setOutput('number', pr ? String(pr.number) : '');
+            core.setOutput('title', title);
+            core.setOutput('url', pr ? pr.html_url : '');
+
+      - name: Bump version
+        id: bump
+        run: |
+          cd server
+          NEW_VERSION=$(npm version "${{ steps.pr.outputs.bump }}" --no-git-tag-version | sed 's/^v//')
+          cd ../client
+          npm version "$NEW_VERSION" --no-git-tag-version --allow-same-version
+          cd ..
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "major_minor=$(echo "$NEW_VERSION" | cut -d. -f1,2)" >> "$GITHUB_OUTPUT"
+
+      - name: Update changelog
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          PR_REF="${{ steps.pr.outputs.number }}"
+          if [ -n "$PR_REF" ]; then
+            ENTRY="- ${{ steps.pr.outputs.title }} ([#$PR_REF](${{ steps.pr.outputs.url }}))"
+          else
+            ENTRY="- ${{ steps.pr.outputs.title }}"
+          fi
+          touch CHANGELOG.md
+          { echo "## v${{ steps.bump.outputs.version }} - $DATE"; echo; echo "$ENTRY"; echo; cat CHANGELOG.md; } > CHANGELOG.md.tmp
+          mv CHANGELOG.md.tmp CHANGELOG.md
+
+      - name: Commit version bump, tag, and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/package.json client/package.json CHANGELOG.md
+          git commit -m "chore: release v${{ steps.bump.outputs.version }}"
+          git tag "test-v${{ steps.bump.outputs.version }}"
+          git push origin HEAD:release-test-scratch --follow-tags
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="${{ steps.pr.outputs.title }}"
+          if [ -n "${{ steps.pr.outputs.number }}" ]; then
+            NOTES="$NOTES (#${{ steps.pr.outputs.number }})"
+          fi
+          gh release create "test-v${{ steps.bump.outputs.version }}" \
+            --title "TEST release - safe to delete: v${{ steps.bump.outputs.version }}" \
+            --notes "$NOTES" \
+            --prerelease
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=test-latest
+            type=raw,value=test-v${{ steps.bump.outputs.version }}
+            type=raw,value=test-${{ steps.bump.outputs.major_minor }}
+            type=sha,prefix=test-sha-
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
