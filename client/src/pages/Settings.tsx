@@ -40,6 +40,8 @@ export function Settings() {
   });
   const [tunnelToken, setTunnelToken] = useState('');
   const [removingTunnel, setRemovingTunnel] = useState(false);
+  const [reconnectingTunnel, setReconnectingTunnel] = useState(false);
+  const [reconnected, setReconnected] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -109,6 +111,25 @@ export function Settings() {
       setError('Failed to remove tunnel');
     } finally {
       setRemovingTunnel(false);
+    }
+  };
+
+  // Drops and re-establishes the tunnel with the same token — recovers a
+  // stuck/failing connection (e.g. one of cloudflared's edge connections
+  // caught in a retry loop) without needing to re-paste the token.
+  const reconnectTunnel = async () => {
+    setReconnectingTunnel(true);
+    setError('');
+    try {
+      const res = await fetch('/api/settings/tunnel/reconnect', { method: 'POST' });
+      if (!res.ok) throw new Error('Failed');
+      setValues(v => ({ ...v, TUNNEL_STATUS: { state: 'starting' } }));
+      setReconnected(true);
+      setTimeout(() => setReconnected(false), 2500);
+    } catch {
+      setError('Failed to reconnect tunnel');
+    } finally {
+      setReconnectingTunnel(false);
     }
   };
 
@@ -222,14 +243,24 @@ export function Settings() {
             container or install needed.
           </div>
           {values.TUNNEL_CONFIGURED && (
-            <button
-              className="setup-back"
-              style={{ color: 'var(--danger)' }}
-              onClick={() => void removeTunnel()}
-              disabled={removingTunnel}
-            >
-              {removingTunnel ? 'Removing…' : 'Remove tunnel'}
-            </button>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                className="setup-back"
+                onClick={() => void reconnectTunnel()}
+                disabled={reconnectingTunnel}
+                title="Drop and re-establish the tunnel connection — useful if it's been stuck or lagging"
+              >
+                {reconnectingTunnel ? 'Reconnecting…' : reconnected ? '✓ Reconnected' : 'Reconnect tunnel'}
+              </button>
+              <button
+                className="setup-back"
+                style={{ color: 'var(--danger)' }}
+                onClick={() => void removeTunnel()}
+                disabled={removingTunnel}
+              >
+                {removingTunnel ? 'Removing…' : 'Remove tunnel'}
+              </button>
+            </div>
           )}
         </div>
         <div style={{ marginBottom: 24 }} />

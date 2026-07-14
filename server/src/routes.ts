@@ -13,7 +13,7 @@ import {
 import { generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir } from './ffmpeg';
 import { getRuntimeByToken } from './roomManager';
 import { fetchSubtitles, subtitlePath, searchSubtitles, extractTitle, srtToVtt, syncSubtitles, undoSync } from './subtitles';
-import { startTunnel, stopTunnel, getTunnelStatus } from './tunnel';
+import { startTunnel, stopTunnel, reconnectTunnel, getTunnelStatus } from './tunnel';
 
 // ── Remote log buffer ─────────────────────────────────────────────────────────
 interface LogEntry { ts: number; device: string; level: string; msg: string; }
@@ -290,6 +290,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.delete('/api/settings/tunnel', { preHandler: requireAdmin }, async (_req, reply) => {
     stopTunnel();
     writePersistedConfig({ TUNNEL_TOKEN: undefined });
+    return reply.send({ ok: true });
+  });
+
+  // Drops and re-establishes the tunnel with the same token, giving cloudflared
+  // a fresh set of edge connections — recovers a stuck/failing connection
+  // without needing to re-paste the token or restart the whole container.
+  app.post('/api/settings/tunnel/reconnect', { preHandler: requireAdmin }, async (_req, reply) => {
+    const ok = reconnectTunnel();
+    if (!ok) return reply.status(400).send({ error: 'No tunnel is configured' });
     return reply.send({ ok: true });
   });
 

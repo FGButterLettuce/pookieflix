@@ -97,6 +97,21 @@ export function stopTunnel(): void {
   killCurrent();
 }
 
+// Drops and re-establishes the tunnel with the same token — useful when one
+// of cloudflared's edge connections gets stuck in a failure loop (seen live:
+// a specific connIndex repeatedly hitting "control stream encountered a
+// failure" while the other connections and the server itself were fine).
+// A fresh process negotiates a brand new set of edge connections rather than
+// waiting on cloudflared's own internal retry/backoff for the stuck one.
+export function reconnectTunnel(): boolean {
+  if (!currentToken) return false;
+  const token = currentToken;
+  killCurrent();
+  stopped = false;
+  spawnTunnel(token);
+  return true;
+}
+
 export function isTunnelRunning(): boolean {
   return !stopped && proc !== null;
 }
