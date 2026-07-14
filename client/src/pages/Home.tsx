@@ -214,6 +214,20 @@ export function Home() {
     }
   };
 
+  const [transcodeBusy, setTranscodeBusy] = useState<string | null>(null);
+
+  const transcodeAction = async (filename: string, action: 'cancel' | 'pause' | 'resume' | 'restart') => {
+    setTranscodeBusy(filename);
+    try {
+      await fetch(`/api/library/${encodeURIComponent(filename)}/transcode/${action}`, { method: 'POST' });
+      loadLibrary();
+    } catch {
+      setError('Transcode action failed');
+    } finally {
+      setTranscodeBusy(null);
+    }
+  };
+
   const startRename = (filename: string) => {
     setRenamingFile(filename);
     setRenameValue(filename);
@@ -487,6 +501,12 @@ export function Home() {
                   <div className="lib-meta-row">
                     <span className="lib-size">{formatBytes(f.size)}</span>
                     {f.subtitleFetching && <span className="lib-sub-badge lib-sub-fetching" title="Fetching subtitles…">CC…</span>}
+                    {f.transcodeStatus === 'running' && (
+                      <span className="lib-sub-badge lib-sub-fetching" title="Transcoding to HLS…">HLS…</span>
+                    )}
+                    {f.transcodeStatus === 'paused' && (
+                      <span className="lib-sub-badge" title="Transcode paused">HLS ⏸</span>
+                    )}
                     {f.lastTime > 5 && (
                       <span className="lib-resume" title="Resume position">
                         ↩ {formatTime(f.lastTime)}
@@ -507,6 +527,56 @@ export function Home() {
                   >
                     CC{f.hasSubtitles ? ` ✓ ${langFlag(subtitleLang)}` : ''}
                   </button>
+                  {f.transcodeStatus === 'running' && (
+                    <>
+                      <button
+                        className="lib-delete-btn"
+                        disabled={transcodeBusy === f.filename}
+                        onClick={() => void transcodeAction(f.filename, 'pause')}
+                        title="Pause transcode"
+                      >
+                        ⏸
+                      </button>
+                      <button
+                        className="lib-delete-btn"
+                        disabled={transcodeBusy === f.filename}
+                        onClick={() => void transcodeAction(f.filename, 'cancel')}
+                        title="Cancel transcode"
+                      >
+                        ⏹
+                      </button>
+                    </>
+                  )}
+                  {f.transcodeStatus === 'paused' && (
+                    <>
+                      <button
+                        className="lib-delete-btn"
+                        disabled={transcodeBusy === f.filename}
+                        onClick={() => void transcodeAction(f.filename, 'resume')}
+                        title="Resume transcode"
+                      >
+                        ▶
+                      </button>
+                      <button
+                        className="lib-delete-btn"
+                        disabled={transcodeBusy === f.filename}
+                        onClick={() => void transcodeAction(f.filename, 'cancel')}
+                        title="Cancel transcode"
+                      >
+                        ⏹
+                      </button>
+                    </>
+                  )}
+                  {(f.transcodeStatus === 'complete' || f.transcodeStatus === 'none') && (
+                    <button
+                      className="lib-delete-btn"
+                      disabled={transcodeBusy === f.filename}
+                      onClick={() => void transcodeAction(f.filename, 'restart')}
+                      title={f.transcodeStatus === 'complete' ? 'Re-transcode to HLS from scratch' : 'Transcode to HLS now'}
+                    >
+                      ↻
+                    </button>
+                  )}
                   <button
                     className="lib-delete-btn"
                     disabled={deletingFile === f.filename}

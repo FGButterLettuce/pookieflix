@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { config } from './config';
 import { hasSubtitles, isFetching } from './subtitles';
+import { getTranscodeStatus } from './ffmpeg';
 import type { RoomRow, LibraryMetaRow, LibraryFileInfo } from './types';
 
 let _db: DatabaseSync | null = null;
@@ -162,6 +163,7 @@ export function listLibraryFiles(): LibraryFileInfo[] {
       hasSubtitles: hasSub,
       subtitleFetching: isFetching(fullPath),
       subtitleName,
+      transcodeStatus: getTranscodeStatus(fullPath),
     };
   }).sort((a, b) => (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0) || a.filename.localeCompare(b.filename));
 }
