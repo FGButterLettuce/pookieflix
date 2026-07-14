@@ -1,3 +1,7 @@
+## v1.5.3 - 2026-07-14
+
+- Add in-app tunnel reconnect and manual transcode controls ([#15](https://github.com/FGButterLettuce/pookieflix/pull/15))
+
 ## v1.5.2 - 2026-07-13
 
 - Fix sync buffer-safety bypass and live-stream-looking HLS output ([#12](https://github.com/FGButterLettuce/pookieflix/pull/12))
