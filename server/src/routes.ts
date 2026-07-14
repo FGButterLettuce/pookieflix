@@ -10,7 +10,10 @@ import {
   createRoom, getRoomByToken, listLibraryFiles,
   purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile, setSubtitleName,
 } from './db';
-import { generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir } from './ffmpeg';
+import {
+  generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
+  getTranscodeStatus, cancelTranscode, pauseTranscode, resumeTranscode, restartTranscode,
+} from './ffmpeg';
 import { getRuntimeByToken } from './roomManager';
 import { fetchSubtitles, subtitlePath, searchSubtitles, extractTitle, srtToVtt, syncSubtitles, undoSync } from './subtitles';
 import { startTunnel, stopTunnel, reconnectTunnel, getTunnelStatus } from './tunnel';
@@ -324,6 +327,41 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // ── Library: list files with metadata ─────────────────────────────────────
   app.get('/api/library', { preHandler: requireAdmin }, async (_req, reply) => {
     return reply.send({ files: listLibraryFiles() });
+  });
+
+  // ── Library: manual transcode controls ─────────────────────────────────────
+  // Status itself is included per-file in GET /api/library (transcodeStatus) —
+  // these are the action endpoints only.
+  app.post('/api/library/:filename/transcode/cancel', { preHandler: requireAdmin }, async (req, reply) => {
+    const { filename } = req.params as { filename: string };
+    let filePath: string;
+    try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
+    const ok = cancelTranscode(filePath);
+    return reply.send({ ok });
+  });
+
+  app.post('/api/library/:filename/transcode/pause', { preHandler: requireAdmin }, async (req, reply) => {
+    const { filename } = req.params as { filename: string };
+    let filePath: string;
+    try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
+    const ok = pauseTranscode(filePath);
+    return reply.send({ ok });
+  });
+
+  app.post('/api/library/:filename/transcode/resume', { preHandler: requireAdmin }, async (req, reply) => {
+    const { filename } = req.params as { filename: string };
+    let filePath: string;
+    try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
+    const ok = resumeTranscode(filePath);
+    return reply.send({ ok });
+  });
+
+  app.post('/api/library/:filename/transcode/restart', { preHandler: requireAdmin }, async (req, reply) => {
+    const { filename } = req.params as { filename: string };
+    let filePath: string;
+    try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
+    restartTranscode(filePath);
+    return reply.send({ ok: true });
   });
 
   // ── Library: serve thumbnail ───────────────────────────────────────────────

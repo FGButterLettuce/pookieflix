@@ -182,4 +182,5 @@ export interface LibraryFileInfo {
   hasSubtitles: boolean;
   subtitleFetching: boolean;
   subtitleName: string | null;
+  transcodeStatus: 'none' | 'running' | 'paused' | 'complete';
 }

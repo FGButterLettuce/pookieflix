@@ -58,6 +58,7 @@ export interface LibraryFile {
   hasSubtitles: boolean;
   subtitleFetching: boolean;
   subtitleName: string | null;
+  transcodeStatus: 'none' | 'running' | 'paused' | 'complete';
 }
 
 export interface PeerStatus {
