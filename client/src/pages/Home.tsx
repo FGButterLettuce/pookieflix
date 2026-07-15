@@ -515,76 +515,82 @@ export function Home() {
                   </div>
                 </div>
 
-                {/* Actions */}
+                {/* Actions — primary row (watch/subtitles), secondary row
+                    (transcode controls/delete) only when there's something
+                    there, so most cards just show one clean row. */}
                 <div className="lib-actions">
-                  <button className="lib-watch-btn" onClick={() => createRoomFrom(f.filename)}>
-                    {f.lastTime > 5 ? 'Resume' : 'Watch'}
-                  </button>
-                  <button
-                    className={`lib-sub-btn${f.hasSubtitles ? ' lib-sub-btn--active' : ''}`}
-                    onClick={() => openSubPicker(f.filename)}
-                    title={f.hasSubtitles ? 'Subtitles loaded · click to change' : 'Add subtitles'}
-                  >
-                    CC{f.hasSubtitles ? ` ✓ ${langFlag(subtitleLang)}` : ''}
-                  </button>
-                  {f.transcodeStatus === 'running' && (
-                    <>
+                  <div className="lib-actions-row">
+                    <button className="lib-watch-btn" onClick={() => createRoomFrom(f.filename)}>
+                      {f.lastTime > 5 ? 'Resume' : 'Watch'}
+                    </button>
+                    <button
+                      className={`lib-sub-btn${f.hasSubtitles ? ' lib-sub-btn--active' : ''}`}
+                      onClick={() => openSubPicker(f.filename)}
+                      title={f.hasSubtitles ? 'Subtitles loaded · click to change' : 'Add subtitles'}
+                    >
+                      CC{f.hasSubtitles ? ` ✓ ${langFlag(subtitleLang)}` : ''}
+                    </button>
+                  </div>
+                  <div className="lib-actions-row">
+                    {f.transcodeStatus === 'running' && (
+                      <>
+                        <button
+                          className="lib-delete-btn"
+                          disabled={transcodeBusy === f.filename}
+                          onClick={() => void transcodeAction(f.filename, 'pause')}
+                          title="Pause transcode"
+                        >
+                          ⏸ Pause
+                        </button>
+                        <button
+                          className="lib-delete-btn"
+                          disabled={transcodeBusy === f.filename}
+                          onClick={() => void transcodeAction(f.filename, 'cancel')}
+                          title="Cancel transcode"
+                        >
+                          ⏹ Cancel
+                        </button>
+                      </>
+                    )}
+                    {f.transcodeStatus === 'paused' && (
+                      <>
+                        <button
+                          className="lib-delete-btn"
+                          disabled={transcodeBusy === f.filename}
+                          onClick={() => void transcodeAction(f.filename, 'resume')}
+                          title="Resume transcode"
+                        >
+                          ▶ Resume
+                        </button>
+                        <button
+                          className="lib-delete-btn"
+                          disabled={transcodeBusy === f.filename}
+                          onClick={() => void transcodeAction(f.filename, 'cancel')}
+                          title="Cancel transcode"
+                        >
+                          ⏹ Cancel
+                        </button>
+                      </>
+                    )}
+                    {(f.transcodeStatus === 'complete' || f.transcodeStatus === 'none') && (
                       <button
                         className="lib-delete-btn"
                         disabled={transcodeBusy === f.filename}
-                        onClick={() => void transcodeAction(f.filename, 'pause')}
-                        title="Pause transcode"
+                        onClick={() => void transcodeAction(f.filename, 'restart')}
+                        title={f.transcodeStatus === 'complete' ? 'Re-transcode to HLS from scratch' : 'Transcode to HLS now'}
                       >
-                        ⏸
+                        ↻ {f.transcodeStatus === 'complete' ? 'Re-transcode' : 'Transcode'}
                       </button>
-                      <button
-                        className="lib-delete-btn"
-                        disabled={transcodeBusy === f.filename}
-                        onClick={() => void transcodeAction(f.filename, 'cancel')}
-                        title="Cancel transcode"
-                      >
-                        ⏹
-                      </button>
-                    </>
-                  )}
-                  {f.transcodeStatus === 'paused' && (
-                    <>
-                      <button
-                        className="lib-delete-btn"
-                        disabled={transcodeBusy === f.filename}
-                        onClick={() => void transcodeAction(f.filename, 'resume')}
-                        title="Resume transcode"
-                      >
-                        ▶
-                      </button>
-                      <button
-                        className="lib-delete-btn"
-                        disabled={transcodeBusy === f.filename}
-                        onClick={() => void transcodeAction(f.filename, 'cancel')}
-                        title="Cancel transcode"
-                      >
-                        ⏹
-                      </button>
-                    </>
-                  )}
-                  {(f.transcodeStatus === 'complete' || f.transcodeStatus === 'none') && (
+                    )}
                     <button
                       className="lib-delete-btn"
-                      disabled={transcodeBusy === f.filename}
-                      onClick={() => void transcodeAction(f.filename, 'restart')}
-                      title={f.transcodeStatus === 'complete' ? 'Re-transcode to HLS from scratch' : 'Transcode to HLS now'}
+                      disabled={deletingFile === f.filename}
+                      onClick={() => deleteFile(f.filename)}
+                      title="Delete from library"
                     >
-                      ↻
+                      {deletingFile === f.filename ? '…' : '🗑'}
                     </button>
-                  )}
-                  <button
-                    className="lib-delete-btn"
-                    disabled={deletingFile === f.filename}
-                    onClick={() => deleteFile(f.filename)}
-                    title="Delete from library"
-                  >
-                    {deletingFile === f.filename ? '…' : '🗑'}
-                  </button>
+                  </div>
                 </div>
               </div>
             );
