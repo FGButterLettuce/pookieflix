@@ -538,7 +538,7 @@ export function Home() {
                           Queued
                         </span>
                         <button
-                          className="lib-delete-btn"
+                          className="lib-transcode-btn"
                           disabled={transcodeBusy === f.filename}
                           onClick={() => void transcodeAction(f.filename, 'cancel')}
                           title="Remove from transcode queue"
@@ -550,7 +550,7 @@ export function Home() {
                     {f.transcodeStatus === 'running' && (
                       <>
                         <button
-                          className="lib-delete-btn"
+                          className="lib-transcode-btn"
                           disabled={transcodeBusy === f.filename}
                           onClick={() => void transcodeAction(f.filename, 'pause')}
                           title="Pause transcode"
@@ -558,7 +558,7 @@ export function Home() {
                           ⏸ Pause
                         </button>
                         <button
-                          className="lib-delete-btn"
+                          className="lib-transcode-btn"
                           disabled={transcodeBusy === f.filename}
                           onClick={() => void transcodeAction(f.filename, 'cancel')}
                           title="Cancel transcode"
@@ -570,7 +570,7 @@ export function Home() {
                     {f.transcodeStatus === 'paused' && (
                       <>
                         <button
-                          className="lib-delete-btn"
+                          className="lib-transcode-btn"
                           disabled={transcodeBusy === f.filename}
                           onClick={() => void transcodeAction(f.filename, 'resume')}
                           title="Resume transcode"
@@ -578,7 +578,7 @@ export function Home() {
                           ▶ Resume
                         </button>
                         <button
-                          className="lib-delete-btn"
+                          className="lib-transcode-btn"
                           disabled={transcodeBusy === f.filename}
                           onClick={() => void transcodeAction(f.filename, 'cancel')}
                           title="Cancel transcode"
@@ -589,7 +589,7 @@ export function Home() {
                     )}
                     {(f.transcodeStatus === 'complete' || f.transcodeStatus === 'none') && (
                       <button
-                        className="lib-delete-btn"
+                        className="lib-transcode-btn"
                         disabled={transcodeBusy === f.filename}
                         onClick={() => void transcodeAction(f.filename, 'restart')}
                         title={f.transcodeStatus === 'complete' ? 'Re-transcode to HLS from scratch' : 'Transcode to HLS now'}

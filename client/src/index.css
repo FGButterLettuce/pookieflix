@@ -828,9 +828,36 @@ body {
 
 .lib-watch-btn:hover { background: var(--accent-hover); }
 
-.lib-delete-btn {
+/* Transcode controls (pause/resume/cancel/restart) — a neutral, reversible
+   action a user takes often, distinct from the one-way, rarely-used delete
+   below. Text label + icon on one line, sized to actually fit. */
+.lib-transcode-btn {
   flex: 1;
-  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.lib-transcode-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-hover); }
+.lib-transcode-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Delete is destructive and rare — kept icon-only and visually separate
+   from the transcode controls it used to share styling with, instead of
+   competing for the same row as an equally-weighted text button. */
+.lib-delete-btn {
+  flex: 0 0 auto;
+  width: 38px;
+  padding: 9px 0;
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--text-muted);
@@ -844,7 +871,7 @@ body {
 .lib-delete-btn:disabled { opacity: 0.4; cursor: default; }
 
 .lib-sub-btn {
-  padding: 9px 12px;
+  padding: 10px 12px;
   background: var(--surface2);
   border: 1px solid var(--border);
   color: #4ade80;
