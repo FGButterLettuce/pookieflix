@@ -1,3 +1,7 @@
+## v1.5.4 - 2026-07-15
+
+- Fix stuck HLS transcodes, serialize them, wider library cards ([#17](https://github.com/FGButterLettuce/pookieflix/pull/17))
+
 ## v1.5.3 - 2026-07-14
 
 - Add in-app tunnel reconnect and manual transcode controls ([#15](https://github.com/FGButterLettuce/pookieflix/pull/15))
