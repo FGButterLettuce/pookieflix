@@ -124,12 +124,14 @@ export function generateThumbnailAsync(videoPath: string, filename: string, onDo
 export async function applyFastStart(videoPath: string): Promise<void> {
   const tmp = videoPath + '.faststart.tmp';
   const ok = await new Promise<boolean>(resolve => {
+    // stdio: 'ignore' — same unread-stderr pipe-fill deadlock as generateHLS
+    // below; a full remux writes enough progress output to trigger it too.
     const ff = spawn('ffmpeg', [
       '-i', videoPath,
       '-c', 'copy',
       '-movflags', '+faststart',
       '-y', tmp,
-    ]);
+    ], { stdio: 'ignore' });
     ff.on('close', code => resolve(code === 0));
     ff.on('error', () => resolve(false));
   });
@@ -164,6 +166,12 @@ export async function generateHLS(videoPath: string): Promise<boolean> {
   fs.mkdirSync(dir, { recursive: true });
   const manifest = hlsManifestPath(videoPath);
   const ok = await new Promise<boolean>(resolve => {
+    // stdio: 'ignore' — ffmpeg writes continuous progress stats to stderr for
+    // the whole transcode. Left as default 'pipe' with nothing draining it,
+    // the OS pipe buffer (~64KB) fills partway through any real movie and
+    // ffmpeg's write() blocks forever: the process goes idle mid-transcode,
+    // no error, no exit, no further segments (confirmed live: two full-movie
+    // transcodes froze permanently within seconds of starting this way).
     const ff = spawn('ffmpeg', [
       '-fflags', '+genpts',
       '-err_detect', 'ignore_err',
@@ -174,7 +182,7 @@ export async function generateHLS(videoPath: string): Promise<boolean> {
       '-hls_playlist_type', 'vod',
       '-hls_segment_filename', path.join(dir, 'seg%04d.ts'),
       '-y', manifest,
-    ]);
+    ], { stdio: 'ignore' });
     activeTranscodes.set(videoPath, { proc: ff, paused: false, startedAt: Date.now() });
     // Only clear the registry entry if it's still this exact process — a
     // cancelled-then-immediately-restarted job registers a new process under
