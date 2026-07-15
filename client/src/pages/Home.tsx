@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { PasswordInput } from '../components/PasswordInput';
 import { useTheme } from '../theme/ThemeContext';
 import type { LibraryFile } from '../types';
 import {
-  PlayIcon, PauseIcon, StopIcon, RestartIcon, HistoryIcon, SubtitlesIcon,
-  TrashIcon, MoreIcon, SettingsIcon, UploadIcon, CheckIcon, FilmIcon,
-} from '../components/Icons';
+  Play, Pause, Square, RotateCw, History, Captions,
+  Trash2, MoreHorizontal, Settings, Upload, Check, Film,
+} from 'lucide-react';
 
 
 
@@ -219,7 +220,33 @@ export function Home() {
   };
 
   const [transcodeBusy, setTranscodeBusy] = useState<string | null>(null);
-  const [openMenuFor, setOpenMenuFor] = useState<string | null>(null);
+
+  // The "⋯" menu is portaled to document.body and positioned in fixed
+  // coordinates captured at open time — it used to be absolutely positioned
+  // inside the card, which got clipped by the "Continue watching" rail's
+  // horizontal scroll container (overflow-x: auto forces overflow-y: auto
+  // too, per the CSS overflow spec, so the menu never had room to render
+  // below the card there).
+  const [menuAnchor, setMenuAnchor] = useState<{ filename: string; top: number; right: number } | null>(null);
+
+  const toggleMenu = (filename: string, btn: HTMLButtonElement) => {
+    setMenuAnchor(cur => {
+      if (cur?.filename === filename) return null;
+      const rect = btn.getBoundingClientRect();
+      return { filename, top: rect.bottom + 8, right: window.innerWidth - rect.right };
+    });
+  };
+
+  useEffect(() => {
+    if (!menuAnchor) return;
+    const close = () => setMenuAnchor(null);
+    window.addEventListener('scroll', close, { capture: true });
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, { capture: true });
+      window.removeEventListener('resize', close);
+    };
+  }, [menuAnchor]);
 
   const transcodeAction = async (filename: string, action: 'cancel' | 'pause' | 'resume' | 'restart') => {
     setTranscodeBusy(filename);
@@ -234,7 +261,7 @@ export function Home() {
   };
 
   const resetProgress = async (filename: string) => {
-    setOpenMenuFor(null);
+    setMenuAnchor(null);
     try {
       await fetch(`/api/library/${encodeURIComponent(filename)}/reset-progress`, { method: 'POST' });
       loadLibrary();
@@ -386,10 +413,10 @@ export function Home() {
             />
           ) : (
             <div className="lib-thumb-placeholder">
-              {f.thumbReady ? <FilmIcon size={24} /> : <span className="thumb-spinner" />}
+              {f.thumbReady ? <Film size={24} /> : <span className="thumb-spinner" />}
             </div>
           )}
-          <div className="lib-play-overlay"><PlayIcon size={26} /></div>
+          <div className="lib-play-overlay"><Play size={26} /></div>
           {f.duration > 0 && (
             <span className="lib-duration">{formatDuration(f.duration)}</span>
           )}
@@ -453,105 +480,112 @@ export function Home() {
         <div className="lib-actions">
           <div className="lib-actions-row">
             <button className="lib-watch-btn" onClick={() => createRoomFrom(f.filename)}>
-              <PlayIcon size={14} />
+              <Play size={14} />
               {f.lastTime > 5 ? 'Resume' : 'Watch'}
             </button>
-            <div className="lib-menu-wrap">
-              <button
-                className={`lib-menu-btn${openMenuFor === f.filename ? ' lib-menu-btn--open' : ''}`}
-                onClick={() => setOpenMenuFor(openMenuFor === f.filename ? null : f.filename)}
-                title="More actions"
-              >
-                <MoreIcon />
-              </button>
-              {openMenuFor === f.filename && (
-                <>
-                  <div className="lib-menu-backdrop" onClick={() => setOpenMenuFor(null)} />
-                  <div className="lib-menu">
-                    <button
-                      className={`lib-menu-item${f.hasSubtitles ? ' lib-menu-item--sub-active' : ''}`}
-                      onClick={() => { setOpenMenuFor(null); openSubPicker(f.filename); }}
-                    >
-                      <SubtitlesIcon />
-                      {f.hasSubtitles ? `Subtitles (${langFlag(subtitleLang)})` : 'Add subtitles'}
-                    </button>
-
-                    {f.transcodeStatus === 'queued' && (
-                      <button
-                        className="lib-menu-item"
-                        disabled={transcodeBusy === f.filename}
-                        onClick={() => void transcodeAction(f.filename, 'cancel')}
-                      >
-                        <StopIcon /> Cancel (queued)
-                      </button>
-                    )}
-                    {f.transcodeStatus === 'running' && (
-                      <>
-                        <button
-                          className="lib-menu-item"
-                          disabled={transcodeBusy === f.filename}
-                          onClick={() => void transcodeAction(f.filename, 'pause')}
-                        >
-                          <PauseIcon /> Pause transcode
-                        </button>
-                        <button
-                          className="lib-menu-item"
-                          disabled={transcodeBusy === f.filename}
-                          onClick={() => void transcodeAction(f.filename, 'cancel')}
-                        >
-                          <StopIcon /> Cancel transcode
-                        </button>
-                      </>
-                    )}
-                    {f.transcodeStatus === 'paused' && (
-                      <>
-                        <button
-                          className="lib-menu-item"
-                          disabled={transcodeBusy === f.filename}
-                          onClick={() => void transcodeAction(f.filename, 'resume')}
-                        >
-                          <PlayIcon /> Resume transcode
-                        </button>
-                        <button
-                          className="lib-menu-item"
-                          disabled={transcodeBusy === f.filename}
-                          onClick={() => void transcodeAction(f.filename, 'cancel')}
-                        >
-                          <StopIcon /> Cancel transcode
-                        </button>
-                      </>
-                    )}
-                    {(f.transcodeStatus === 'complete' || f.transcodeStatus === 'none') && (
-                      <button
-                        className="lib-menu-item"
-                        disabled={transcodeBusy === f.filename}
-                        onClick={() => void transcodeAction(f.filename, 'restart')}
-                      >
-                        <RestartIcon /> {f.transcodeStatus === 'complete' ? 'Re-transcode' : 'Transcode now'}
-                      </button>
-                    )}
-
-                    {f.lastTime > 5 && (
-                      <button className="lib-menu-item" onClick={() => void resetProgress(f.filename)}>
-                        <HistoryIcon /> Start over
-                      </button>
-                    )}
-
-                    <div className="lib-menu-divider" />
-                    <button
-                      className="lib-menu-item lib-menu-item--danger"
-                      disabled={deletingFile === f.filename}
-                      onClick={() => { setOpenMenuFor(null); deleteFile(f.filename); }}
-                    >
-                      <TrashIcon /> {deletingFile === f.filename ? 'Deleting…' : 'Delete'}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+            <button
+              className={`lib-menu-btn${menuAnchor?.filename === f.filename ? ' lib-menu-btn--open' : ''}`}
+              onClick={e => toggleMenu(f.filename, e.currentTarget)}
+              title="More actions"
+            >
+              <MoreHorizontal />
+            </button>
           </div>
         </div>
       </div>
+    );
+  }
+
+  // Portaled to document.body and positioned via menuAnchor's fixed
+  // coordinates — see the comment by menuAnchor's declaration above.
+  function renderMenu() {
+    if (!menuAnchor) return null;
+    const f = library.find(lf => lf.filename === menuAnchor.filename);
+    if (!f) return null;
+
+    return (
+      <>
+        <div className="lib-menu-backdrop" onClick={() => setMenuAnchor(null)} />
+        <div className="lib-menu" style={{ top: menuAnchor.top, right: menuAnchor.right }}>
+          <button
+            className={`lib-menu-item${f.hasSubtitles ? ' lib-menu-item--sub-active' : ''}`}
+            onClick={() => { setMenuAnchor(null); openSubPicker(f.filename); }}
+          >
+            <Captions />
+            {f.hasSubtitles ? `Subtitles (${langFlag(subtitleLang)})` : 'Add subtitles'}
+          </button>
+
+          {f.transcodeStatus === 'queued' && (
+            <button
+              className="lib-menu-item"
+              disabled={transcodeBusy === f.filename}
+              onClick={() => void transcodeAction(f.filename, 'cancel')}
+            >
+              <Square /> Cancel (queued)
+            </button>
+          )}
+          {f.transcodeStatus === 'running' && (
+            <>
+              <button
+                className="lib-menu-item"
+                disabled={transcodeBusy === f.filename}
+                onClick={() => void transcodeAction(f.filename, 'pause')}
+              >
+                <Pause /> Pause transcode
+              </button>
+              <button
+                className="lib-menu-item"
+                disabled={transcodeBusy === f.filename}
+                onClick={() => void transcodeAction(f.filename, 'cancel')}
+              >
+                <Square /> Cancel transcode
+              </button>
+            </>
+          )}
+          {f.transcodeStatus === 'paused' && (
+            <>
+              <button
+                className="lib-menu-item"
+                disabled={transcodeBusy === f.filename}
+                onClick={() => void transcodeAction(f.filename, 'resume')}
+              >
+                <Play /> Resume transcode
+              </button>
+              <button
+                className="lib-menu-item"
+                disabled={transcodeBusy === f.filename}
+                onClick={() => void transcodeAction(f.filename, 'cancel')}
+              >
+                <Square /> Cancel transcode
+              </button>
+            </>
+          )}
+          {(f.transcodeStatus === 'complete' || f.transcodeStatus === 'none') && (
+            <button
+              className="lib-menu-item"
+              disabled={transcodeBusy === f.filename}
+              onClick={() => void transcodeAction(f.filename, 'restart')}
+            >
+              <RotateCw /> {f.transcodeStatus === 'complete' ? 'Re-transcode' : 'Transcode now'}
+            </button>
+          )}
+
+          {f.lastTime > 5 && (
+            <button className="lib-menu-item" onClick={() => void resetProgress(f.filename)}>
+              <History /> Start over
+            </button>
+          )}
+
+          <div className="lib-menu-divider" />
+          <button
+            className="lib-menu-item lib-menu-item--danger"
+            disabled={deletingFile === f.filename}
+            onClick={() => { setMenuAnchor(null); deleteFile(f.filename); }}
+          >
+            <Trash2 /> {deletingFile === f.filename ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
+      </>
     );
   }
 
@@ -584,7 +618,7 @@ export function Home() {
     <div className="home-root">
       <header className="home-topbar">
         <span className="home-logo"><Logo size="sm" variant={theme} /></span>
-        <Link to="/settings" className="settings-link" title="Settings"><SettingsIcon /></Link>
+        <Link to="/settings" className="settings-link" title="Settings"><Settings /></Link>
       </header>
 
       {/* Upload zone */}
@@ -605,7 +639,7 @@ export function Home() {
           </div>
         ) : uploadedRoomUrl ? (
           <div className="upload-progress-inner">
-            <div className="upload-icon"><CheckIcon /></div>
+            <div className="upload-icon"><Check /></div>
             <div className="upload-label">Upload complete</div>
             <a className="primary-btn" href={uploadedRoomUrl} style={{ marginTop: 10 }}>
               Watch on PookieFlix →
@@ -616,7 +650,7 @@ export function Home() {
           </div>
         ) : (
           <>
-            <div className="upload-icon"><UploadIcon /></div>
+            <div className="upload-icon"><Upload /></div>
             <div className="upload-label">Drop an MP4 here or click to upload</div>
             <div className="upload-hint">Uploads go to your library and are never auto-deleted</div>
           </>
@@ -641,7 +675,7 @@ export function Home() {
           full library below. Same card renderer, two contexts. */}
       {library.length === 0 && !uploading ? (
         <div className="library-empty">
-          <div className="library-empty-icon"><FilmIcon size={40} /></div>
+          <div className="library-empty-icon"><Film size={40} /></div>
           <div>Your library is empty. Upload a video to get started.</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
             You can also drop files into <code>data/media/library/</code> on the server.
@@ -774,6 +808,8 @@ export function Home() {
         </div>
         );
       })()}
+
+      {menuAnchor && createPortal(renderMenu(), document.body)}
     </div>
   );
 }
