@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import * as Tooltip from '@radix-ui/react-tooltip';
+import { ArrowLeft, Info } from 'lucide-react';
+import { Logo } from '../components/Logo';
+import { useTheme } from '../theme/ThemeContext';
 import { PasswordInput } from '../components/PasswordInput';
 import { PasteableInput } from '../components/PasteableInput';
 
@@ -28,7 +32,7 @@ const TUNNEL_STATUS_LABEL: Record<TunnelStatus['state'], string> = {
 };
 
 export function Settings() {
-  const navigate = useNavigate();
+  const { theme } = useTheme();
   const [values, setValues] = useState<SettingsData>({
     APP_BASE_URL: '',
     UPLOAD_URL: '',
@@ -154,147 +158,184 @@ export function Settings() {
   };
 
   return (
-    <div className="setup-root">
-      <div className="setup-card settings-card">
-        <button className="setup-back" style={{ marginBottom: 16 }} onClick={() => navigate('/')}>
-          ← Back to library
-        </button>
-        <h1 className="setup-title" style={{ marginBottom: 24 }}>Settings</h1>
+    <div className="home-root">
+      <header className="home-topbar">
+        <span className="home-logo"><Logo size="sm" variant={theme} /></span>
+        <Link to="/" className="settings-link" title="Back to library"><ArrowLeft /></Link>
+      </header>
 
-        <label className="settings-label">Public domain</label>
-        <PasteableInput
-          className="setup-input"
-          type="url"
-          placeholder="https://watch.yourdomain.com"
-          value={values.APP_BASE_URL}
-          onChange={set('APP_BASE_URL')}
-        />
-        <div className="setup-hint" style={{ marginBottom: 20 }}>Used to generate room invite links</div>
+      <div className="settings-page">
+        <h1 className="settings-page-title">Settings</h1>
 
-        <label className="settings-label">Your name</label>
-        <PasteableInput
-          className="setup-input"
-          placeholder="e.g. Niranjan"
-          value={values.USER_NAME}
-          onChange={set('USER_NAME')}
-        />
-        <div className="setup-hint" style={{ marginBottom: 20 }}>Used for personalized domain suggestions if you set up a Cloudflare Tunnel</div>
+        <section className="settings-section">
+          <h2 className="settings-section-title">Account</h2>
 
-        <label className="settings-label">Partner's name</label>
-        <PasteableInput
-          className="setup-input"
-          placeholder="e.g. Anu"
-          value={values.PARTNER_NAME}
-          onChange={set('PARTNER_NAME')}
-        />
-        <div className="setup-hint" style={{ marginBottom: 20 }}>Same, also used for domain suggestions</div>
-
-        <label className="settings-label">Local network URL <span className="settings-optional">(optional)</span></label>
-        <PasteableInput
-          className="setup-input"
-          type="url"
-          placeholder="http://192.168.0.91:3000"
-          value={values.UPLOAD_URL}
-          onChange={set('UPLOAD_URL')}
-        />
-        <div className="setup-hint" style={{ marginBottom: 20 }}>Direct upload path bypassing Cloudflare</div>
-
-        <label className="settings-label">OpenSubtitles API key <span className="settings-optional">(optional)</span></label>
-        <PasteableInput
-          className="setup-input"
-          placeholder="Your API key"
-          value={values.OPENSUBTITLES_API_KEY}
-          onChange={set('OPENSUBTITLES_API_KEY')}
-        />
-        <div className="setup-hint" style={{ marginBottom: 24 }}>Auto-fetch subtitles on upload</div>
-
-        <label className="settings-label">Cloudflare Tunnel</label>
-        <div className="tunnel-card">
-          <div className="tunnel-card-header">
-            <span
-              className={`tunnel-status-dot tunnel-status-dot--${values.TUNNEL_CONFIGURED ? values.TUNNEL_STATUS.state : 'stopped'}`}
-              title={values.TUNNEL_STATUS.message || undefined}
+          <div className="settings-field">
+            <label className="settings-label">Your name</label>
+            <PasteableInput
+              className="setup-input"
+              placeholder="e.g. Niranjan"
+              value={values.USER_NAME}
+              onChange={set('USER_NAME')}
             />
-            <span className="tunnel-status-label">
-              {values.TUNNEL_CONFIGURED ? TUNNEL_STATUS_LABEL[values.TUNNEL_STATUS.state] : 'Not configured'}
-            </span>
-            {values.TUNNEL_STATUS.state === 'error' && values.TUNNEL_STATUS.message && (
-              <span className="tunnel-status-detail" title={values.TUNNEL_STATUS.message}>ⓘ</span>
-            )}
+            <div className="setup-hint" style={{ marginBottom: 0 }}>Used for personalized domain suggestions if you set up a Cloudflare Tunnel</div>
           </div>
 
-          <a
-            className="external-cta-btn"
-            href="https://dash.cloudflare.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            open dash.cloudflare.com ↗
-          </a>
-          <PasteableInput
-            className="setup-input"
-            placeholder={values.TUNNEL_CONFIGURED ? 'Paste a new token to replace this tunnel' : 'Paste a token to enable a tunnel'}
-            value={tunnelToken}
-            onChange={e => setTunnelToken(e.target.value)}
-          />
-          <div className="setup-hint" style={{ marginBottom: 12 }}>
-            From your tunnel's "Install connector" step — paste the whole command shown there,
-            we'll find the token in it. PookieFlix runs and manages the tunnel itself, no separate
-            container or install needed.
+          <div className="settings-field">
+            <label className="settings-label">Partner's name</label>
+            <PasteableInput
+              className="setup-input"
+              placeholder="e.g. Anu"
+              value={values.PARTNER_NAME}
+              onChange={set('PARTNER_NAME')}
+            />
+            <div className="setup-hint" style={{ marginBottom: 0 }}>Same, also used for domain suggestions</div>
           </div>
-          {values.TUNNEL_CONFIGURED && (
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button
-                className="setup-back"
-                onClick={() => void reconnectTunnel()}
-                disabled={reconnectingTunnel}
-                title="Drop and re-establish the tunnel connection — useful if it's been stuck or lagging"
+
+          <div className="settings-divider" />
+
+          <div className="settings-subsection-label">Change password</div>
+          <div className="settings-field">
+            <label className="settings-label">New password</label>
+            <PasswordInput
+              className="setup-input"
+              placeholder="At least 6 characters"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+            />
+          </div>
+          <div className="settings-field">
+            <label className="settings-label">Confirm password</label>
+            <PasswordInput
+              className="setup-input"
+              placeholder="Repeat new password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && void changePassword()}
+            />
+          </div>
+          {pwError && <div className="home-error" style={{ marginBottom: 12 }}>{pwError}</div>}
+          <button className="primary-btn" style={{ width: '100%', marginTop: 0 }} onClick={() => void changePassword()} disabled={pwSaving}>
+            {pwSaving ? 'Saving…' : pwSaved ? '✓ Password changed' : 'Change password'}
+          </button>
+        </section>
+
+        <section className="settings-section">
+          <h2 className="settings-section-title">Access</h2>
+
+          <div className="settings-field">
+            <label className="settings-label">Public domain</label>
+            <PasteableInput
+              className="setup-input"
+              type="url"
+              placeholder="https://watch.yourdomain.com"
+              value={values.APP_BASE_URL}
+              onChange={set('APP_BASE_URL')}
+            />
+            <div className="setup-hint" style={{ marginBottom: 0 }}>Used to generate room invite links</div>
+          </div>
+
+          <div className="settings-field">
+            <label className="settings-label">Local network URL <span className="settings-optional">(optional)</span></label>
+            <PasteableInput
+              className="setup-input"
+              type="url"
+              placeholder="http://192.168.0.91:3000"
+              value={values.UPLOAD_URL}
+              onChange={set('UPLOAD_URL')}
+            />
+            <div className="setup-hint" style={{ marginBottom: 0 }}>Direct upload path bypassing Cloudflare</div>
+          </div>
+
+          <div className="settings-field">
+            <label className="settings-label">Cloudflare Tunnel</label>
+            <div className="tunnel-card">
+              <div className="tunnel-card-header">
+                <span
+                  className={`tunnel-status-dot tunnel-status-dot--${values.TUNNEL_CONFIGURED ? values.TUNNEL_STATUS.state : 'stopped'}`}
+                />
+                <span className="tunnel-status-label">
+                  {values.TUNNEL_CONFIGURED ? TUNNEL_STATUS_LABEL[values.TUNNEL_STATUS.state] : 'Not configured'}
+                </span>
+                {values.TUNNEL_STATUS.state === 'error' && values.TUNNEL_STATUS.message && (
+                  <Tooltip.Provider delayDuration={800}>
+                    <Tooltip.Root>
+                      <Tooltip.Trigger asChild>
+                        <button type="button" className="tunnel-status-detail-btn" aria-label="Connection error details">
+                          <Info size={14} />
+                        </button>
+                      </Tooltip.Trigger>
+                      <Tooltip.Portal>
+                        <Tooltip.Content className="tooltip-content" sideOffset={6}>
+                          {values.TUNNEL_STATUS.message}
+                          <Tooltip.Arrow className="tooltip-arrow" />
+                        </Tooltip.Content>
+                      </Tooltip.Portal>
+                    </Tooltip.Root>
+                  </Tooltip.Provider>
+                )}
+              </div>
+
+              <a
+                className="external-cta-btn"
+                href="https://dash.cloudflare.com/"
+                target="_blank"
+                rel="noopener noreferrer"
               >
-                {reconnectingTunnel ? 'Reconnecting…' : reconnected ? '✓ Reconnected' : 'Reconnect tunnel'}
-              </button>
-              <button
-                className="setup-back"
-                style={{ color: 'var(--danger)' }}
-                onClick={() => void removeTunnel()}
-                disabled={removingTunnel}
-              >
-                {removingTunnel ? 'Removing…' : 'Remove tunnel'}
-              </button>
+                open dash.cloudflare.com ↗
+              </a>
+              <PasteableInput
+                className="setup-input"
+                placeholder={values.TUNNEL_CONFIGURED ? 'Paste a new token to replace this tunnel' : 'Paste a token to enable a tunnel'}
+                value={tunnelToken}
+                onChange={e => setTunnelToken(e.target.value)}
+              />
+              <div className="setup-hint" style={{ marginBottom: 12 }}>
+                From your tunnel's "Install connector" step — paste the whole command shown there,
+                we'll find the token in it. PookieFlix runs and manages the tunnel itself, no separate
+                container or install needed.
+              </div>
+              {values.TUNNEL_CONFIGURED && (
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    className="setup-back"
+                    onClick={() => void reconnectTunnel()}
+                    disabled={reconnectingTunnel}
+                    title="Drop and re-establish the tunnel connection — useful if it's been stuck or lagging"
+                  >
+                    {reconnectingTunnel ? 'Reconnecting…' : reconnected ? '✓ Reconnected' : 'Reconnect tunnel'}
+                  </button>
+                  <button
+                    className="setup-back"
+                    style={{ color: 'var(--danger)' }}
+                    onClick={() => void removeTunnel()}
+                    disabled={removingTunnel}
+                  >
+                    {removingTunnel ? 'Removing…' : 'Remove tunnel'}
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        <div style={{ marginBottom: 24 }} />
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <h2 className="settings-section-title">Advanced</h2>
+          <div className="settings-field">
+            <label className="settings-label">OpenSubtitles API key <span className="settings-optional">(optional)</span></label>
+            <PasteableInput
+              className="setup-input"
+              placeholder="Your API key"
+              value={values.OPENSUBTITLES_API_KEY}
+              onChange={set('OPENSUBTITLES_API_KEY')}
+            />
+            <div className="setup-hint" style={{ marginBottom: 0 }}>Auto-fetch subtitles on upload</div>
+          </div>
+        </section>
 
         {error && <div className="home-error" style={{ marginBottom: 12 }}>{error}</div>}
-
         <button className="primary-btn" style={{ width: '100%' }} onClick={save} disabled={saving}>
           {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save settings'}
-        </button>
-
-        <hr style={{ margin: '28px 0', borderColor: 'var(--border)' }} />
-        <h2 className="settings-label" style={{ fontSize: 15, marginBottom: 16 }}>Change password</h2>
-
-        <label className="settings-label">New password</label>
-        <PasswordInput
-          className="setup-input"
-          placeholder="At least 6 characters"
-          value={newPassword}
-          onChange={e => setNewPassword(e.target.value)}
-        />
-
-        <label className="settings-label" style={{ marginTop: 12 }}>Confirm password</label>
-        <PasswordInput
-          className="setup-input"
-          placeholder="Repeat new password"
-          value={confirmPassword}
-          onChange={e => setConfirmPassword(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && void changePassword()}
-        />
-
-        {pwError && <div className="home-error" style={{ margin: '8px 0' }}>{pwError}</div>}
-
-        <button className="primary-btn" style={{ width: '100%', marginTop: 12 }} onClick={() => void changePassword()} disabled={pwSaving}>
-          {pwSaving ? 'Saving…' : pwSaved ? '✓ Password changed' : 'Change password'}
         </button>
       </div>
     </div>
