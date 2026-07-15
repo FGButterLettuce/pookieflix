@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import type { VideoPlayerHandle } from '../components/VideoPlayer';
 import { RoomStatus } from '../components/RoomStatus';
@@ -378,6 +379,9 @@ export function Room() {
   return (
     <div className="room-container">
       <div className="room-header">
+        <button className="settings-link" onClick={() => navigate('/')} title="Back to library">
+          <ArrowLeft />
+        </button>
         <span className="room-logo">
           <img src="/favicon.svg" alt="" className="room-logo-icon" />
           <span className="room-logo-full"><Logo size="sm" mark={false} variant={theme} /></span>

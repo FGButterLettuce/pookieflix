@@ -1,4 +1,8 @@
 import { useMemo, useState } from 'react';
+import {
+  MapPin, Home, Cloud, Link2, UsersRound, ShoppingBag, Globe,
+  KeyRound, Check, Lock, LogIn, Network, CirclePlus, Save,
+} from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { PasswordInput } from '../components/PasswordInput';
 import { PasteableInput } from '../components/PasteableInput';
@@ -163,12 +167,12 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {/* Step 1 — Where */}
         {step === 1 && (
           <div className="setup-step">
-            <div className="setup-icon">📍</div>
+            <div className="setup-icon"><MapPin /></div>
             <h1 className="setup-title">where will you two be watching from?</h1>
             <p className="setup-desc">pick what fits — you can change this later</p>
             <div className="mode-columns">
               <div className="mode-card">
-                <div className="mode-card-icon">🏠</div>
+                <div className="mode-card-icon"><Home /></div>
                 <div className="mode-card-title">home only</div>
                 <div className="mode-card-desc">same wifi as your partner</div>
                 <div className="mode-prereq-pills">
@@ -179,7 +183,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
 
               <div className="mode-card mode-card--featured">
                 <span className="mode-card-badge">recommended</span>
-                <div className="mode-card-icon">☁️</div>
+                <div className="mode-card-icon"><Cloud /></div>
                 <div className="mode-card-title">tunnel</div>
                 <div className="mode-card-desc">watch from anywhere, free and secure</div>
                 <div className="mode-prereq-pills">
@@ -190,7 +194,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               </div>
 
               <div className="mode-card">
-                <div className="mode-card-icon">🔗</div>
+                <div className="mode-card-icon"><Link2 /></div>
                 <div className="mode-card-title">ddns</div>
                 <div className="mode-card-desc">watch from anywhere, no domain needed</div>
                 <div className="mode-prereq-pills">
@@ -208,7 +212,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
           <div className="setup-step">
 
             {tunnelPhase === 'domain-check' && (<>
-              <div className="setup-icon">🌐</div>
+              <div className="setup-icon"><Globe /></div>
               <h1 className="setup-title">quick check — got a domain already?</h1>
               <p className="setup-desc">
                 the tunnel needs a domain name pointed at cloudflare. if you don't have one yet,
@@ -226,7 +230,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             </>)}
 
             {tunnelPhase === 'domain-names' && (<>
-              <div className="setup-icon">💌</div>
+              <div className="setup-icon"><UsersRound /></div>
               <h1 className="setup-title">who's watching?</h1>
               <p className="setup-desc">two names, and we'll suggest some domain ideas just for you two.</p>
               <PasteableInput
@@ -255,7 +259,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             </>)}
 
             {tunnelPhase === 'domain-suggestions' && (<>
-              <div className="setup-icon">🛍️</div>
+              <div className="setup-icon"><ShoppingBag /></div>
               <h1 className="setup-title">{userName} &amp; {partnerName}, here's a few ideas</h1>
               <p className="setup-desc">
                 domains like this run about <strong>$3–12/year</strong> — cheaper than one
@@ -305,29 +309,31 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             {tunnelPhase === 'cloudflare' && (<>
 
             {tunnelSubStep === 0 && (<>
-              <div className="setup-icon">☁️</div>
-              <h1 className="setup-title">create a cloudflare tunnel</h1>
-              <p className="setup-desc">
+              <div className="setup-task-header">
+                <div className="setup-icon"><Cloud /></div>
+                <h1 className="setup-title">create a cloudflare tunnel</h1>
+              </div>
+              <p className="setup-desc setup-desc--left">
                 a cloudflare tunnel gives your server a public web address, with no static IP or port forwarding needed. it's free.
               </p>
               <div className="step-flow">
                 <div className="step-flow-item">
-                  <div className="step-flow-icon">1️⃣</div>
+                  <div className="step-flow-icon"><LogIn /></div>
                   <div className="step-flow-label">sign in to cloudflare</div>
                 </div>
                 <div className="step-flow-arrow">→</div>
                 <div className="step-flow-item">
-                  <div className="step-flow-icon">2️⃣</div>
+                  <div className="step-flow-icon"><Network /></div>
                   <div className="step-flow-label">networking → tunnels</div>
                 </div>
                 <div className="step-flow-arrow">→</div>
                 <div className="step-flow-item">
-                  <div className="step-flow-icon">3️⃣</div>
+                  <div className="step-flow-icon"><CirclePlus /></div>
                   <div className="step-flow-label">create a tunnel</div>
                 </div>
                 <div className="step-flow-arrow">→</div>
                 <div className="step-flow-item">
-                  <div className="step-flow-icon">4️⃣</div>
+                  <div className="step-flow-icon"><Save /></div>
                   <div className="step-flow-label">save it</div>
                 </div>
               </div>
@@ -352,9 +358,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             </>)}
 
             {tunnelSubStep === 1 && (<>
-              <div className="setup-icon">🔑</div>
-              <h1 className="setup-title">connect the tunnel</h1>
-              <p className="setup-desc">
+              <div className="setup-task-header">
+                <div className="setup-icon"><KeyRound /></div>
+                <h1 className="setup-title">connect the tunnel</h1>
+              </div>
+              <p className="setup-desc setup-desc--left">
                 pookieflix runs and manages the connector itself — no separate install or terminal
                 command needed. cloudflare's page shows you a command to run on your own computer,
                 but you can skip that entirely.
@@ -404,9 +412,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             </>)}
 
             {tunnelSubStep === 2 && (<>
-              <div className="setup-icon">🌐</div>
-              <h1 className="setup-title">add a public hostname</h1>
-              <p className="setup-desc">
+              <div className="setup-task-header">
+                <div className="setup-icon"><Globe /></div>
+                <h1 className="setup-title">add a public hostname</h1>
+              </div>
+              <p className="setup-desc setup-desc--left">
                 now tell cloudflare what web address to use for pookieflix. this only works for a
                 domain whose nameservers are already set up in this cloudflare account — if your
                 domain lives elsewhere, add it to cloudflare first.
@@ -486,9 +496,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {/* Step 2 — DDNS */}
         {step === 2 && mode === 'ddns' && (
           <div className="setup-step">
-            <div className="setup-icon">🔗</div>
-            <h1 className="setup-title">set up ddns + port forwarding</h1>
-            <p className="setup-desc">
+            <div className="setup-task-header">
+              <div className="setup-icon"><Link2 /></div>
+              <h1 className="setup-title">set up ddns + port forwarding</h1>
+            </div>
+            <p className="setup-desc setup-desc--left">
               this gives your server a hostname that always follows your home IP address, even
               when it changes.
             </p>
@@ -533,7 +545,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {/* Step 3 — Password + Subtitles */}
         {step === 3 && (
           <div className="setup-step">
-            <div className="setup-icon">🔒</div>
+            <div className="setup-icon"><Lock /></div>
             <h1 className="setup-title">set your password</h1>
             <p className="setup-desc">
               {mode === 'local'
@@ -605,7 +617,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {/* Step 4 — Done */}
         {step === 4 && (
           <div className="setup-step">
-            <div className="setup-icon">✓</div>
+            <div className="setup-icon"><Check /></div>
             <h1 className="setup-title">you're all set!</h1>
             <p className="setup-desc">
               {mode === 'local'

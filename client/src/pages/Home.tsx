@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import * as Dialog from '@radix-ui/react-dialog';
 import { useNavigate, Link } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { PasswordInput } from '../components/PasswordInput';
@@ -75,6 +76,7 @@ export function Home() {
   const [subAutoLoading, setSubAutoLoading] = useState(false);
   const [subRemoving, setSubRemoving] = useState(false);
   const subFileInputRef = useRef<HTMLInputElement>(null);
+  const subSearchInputRef = useRef<HTMLInputElement>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -221,33 +223,6 @@ export function Home() {
 
   const [transcodeBusy, setTranscodeBusy] = useState<string | null>(null);
 
-  // The "⋯" menu is portaled to document.body and positioned in fixed
-  // coordinates captured at open time — it used to be absolutely positioned
-  // inside the card, which got clipped by the "Continue watching" rail's
-  // horizontal scroll container (overflow-x: auto forces overflow-y: auto
-  // too, per the CSS overflow spec, so the menu never had room to render
-  // below the card there).
-  const [menuAnchor, setMenuAnchor] = useState<{ filename: string; top: number; right: number } | null>(null);
-
-  const toggleMenu = (filename: string, btn: HTMLButtonElement) => {
-    setMenuAnchor(cur => {
-      if (cur?.filename === filename) return null;
-      const rect = btn.getBoundingClientRect();
-      return { filename, top: rect.bottom + 8, right: window.innerWidth - rect.right };
-    });
-  };
-
-  useEffect(() => {
-    if (!menuAnchor) return;
-    const close = () => setMenuAnchor(null);
-    window.addEventListener('scroll', close, { capture: true });
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('scroll', close, { capture: true });
-      window.removeEventListener('resize', close);
-    };
-  }, [menuAnchor]);
-
   const transcodeAction = async (filename: string, action: 'cancel' | 'pause' | 'resume' | 'restart') => {
     setTranscodeBusy(filename);
     try {
@@ -261,7 +236,6 @@ export function Home() {
   };
 
   const resetProgress = async (filename: string) => {
-    setMenuAnchor(null);
     try {
       await fetch(`/api/library/${encodeURIComponent(filename)}/reset-progress`, { method: 'POST' });
       loadLibrary();
@@ -476,116 +450,108 @@ export function Home() {
         {/* Actions — Watch/Resume is the only action that lives on
             the card itself. Everything else (subtitles, transcode
             controls, reset progress, delete) is one tap away in the
-            "⋯" menu instead of crowding a card this small. */}
+            "⋯" menu instead of crowding a card this small. Radix
+            DropdownMenu owns positioning (collision-aware, flips near
+            viewport edges), focus trapping, Escape-to-close, and
+            arrow-key navigation — a hand-rolled version of all of this
+            used to live here. */}
         <div className="lib-actions">
           <div className="lib-actions-row">
             <button className="lib-watch-btn" onClick={() => createRoomFrom(f.filename)}>
               <Play size={14} />
               {f.lastTime > 5 ? 'Resume' : 'Watch'}
             </button>
-            <button
-              className={`lib-menu-btn${menuAnchor?.filename === f.filename ? ' lib-menu-btn--open' : ''}`}
-              onClick={e => toggleMenu(f.filename, e.currentTarget)}
-              title="More actions"
-            >
-              <MoreHorizontal />
-            </button>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button className="lib-menu-btn" title="More actions">
+                  <MoreHorizontal />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content className="lib-menu" align="end" sideOffset={8} collisionPadding={8}>
+                  <DropdownMenu.Item
+                    className={`lib-menu-item${f.hasSubtitles ? ' lib-menu-item--sub-active' : ''}`}
+                    onSelect={() => openSubPicker(f.filename)}
+                  >
+                    <Captions />
+                    {f.hasSubtitles ? `Subtitles (${langFlag(subtitleLang)})` : 'Add subtitles'}
+                  </DropdownMenu.Item>
+
+                  {f.transcodeStatus === 'queued' && (
+                    <DropdownMenu.Item
+                      className="lib-menu-item"
+                      disabled={transcodeBusy === f.filename}
+                      onSelect={() => void transcodeAction(f.filename, 'cancel')}
+                    >
+                      <Square /> Cancel (queued)
+                    </DropdownMenu.Item>
+                  )}
+                  {f.transcodeStatus === 'running' && (
+                    <>
+                      <DropdownMenu.Item
+                        className="lib-menu-item"
+                        disabled={transcodeBusy === f.filename}
+                        onSelect={() => void transcodeAction(f.filename, 'pause')}
+                      >
+                        <Pause /> Pause transcode
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        className="lib-menu-item"
+                        disabled={transcodeBusy === f.filename}
+                        onSelect={() => void transcodeAction(f.filename, 'cancel')}
+                      >
+                        <Square /> Cancel transcode
+                      </DropdownMenu.Item>
+                    </>
+                  )}
+                  {f.transcodeStatus === 'paused' && (
+                    <>
+                      <DropdownMenu.Item
+                        className="lib-menu-item"
+                        disabled={transcodeBusy === f.filename}
+                        onSelect={() => void transcodeAction(f.filename, 'resume')}
+                      >
+                        <Play /> Resume transcode
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        className="lib-menu-item"
+                        disabled={transcodeBusy === f.filename}
+                        onSelect={() => void transcodeAction(f.filename, 'cancel')}
+                      >
+                        <Square /> Cancel transcode
+                      </DropdownMenu.Item>
+                    </>
+                  )}
+                  {(f.transcodeStatus === 'complete' || f.transcodeStatus === 'none') && (
+                    <DropdownMenu.Item
+                      className="lib-menu-item"
+                      disabled={transcodeBusy === f.filename}
+                      onSelect={() => void transcodeAction(f.filename, 'restart')}
+                    >
+                      <RotateCw /> {f.transcodeStatus === 'complete' ? 'Re-transcode' : 'Transcode now'}
+                    </DropdownMenu.Item>
+                  )}
+
+                  {f.lastTime > 5 && (
+                    <DropdownMenu.Item className="lib-menu-item" onSelect={() => void resetProgress(f.filename)}>
+                      <History /> Start over
+                    </DropdownMenu.Item>
+                  )}
+
+                  <DropdownMenu.Separator className="lib-menu-divider" />
+                  <DropdownMenu.Item
+                    className="lib-menu-item lib-menu-item--danger"
+                    disabled={deletingFile === f.filename}
+                    onSelect={() => deleteFile(f.filename)}
+                  >
+                    <Trash2 /> {deletingFile === f.filename ? 'Deleting…' : 'Delete'}
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           </div>
         </div>
       </div>
-    );
-  }
-
-  // Portaled to document.body and positioned via menuAnchor's fixed
-  // coordinates — see the comment by menuAnchor's declaration above.
-  function renderMenu() {
-    if (!menuAnchor) return null;
-    const f = library.find(lf => lf.filename === menuAnchor.filename);
-    if (!f) return null;
-
-    return (
-      <>
-        <div className="lib-menu-backdrop" onClick={() => setMenuAnchor(null)} />
-        <div className="lib-menu" style={{ top: menuAnchor.top, right: menuAnchor.right }}>
-          <button
-            className={`lib-menu-item${f.hasSubtitles ? ' lib-menu-item--sub-active' : ''}`}
-            onClick={() => { setMenuAnchor(null); openSubPicker(f.filename); }}
-          >
-            <Captions />
-            {f.hasSubtitles ? `Subtitles (${langFlag(subtitleLang)})` : 'Add subtitles'}
-          </button>
-
-          {f.transcodeStatus === 'queued' && (
-            <button
-              className="lib-menu-item"
-              disabled={transcodeBusy === f.filename}
-              onClick={() => void transcodeAction(f.filename, 'cancel')}
-            >
-              <Square /> Cancel (queued)
-            </button>
-          )}
-          {f.transcodeStatus === 'running' && (
-            <>
-              <button
-                className="lib-menu-item"
-                disabled={transcodeBusy === f.filename}
-                onClick={() => void transcodeAction(f.filename, 'pause')}
-              >
-                <Pause /> Pause transcode
-              </button>
-              <button
-                className="lib-menu-item"
-                disabled={transcodeBusy === f.filename}
-                onClick={() => void transcodeAction(f.filename, 'cancel')}
-              >
-                <Square /> Cancel transcode
-              </button>
-            </>
-          )}
-          {f.transcodeStatus === 'paused' && (
-            <>
-              <button
-                className="lib-menu-item"
-                disabled={transcodeBusy === f.filename}
-                onClick={() => void transcodeAction(f.filename, 'resume')}
-              >
-                <Play /> Resume transcode
-              </button>
-              <button
-                className="lib-menu-item"
-                disabled={transcodeBusy === f.filename}
-                onClick={() => void transcodeAction(f.filename, 'cancel')}
-              >
-                <Square /> Cancel transcode
-              </button>
-            </>
-          )}
-          {(f.transcodeStatus === 'complete' || f.transcodeStatus === 'none') && (
-            <button
-              className="lib-menu-item"
-              disabled={transcodeBusy === f.filename}
-              onClick={() => void transcodeAction(f.filename, 'restart')}
-            >
-              <RotateCw /> {f.transcodeStatus === 'complete' ? 'Re-transcode' : 'Transcode now'}
-            </button>
-          )}
-
-          {f.lastTime > 5 && (
-            <button className="lib-menu-item" onClick={() => void resetProgress(f.filename)}>
-              <History /> Start over
-            </button>
-          )}
-
-          <div className="lib-menu-divider" />
-          <button
-            className="lib-menu-item lib-menu-item--danger"
-            disabled={deletingFile === f.filename}
-            onClick={() => { setMenuAnchor(null); deleteFile(f.filename); }}
-          >
-            <Trash2 /> {deletingFile === f.filename ? 'Deleting…' : 'Delete'}
-          </button>
-        </div>
-      </>
     );
   }
 
@@ -712,14 +678,21 @@ export function Home() {
         const currentFile = library.find(f => f.filename === subPickerFile);
         const hasSub = currentFile?.hasSubtitles ?? false;
         return (
-        <div className="sub-modal-overlay" onClick={closeSubPicker}>
-          <div className="sub-modal" onClick={e => e.stopPropagation()}>
+        <Dialog.Root open onOpenChange={open => { if (!open) closeSubPicker(); }}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="sub-modal-overlay" />
+            <Dialog.Content
+              className="sub-modal"
+              onOpenAutoFocus={e => { e.preventDefault(); subSearchInputRef.current?.focus(); }}
+            >
             <div className="sub-modal-header">
               <div>
-                <div className="sub-modal-title">Subtitles</div>
-                <div className="sub-modal-filename">{subPickerFile}</div>
+                <Dialog.Title className="sub-modal-title">Subtitles</Dialog.Title>
+                <Dialog.Description className="sub-modal-filename">{subPickerFile}</Dialog.Description>
               </div>
-              <button className="sub-modal-close" onClick={closeSubPicker}>✕</button>
+              <Dialog.Close asChild>
+                <button className="sub-modal-close">✕</button>
+              </Dialog.Close>
             </div>
 
             {/* Current status */}
@@ -766,9 +739,9 @@ export function Home() {
               <div className="sub-modal-label">Search OpenSubtitles</div>
               <div className="sub-search-row">
                 <input
+                  ref={subSearchInputRef}
                   className="sub-search-input"
                   value={subQuery}
-                  autoFocus
                   onChange={e => setSubQuery(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && void searchSubs()}
                   placeholder="Movie title…"
@@ -804,12 +777,11 @@ export function Home() {
                 <div className="sub-modal-hint">Search for a subtitle above, or upload your own file.</div>
               )}
             </div>
-          </div>
-        </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
         );
       })()}
-
-      {menuAnchor && createPortal(renderMenu(), document.body)}
     </div>
   );
 }

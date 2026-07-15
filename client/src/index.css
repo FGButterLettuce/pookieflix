@@ -1,6 +1,6 @@
 /* Hallmark · genre: playful · macrostructure: Ecosystem Index (app-adapted)
  * theme: custom · vibe: "cozy, two-person movie night, playful but functional"
- * paper: oklch(91% 0.015 320) · accent: oklch(58% 0.19 5)
+ * paper: #eae6ef (site-literal, not OKLCH-derived — see light-theme block below) · accent: #e0457f
  * display: Figtree (wordmark only) · body: Plus Jakarta Sans
  * axes: mid / rounded-sans / chromatic-other (dusty-rose ~5°)
  * nav: custom minimal app-bar (2 genuine destinations) · footer: none (app page)
@@ -17,24 +17,27 @@
 html { overflow-x: clip; }
 body { overflow-x: clip; }
 
-/* Token values below are OKLCH conversions of PookieFlix's established palette
-   (a saturated pink accent over warm purple-tinted neutrals) — kept as the
-   same custom-property names so Setup/Room/Settings, which also read these,
-   are unaffected. Pure #fff/#000 replaced with tinted equivalents per the
-   "no pure extremes" rule; everything else preserves the original hue. */
+/* Light-theme neutrals + accent are the literal hex values from the
+   pookieflix-site marketing repo's already-validated "Pookie mode" palette
+   (client/src/index.css there) — not an OKLCH re-derivation. An earlier
+   OKLCH conversion of this same palette drifted perceptibly heavier than
+   the original; the fix is to stop re-deriving and use the source values
+   directly. Dark theme is unaffected (not the palette that was flagged)
+   and keeps its OKLCH derivation. Focus/danger/success have no site
+   equivalent to defer to, so they also keep their OKLCH derivation. */
 :root, [data-theme="light"] {
-  --bg: oklch(91% 0.015 320);
-  --bg2: oklch(95% 0.012 320);
-  --surface: oklch(98% 0.006 340);
-  --surface2: oklch(95% 0.012 320);
-  --surface3: oklch(92% 0.014 320);
-  --border: oklch(85% 0.02 320);
-  --text: oklch(24% 0.06 330);
-  --text-muted: oklch(42% 0.045 330);
-  --text-subtle: oklch(58% 0.08 300);
-  --accent: oklch(58% 0.19 5);
-  --accent-hover: oklch(48% 0.18 5);
-  --accent-ink: oklch(99% 0.004 340);
+  --bg: #eae6ef;
+  --bg2: #f5f1f8;
+  --surface: #ffffff;
+  --surface2: #f5f1f8;
+  --surface3: #efebf3;
+  --border: rgba(52,32,63,0.1);
+  --text: #34203f;
+  --text-muted: #6b566f;
+  --text-subtle: #9a7bb5;
+  --accent: #e0457f;
+  --accent-hover: #c73569;
+  --accent-ink: #fef8fb;
   --accent-rgb: 224,69,127;
   --focus: oklch(60% 0.21 5);
   --danger: oklch(58% 0.19 25);
@@ -42,8 +45,8 @@ body { overflow-x: clip; }
   --radius: 16px;
   --radius-sm: 10px;
   --radius-lg: 20px;
-  --shadow-card: 0 12px 28px -18px oklch(24% 0.06 330 / 0.28);
-  --shadow-raised: 0 16px 36px -16px oklch(24% 0.06 330 / 0.32);
+  --shadow-card: 0 12px 28px -18px rgba(52,32,63,0.28);
+  --shadow-raised: 0 16px 36px -16px rgba(52,32,63,0.32);
 }
 
 [data-theme="dark"] {
@@ -106,9 +109,9 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 500;
   font-size: 15px;
   line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
 }
 
 :focus-visible {
@@ -157,7 +160,7 @@ body {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   color: var(--text-muted);
   transition: color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out);
 }
@@ -182,10 +185,6 @@ body {
   width: 100%;
   max-width: 760px;
 }
-.setup-card.settings-card {
-  max-width: 580px;
-}
-
 .setup-dots {
   display: flex;
   gap: 6px;
@@ -205,10 +204,12 @@ body {
 .setup-step { display: flex; flex-direction: column; }
 
 .setup-icon {
-  font-size: 36px;
+  display: flex;
+  justify-content: center;
   margin-bottom: 16px;
-  text-align: center;
+  color: var(--accent);
 }
+.setup-icon svg { width: 36px; height: 36px; }
 
 .setup-title {
   font-family: 'Figtree', sans-serif;
@@ -227,6 +228,21 @@ body {
   text-align: center;
   margin-bottom: 24px;
 }
+
+/* Instructional ("read this, then go do it") steps get a left-aligned
+   inline icon+title header instead of the stacked-centered pattern the
+   decision/celebration steps use — distinguishes "do a task" steps from
+   "make a choice" steps instead of every step sharing one identical shape. */
+.setup-task-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.setup-task-header .setup-icon { margin-bottom: 0; }
+.setup-task-header .setup-icon svg { width: 28px; height: 28px; }
+.setup-task-header .setup-title { text-align: left; margin-bottom: 0; }
+.setup-desc--left { text-align: left; }
 
 .setup-input {
   width: 100%;
@@ -360,10 +376,11 @@ body {
   font-size: 15px;
   font-weight: 700;
   padding: 14px 20px;
-  border-radius: 999px;
-  transition: color 0.15s, border-color 0.15s;
+  border-radius: var(--radius);
+  transition: color 0.15s, border-color 0.15s, transform 0.1s;
 }
 .setup-back:hover, .secondary-btn:hover { border-color: var(--accent); color: var(--accent-hover); }
+.setup-back:active, .secondary-btn:active { transform: translateY(1px); }
 .secondary-btn { width: 100%; }
 
 /* Real clickable button to an external destination (Cloudflare, a registrar,
@@ -375,7 +392,7 @@ body {
   background: var(--accent);
   color: #fff;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 8px 16px;
   font-size: 13px;
   font-weight: 700;
@@ -411,8 +428,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  color: var(--text-muted);
 }
+.step-flow-icon svg { width: 20px; height: 20px; }
 .step-flow-label {
   font-size: 13px;
   color: var(--text-muted);
@@ -494,6 +512,50 @@ body {
 }
 .settings-optional { font-weight: 400; color: var(--text-muted); }
 
+/* ── Settings (topbar layout, grouped sections) ──────────────────────────────
+   Was previously the onboarding wizard's centered .setup-card reused
+   wholesale — one long flat column of fields, which read like a mobile-app
+   scrolling list on desktop. Now: Home's real topbar chrome + independent
+   bordered section panels instead of one card. */
+.settings-page {
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-lg) 64px;
+}
+.settings-page-title {
+  font-family: 'Figtree', sans-serif;
+  font-weight: 900;
+  font-size: 26px;
+  color: var(--text);
+  margin-bottom: 24px;
+}
+.settings-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.settings-section-title {
+  font-family: 'Figtree', sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--text);
+  margin-bottom: 18px;
+}
+.settings-field { margin-bottom: 20px; }
+.settings-field:last-child { margin-bottom: 0; }
+.settings-divider { height: 1px; background: var(--border); margin: 20px 0; }
+.settings-subsection-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+  margin-bottom: 14px;
+}
+
 /* ── Responsive scale-up for large desktop viewports ─────────────────────
    .setup-card's base sizing (max-width 520px, 15px body copy) is tuned for
    phone/small-laptop screens. On a large monitor (~1920px+ / ~2000px) that
@@ -507,12 +569,10 @@ body {
     max-width: 860px;
     padding: 56px;
   }
-  .setup-card.settings-card {
-    max-width: 720px;
-  }
   .setup-card .setup-dots { margin-bottom: 40px; }
-  .setup-card .setup-icon { font-size: 44px; }
+  .setup-card .setup-icon svg { width: 44px; height: 44px; }
   .setup-card .setup-title { font-size: 28px; }
+  .setup-card .setup-task-header .setup-icon svg { width: 34px; height: 34px; }
   .setup-card .setup-desc { font-size: 17px; }
   .setup-card .setup-input { font-size: 16px; padding: 14px 18px; }
   .setup-card .setup-hint { font-size: 14px; }
@@ -526,12 +586,13 @@ body {
   }
   .setup-card .external-cta-btn { font-size: 14px; padding: 10px 18px; }
   .setup-card .mode-card { padding: 26px 20px; }
-  .setup-card .mode-card-icon { font-size: 38px; }
+  .setup-card .mode-card-icon svg { width: 38px; height: 38px; }
   .setup-card .mode-card-title { font-size: 20px; }
   .setup-card .mode-card-desc { font-size: 15px; }
   .setup-card .mode-prereq-pill { font-size: 13px; padding: 5px 14px; }
   .setup-card .mode-choose-btn { font-size: 15px; padding: 13px; }
-  .setup-card .step-flow-icon { width: 54px; height: 54px; font-size: 22px; }
+  .setup-card .step-flow-icon { width: 54px; height: 54px; }
+  .setup-card .step-flow-icon svg { width: 22px; height: 22px; }
   .setup-card .step-flow-label { font-size: 14px; }
   .setup-card .domain-suggestion-name { font-size: 16px; }
   .setup-card .domain-suggestion-cta { font-size: 14px; padding: 10px 18px; }
@@ -569,11 +630,38 @@ body {
   font-weight: 600;
   color: var(--text);
 }
-.tunnel-status-detail {
+.tunnel-status-detail-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: none;
+  border-radius: 50%;
   color: var(--text-muted);
   cursor: help;
-  font-size: 12px;
+  padding: 0;
 }
+.tunnel-status-detail-btn:hover { color: var(--text); background: var(--surface); }
+
+/* Radix Tooltip — Portal renders into document.body, positioning is
+   collision-aware. Opens on hover (delayDuration on the Provider) and
+   instantly on keyboard focus, unlike a bare title="" attribute on a
+   non-focusable span. */
+.tooltip-content {
+  max-width: 260px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
+  z-index: var(--z-toast);
+  animation: menu-in var(--dur-short) var(--ease-out);
+}
+.tooltip-arrow { fill: var(--text); }
 
 /* Upload zone */
 .upload-zone {
@@ -947,7 +1035,7 @@ body {
   background: var(--accent);
   color: var(--accent-ink);
   border: none;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -975,27 +1063,18 @@ body {
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--text-muted);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius);
   cursor: pointer;
   transition: color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out);
 }
-.lib-menu-btn:hover, .lib-menu-btn--open { color: var(--text); border-color: var(--accent); }
+.lib-menu-btn:hover, .lib-menu-btn[data-state="open"] { color: var(--text); border-color: var(--accent); }
 
-/* Invisible full-viewport layer, click anywhere to close the menu. */
-.lib-menu-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-dropdown);
-}
-
-/* Portaled to document.body — position: fixed with top/right set inline by
-   React from the trigger button's measured getBoundingClientRect(), so it
-   always renders in real viewport coordinates regardless of which
-   scroll/transform container the trigger button happens to sit inside
-   (the "Continue watching" rail's horizontal scroll, a hovering/lifted
-   card, etc.) instead of being clipped by them. */
+/* Radix DropdownMenu.Content — Radix itself owns positioning (portaled,
+   collision-aware, flips near viewport edges so it's never clipped by the
+   "Continue watching" rail's horizontal scroll or any other scroll/
+   transform container), Escape-to-close, outside-click dismiss, focus
+   trapping, and arrow-key navigation. This rule is visual only. */
 .lib-menu {
-  position: fixed;
   z-index: calc(var(--z-dropdown) + 1);
   min-width: 200px;
   background: var(--surface);
@@ -1027,8 +1106,8 @@ body {
   transition: background-color var(--dur-micro) var(--ease-out);
 }
 .lib-menu-item svg { flex-shrink: 0; color: var(--text-subtle); }
-.lib-menu-item:hover:not(:disabled) { background: var(--surface2); }
-.lib-menu-item:disabled { opacity: 0.4; cursor: default; }
+.lib-menu-item[data-highlighted] { background: var(--surface2); outline: none; }
+.lib-menu-item[data-disabled] { opacity: 0.4; cursor: default; }
 .lib-menu-item--sub-active { color: var(--success); }
 .lib-menu-item--sub-active svg { color: var(--success); }
 .lib-menu-item--danger { color: var(--danger); }
@@ -1061,26 +1140,33 @@ body {
 .lib-sub-picker { display: none; } /* replaced by modal */
 
 /* ── Subtitle modal ──────────────────────────────────────────────────────── */
+/* Radix Dialog.Overlay and Dialog.Content are portaled as siblings, not
+   parent/child, so centering can't rely on the overlay's flexbox the way a
+   hand-rolled overlay+child modal could — .sub-modal centers itself via
+   fixed positioning + transform instead. Radix owns focus trap, Escape-to-
+   close, outside-click dismiss, and returning focus to the trigger on
+   close. */
 .sub-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  padding: 16px;
+  z-index: var(--z-modal);
 }
 .sub-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  width: 100%;
+  width: calc(100% - 32px);
   max-width: 520px;
   max-height: 90vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  z-index: calc(var(--z-modal) + 1);
 }
 .sub-modal-header {
   display: flex;
@@ -1235,11 +1321,11 @@ body {
   background: var(--accent);
   color: #fff;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius);
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, opacity 0.15s, box-shadow 0.15s, transform 0.1s;
   margin-top: 8px;
   box-shadow: 0 4px 16px rgba(var(--accent-rgb), 0.3);
 }
@@ -1248,6 +1334,7 @@ body {
   background: var(--accent-hover);
   box-shadow: 0 6px 20px rgba(var(--accent-rgb), 0.35);
 }
+.primary-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 2px 10px rgba(var(--accent-rgb), 0.3); }
 .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
 /* ── Room ─────────────────────────────────────────────────────────────────── */
@@ -1269,6 +1356,10 @@ body {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   min-height: 52px;
+}
+
+.room-header .settings-link {
+  flex-shrink: 0;
 }
 
 .room-logo {
@@ -1426,6 +1517,12 @@ body {
   background: rgba(0,0,0,0.7);
   backdrop-filter: blur(6px);
   z-index: 10;
+  /* The backdrop itself must not intercept clicks — this used to cover the
+     native <video controls> entirely, so play/pause/scrub silently did
+     nothing for as long as any callout (buffering, resync, waiting-for-
+     viewers) was showing. Only re-enable pointer events on the callout's
+     own content below. */
+  pointer-events: none;
 }
 
 .overlay-content {
@@ -1436,6 +1533,7 @@ body {
   text-align: center;
   padding: 32px 24px;
   max-width: 360px;
+  pointer-events: auto;
 }
 
 .overlay-icon { font-size: 40px; }
@@ -1685,7 +1783,8 @@ body {
 .mode-card--featured .mode-prereq-pill {
   white-space: nowrap;
 }
-.mode-card-icon { font-size: 34px; }
+.mode-card-icon { color: var(--accent); }
+.mode-card-icon svg { width: 34px; height: 34px; }
 .mode-card-title {
   font-family: 'Figtree', sans-serif;
   font-weight: 800;
@@ -1723,13 +1822,15 @@ body {
   width: 100%;
   background: var(--surface2);
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 12px;
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
   cursor: pointer;
+  transition: transform 0.1s;
 }
+.mode-choose-btn:active { transform: translateY(1px); }
 .mode-choose-btn--primary {
   background: var(--accent);
   color: #fff;
@@ -1782,7 +1883,7 @@ body {
   background: var(--accent);
   color: #fff;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 9px 16px;
   font-size: 13px;
   font-weight: 700;
