@@ -1,3 +1,7 @@
+## v1.5.9 - 2026-07-15
+
+- Roll out app-wide design system: tokens, Radix primitives, Settings rebuild ([#22](https://github.com/FGButterLettuce/pookieflix/pull/22))
+
 ## v1.5.8 - 2026-07-15
 
 - Fix menu clipping in Continue Watching rail, switch to lucide-react icons ([#21](https://github.com/FGButterLettuce/pookieflix/pull/21))
