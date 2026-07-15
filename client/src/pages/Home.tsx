@@ -532,6 +532,21 @@ export function Home() {
                     </button>
                   </div>
                   <div className="lib-actions-row">
+                    {f.transcodeStatus === 'queued' && (
+                      <>
+                        <span className="lib-sub-badge" title="Waiting for another transcode to finish first">
+                          Queued
+                        </span>
+                        <button
+                          className="lib-delete-btn"
+                          disabled={transcodeBusy === f.filename}
+                          onClick={() => void transcodeAction(f.filename, 'cancel')}
+                          title="Remove from transcode queue"
+                        >
+                          ⏹ Cancel
+                        </button>
+                      </>
+                    )}
                     {f.transcodeStatus === 'running' && (
                       <>
                         <button

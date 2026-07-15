@@ -57,9 +57,10 @@ describe('manual transcode controls', () => {
 
   it('cancelTranscode kills an in-progress job and cleans up its output', async () => {
     ffmpeg.generateHLSAsync(longVideo);
-    // generateHLS's synchronous prefix (through activeTranscodes.set) runs
-    // before this line, since `new Promise(executor)` runs its executor
-    // synchronously — the job is registered before generateHLSAsync returns.
+    // Transcodes are serialized through a queue now, so a freshly-claimed job
+    // only starts once its turn is dispatched off the microtask queue — one
+    // macrotask tick (setImmediate) guarantees that's happened.
+    await new Promise(r => setImmediate(r));
     assert.equal(ffmpeg.getTranscodeStatus(longVideo), 'running');
 
     const cancelled = ffmpeg.cancelTranscode(longVideo);
@@ -75,6 +76,7 @@ describe('manual transcode controls', () => {
 
   it('pauseTranscode then resumeTranscode round-trips status without losing the job', async () => {
     ffmpeg.generateHLSAsync(longVideo);
+    await new Promise(r => setImmediate(r));
     assert.equal(ffmpeg.getTranscodeStatus(longVideo), 'running');
 
     assert.equal(ffmpeg.pauseTranscode(longVideo), true);
@@ -99,17 +101,52 @@ describe('manual transcode controls', () => {
     assert.equal(ffmpeg.getTranscodeStatus(longVideo), 'none');
 
     ffmpeg.generateHLSAsync(longVideo);
+    await new Promise(r => setImmediate(r));
     assert.equal(ffmpeg.getTranscodeStatus(longVideo), 'running');
 
     ffmpeg.restartTranscode(longVideo);
-    // restartTranscode cancels the old job synchronously, then kicks off a
-    // new one — still 'running' (or momentarily 'none' between the two),
-    // never left permanently stuck.
+    // restartTranscode cancels the old job synchronously, then re-queues a
+    // fresh one — never left permanently stuck as 'paused' in between.
     assert.notEqual(ffmpeg.getTranscodeStatus(longVideo), 'paused');
 
     await new Promise(r => setTimeout(r, 2500));
     assert.equal(ffmpeg.getTranscodeStatus(longVideo), 'complete');
     const manifest = fs.readFileSync(ffmpeg.hlsManifestPath(longVideo), 'utf8');
     assert.match(manifest, /#EXT-X-ENDLIST/);
+  });
+
+  it('queues a second transcode behind a running one instead of running both at once', async () => {
+    // Clean slate — previous tests left both files 'complete'.
+    ffmpeg.cancelTranscode(longVideo);
+    ffmpeg.cancelTranscode(shortVideo);
+    try { fs.rmSync(ffmpeg.hlsDir(longVideo), { recursive: true }); } catch { /* ignore */ }
+    try { fs.rmSync(ffmpeg.hlsDir(shortVideo), { recursive: true }); } catch { /* ignore */ }
+    assert.equal(ffmpeg.getTranscodeStatus(longVideo), 'none');
+    assert.equal(ffmpeg.getTranscodeStatus(shortVideo), 'none');
+
+    ffmpeg.generateHLSAsync(longVideo);
+    ffmpeg.generateHLSAsync(shortVideo);
+    await new Promise(r => setImmediate(r));
+
+    // Only the first claimant actually spawned ffmpeg; the second is
+    // reserved but waiting, not running concurrently.
+    assert.equal(ffmpeg.getTranscodeStatus(longVideo), 'running');
+    assert.equal(ffmpeg.getTranscodeStatus(shortVideo), 'queued');
+
+    // Cancelling a queued (not-yet-started) job removes it outright — it
+    // never gets its turn.
+    assert.equal(ffmpeg.cancelTranscode(shortVideo), true);
+    assert.equal(ffmpeg.getTranscodeStatus(shortVideo), 'none');
+
+    // Let the first job finish, then queue the second again and confirm it
+    // now runs immediately since nothing is ahead of it.
+    await new Promise(r => setTimeout(r, 2500));
+    assert.equal(ffmpeg.getTranscodeStatus(longVideo), 'complete');
+
+    ffmpeg.generateHLSAsync(shortVideo);
+    await new Promise(r => setImmediate(r));
+    assert.equal(ffmpeg.getTranscodeStatus(shortVideo), 'running');
+    await new Promise(r => setTimeout(r, 500));
+    assert.equal(ffmpeg.getTranscodeStatus(shortVideo), 'complete');
   });
 });
