@@ -1,3 +1,7 @@
+## v1.5.8 - 2026-07-15
+
+- Fix menu clipping in Continue Watching rail, switch to lucide-react icons ([#21](https://github.com/FGButterLettuce/pookieflix/pull/21))
+
 ## v1.5.7 - 2026-07-15
 
 - Redesign home/library page (Hallmark) ([#20](https://github.com/FGButterLettuce/pookieflix/pull/20))
