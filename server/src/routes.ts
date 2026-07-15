@@ -9,6 +9,7 @@ import { isSetupComplete, readPersistedConfig, writePersistedConfig, getPassword
 import {
   createRoom, getRoomByToken, listLibraryFiles,
   purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile, setSubtitleName,
+  updateLibraryLastTime,
 } from './db';
 import {
   generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
@@ -361,6 +362,18 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     let filePath: string;
     try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
     restartTranscode(filePath);
+    return reply.send({ ok: true });
+  });
+
+  // ── Library: reset watch progress (start over) ─────────────────────────────
+  app.post('/api/library/:filename/reset-progress', {
+    config: { rateLimit: { max: 20, timeWindow: '1m' } },
+    preHandler: requireAdmin,
+  }, async (req, reply) => {
+    const { filename } = req.params as { filename: string };
+    if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send({ error: 'Invalid filename' });
+    try { assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
+    updateLibraryLastTime(filename, 0);
     return reply.send({ ok: true });
   });
 

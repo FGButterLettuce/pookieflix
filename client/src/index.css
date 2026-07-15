@@ -653,7 +653,9 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
+  /* Not overflow:hidden — the actions menu below needs to pop out past the
+     card's own bottom edge without being clipped. The thumbnail clips its
+     own top corners instead (see .lib-thumb-wrap). */
   display: flex;
   flex-direction: column;
   transition: border-color 0.15s, transform 0.1s;
@@ -664,6 +666,7 @@ body {
 /* Thumbnail */
 .lib-thumb-wrap {
   position: relative;
+  border-radius: var(--radius) var(--radius) 0 0;
   aspect-ratio: 16/9;
   background: #000;
   cursor: pointer;
@@ -798,13 +801,11 @@ body {
 .lib-size   { font-size: 11px; color: var(--text-muted); }
 .lib-resume { font-size: 11px; color: var(--accent-hover); }
 
-/* Actions — two rows: primary (watch/subtitles) on top, secondary
-   (transcode controls/delete) below, so a running transcode's extra
-   buttons get real room instead of being crushed into one line. */
+/* Actions — one row: the single primary action (Watch/Resume) plus a
+   "⋯" overflow button. Everything else (subtitles, transcode controls,
+   reset progress, delete) lives in the dropdown menu below instead of
+   competing for space as its own button on an already-small card. */
 .lib-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   padding: 0 12px 12px;
 }
 
@@ -828,48 +829,78 @@ body {
 
 .lib-watch-btn:hover { background: var(--accent-hover); }
 
-/* Transcode controls (pause/resume/cancel/restart) — a neutral, reversible
-   action a user takes often, distinct from the one-way, rarely-used delete
-   below. Text label + icon on one line, sized to actually fit. */
-.lib-transcode-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 9px 10px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  font-size: 12.5px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-}
-.lib-transcode-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-hover); }
-.lib-transcode-btn:disabled { opacity: 0.4; cursor: default; }
-
-/* Delete is destructive and rare — kept icon-only and visually separate
-   from the transcode controls it used to share styling with, instead of
-   competing for the same row as an equally-weighted text button. */
-.lib-delete-btn {
+.lib-menu-wrap {
+  position: relative;
   flex: 0 0 auto;
-  width: 38px;
-  padding: 9px 0;
+}
+
+.lib-menu-btn {
+  width: 40px;
+  height: 100%;
+  padding: 10px 0;
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--text-muted);
   border-radius: var(--radius-sm);
-  font-size: 15px;
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 }
+.lib-menu-btn:hover, .lib-menu-btn--open { color: var(--text); border-color: var(--accent); }
 
-.lib-delete-btn:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
-.lib-delete-btn:disabled { opacity: 0.4; cursor: default; }
+/* Invisible full-viewport layer, click anywhere to close the menu. Must
+   live outside any transformed ancestor (.lib-card lifts on hover) since
+   `transform` creates a containing block that would break `fixed`. */
+.lib-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
 
+.lib-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 190px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.4);
+  padding: 4px;
+}
+
+.lib-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.lib-menu-item:hover:not(:disabled) { background: var(--surface2); }
+.lib-menu-item:disabled { opacity: 0.4; cursor: default; }
+.lib-menu-item--sub-active { color: #4ade80; }
+.lib-menu-item--danger { color: var(--danger); }
+
+.lib-menu-divider {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+}
+
+/* Used by the subtitle modal's own action buttons (search/auto-pick/apply/
+   remove) — no longer used directly on the library card, which now routes
+   subtitle access through the "⋯" menu instead. */
 .lib-sub-btn {
   padding: 10px 12px;
   background: var(--surface2);
@@ -884,7 +915,6 @@ body {
 }
 .lib-sub-btn:hover:not(:disabled) { border-color: #4ade80; }
 .lib-sub-btn:disabled { opacity: 0.4; cursor: default; }
-.lib-sub-btn--active { color: #4ade80; border-color: #4ade80; }
 
 .lib-sub-picker { display: none; } /* replaced by modal */
 
