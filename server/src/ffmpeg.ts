@@ -8,7 +8,7 @@ import { config } from './config';
 // #13) need visibility into in-progress HLS generation, which fire-and-forget
 // generateHLSAsync previously had none of.
 
-export type TranscodeState = 'none' | 'running' | 'paused' | 'complete';
+export type TranscodeState = 'none' | 'queued' | 'running' | 'paused' | 'complete';
 
 interface TranscodeJob {
   proc: ChildProcess;
@@ -18,15 +18,31 @@ interface TranscodeJob {
 
 const activeTranscodes = new Map<string, TranscodeJob>();
 
+// Transcodes run one at a time — two full-movie `-c copy` jobs writing to the
+// same disk concurrently just make both slower, and simultaneous transcodes
+// starting at boot is exactly what happens today when several library files
+// are missing HLS at once. queuedPaths tracks work claimed but not yet
+// spawned; queueTail is the serial chain each new job attaches to.
+const queuedPaths = new Set<string>();
+const cancelledQueued = new Set<string>();
+let queueTail: Promise<void> = Promise.resolve();
+
 export function getTranscodeStatus(videoPath: string): TranscodeState {
   const job = activeTranscodes.get(videoPath);
   if (job) return job.paused ? 'paused' : 'running';
+  if (queuedPaths.has(videoPath)) return 'queued';
   return hasHLS(videoPath) ? 'complete' : 'none';
 }
 
 // Kills an in-progress transcode and removes its partial output, same cleanup
-// path as a failed/timed-out transcode already used.
+// path as a failed/timed-out transcode already used. If the job hasn't
+// started yet (still waiting in the queue), skips its turn instead.
 export function cancelTranscode(videoPath: string): boolean {
+  if (queuedPaths.has(videoPath)) {
+    cancelledQueued.add(videoPath);
+    queuedPaths.delete(videoPath);
+    return true;
+  }
   const job = activeTranscodes.get(videoPath);
   if (!job) return false;
   job.proc.kill('SIGKILL');
@@ -124,12 +140,14 @@ export function generateThumbnailAsync(videoPath: string, filename: string, onDo
 export async function applyFastStart(videoPath: string): Promise<void> {
   const tmp = videoPath + '.faststart.tmp';
   const ok = await new Promise<boolean>(resolve => {
+    // stdio: 'ignore' — same unread-stderr pipe-fill deadlock as generateHLS
+    // below; a full remux writes enough progress output to trigger it too.
     const ff = spawn('ffmpeg', [
       '-i', videoPath,
       '-c', 'copy',
       '-movflags', '+faststart',
       '-y', tmp,
-    ]);
+    ], { stdio: 'ignore' });
     ff.on('close', code => resolve(code === 0));
     ff.on('error', () => resolve(false));
   });
@@ -159,11 +177,29 @@ const HLS_TIMEOUT_MS = 10 * 60 * 1000; // 10 min — stream copy should never ta
 
 export async function generateHLS(videoPath: string): Promise<boolean> {
   if (hasHLS(videoPath)) return true;
-  if (activeTranscodes.has(videoPath)) return false; // already in progress
+  if (activeTranscodes.has(videoPath) || queuedPaths.has(videoPath)) return false; // already claimed
+  queuedPaths.add(videoPath);
+  const run = queueTail.then(() => runQueuedTranscode(videoPath));
+  // Keep the chain moving even if this job failed — one bad file must not
+  // stall every transcode queued behind it.
+  queueTail = run.then(() => {}, () => {});
+  return run;
+}
+
+async function runQueuedTranscode(videoPath: string): Promise<boolean> {
+  queuedPaths.delete(videoPath);
+  if (cancelledQueued.delete(videoPath)) return false; // cancelled before its turn came up
+  if (hasHLS(videoPath)) return true; // e.g. satisfied by another path while queued
   const dir = hlsDir(videoPath);
   fs.mkdirSync(dir, { recursive: true });
   const manifest = hlsManifestPath(videoPath);
   const ok = await new Promise<boolean>(resolve => {
+    // stdio: 'ignore' — ffmpeg writes continuous progress stats to stderr for
+    // the whole transcode. Left as default 'pipe' with nothing draining it,
+    // the OS pipe buffer (~64KB) fills partway through any real movie and
+    // ffmpeg's write() blocks forever: the process goes idle mid-transcode,
+    // no error, no exit, no further segments (confirmed live: two full-movie
+    // transcodes froze permanently within seconds of starting this way).
     const ff = spawn('ffmpeg', [
       '-fflags', '+genpts',
       '-err_detect', 'ignore_err',
@@ -174,7 +210,7 @@ export async function generateHLS(videoPath: string): Promise<boolean> {
       '-hls_playlist_type', 'vod',
       '-hls_segment_filename', path.join(dir, 'seg%04d.ts'),
       '-y', manifest,
-    ]);
+    ], { stdio: 'ignore' });
     activeTranscodes.set(videoPath, { proc: ff, paused: false, startedAt: Date.now() });
     // Only clear the registry entry if it's still this exact process — a
     // cancelled-then-immediately-restarted job registers a new process under
