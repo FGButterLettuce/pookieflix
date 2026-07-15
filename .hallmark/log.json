@@ -1,0 +1,11 @@
+[
+  {
+    "date": "2026-07-15",
+    "macrostructure": "Ecosystem Index (app-adapted)",
+    "theme": "custom",
+    "theme_axes": "mid / rounded-sans / chromatic-other (dusty-rose ~5°)",
+    "vibe": "cozy, two-person movie night, playful but functional",
+    "enrichment": "none",
+    "brief": "PookieFlix home/library page redesign — client/src/pages/Home.tsx"
+  }
+]

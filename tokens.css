@@ -1,0 +1,80 @@
+/* Hallmark tokens — PookieFlix
+ * Extracted from client/src/index.css :root / [data-theme]. A custom (tuned)
+ * theme: PookieFlix's own established pink accent + Figtree/Plus Jakarta
+ * Sans pairing, converted to OKLCH and given a proper 4pt spacing/motion/
+ * z-index system. Portable reference only — the app itself reads the
+ * tokens from client/src/index.css, not this file.
+ */
+:root, [data-theme="light"] {
+  --bg:            oklch(91% 0.015 320);
+  --bg2:           oklch(95% 0.012 320);
+  --surface:       oklch(98% 0.006 340);
+  --surface2:      oklch(95% 0.012 320);
+  --surface3:      oklch(92% 0.014 320);
+  --border:        oklch(85% 0.02 320);
+  --text:          oklch(24% 0.06 330);
+  --text-muted:    oklch(42% 0.045 330);
+  --text-subtle:   oklch(58% 0.08 300);
+  --accent:        oklch(58% 0.19 5);
+  --accent-hover:  oklch(48% 0.18 5);
+  --accent-ink:    oklch(99% 0.004 340);
+  --focus:         oklch(60% 0.21 5);
+  --danger:        oklch(58% 0.19 25);
+  --success:       oklch(52% 0.13 145);
+
+  --radius:      16px;
+  --radius-sm:   10px;
+  --radius-lg:   20px;
+  --radius-pill: 999px;
+
+  --shadow-card:   0 12px 28px -18px oklch(24% 0.06 330 / 0.28);
+  --shadow-raised: 0 16px 36px -16px oklch(24% 0.06 330 / 0.32);
+}
+
+[data-theme="dark"] {
+  --bg:            oklch(14% 0.02 300);
+  --bg2:           oklch(17% 0.022 300);
+  --surface:       oklch(19% 0.025 300);
+  --surface2:      oklch(24% 0.03 300);
+  --surface3:      oklch(28% 0.032 300);
+  --border:        oklch(32% 0.02 300);
+  --text:          oklch(96% 0.012 60);
+  --text-muted:    oklch(78% 0.012 60);
+  --text-subtle:   oklch(64% 0.08 300);
+  --accent:        oklch(74% 0.15 5);
+  --accent-hover:  oklch(80% 0.12 5);
+  --accent-ink:    oklch(16% 0.03 330);
+  --focus:         oklch(78% 0.18 5);
+  --danger:        oklch(64% 0.17 25);
+  --success:       oklch(78% 0.17 145);
+
+  --shadow-card:   0 12px 28px -16px oklch(6% 0.02 300 / 0.5);
+  --shadow-raised: 0 16px 36px -14px oklch(6% 0.02 300 / 0.55);
+}
+
+:root {
+  --font-display: "Figtree", ui-sans-serif, system-ui, sans-serif;  /* wordmark only */
+  --font-body:    "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs:  0.5rem;
+  --space-sm:  0.75rem;
+  --space-md:  1rem;
+  --space-lg:  1.5rem;
+  --space-xl:  2.5rem;
+  --space-2xl: 4rem;
+
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:     cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long:  420ms;
+
+  --z-raised:   10;
+  --z-dropdown: 100;
+  --z-sticky:   200;
+  --z-modal:    400;
+  --z-toast:    500;
+}
