@@ -644,8 +644,8 @@ body {
 /* Library grid */
 .library-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 20px;
   padding: 24px 28px 0;
 }
 
@@ -798,21 +798,29 @@ body {
 .lib-size   { font-size: 11px; color: var(--text-muted); }
 .lib-resume { font-size: 11px; color: var(--accent-hover); }
 
-/* Actions */
+/* Actions — two rows: primary (watch/subtitles) on top, secondary
+   (transcode controls/delete) below, so a running transcode's extra
+   buttons get real room instead of being crushed into one line. */
 .lib-actions {
   display: flex;
-  gap: 6px;
-  padding: 0 10px 10px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.lib-actions-row {
+  display: flex;
+  gap: 8px;
 }
 
 .lib-watch-btn {
   flex: 1;
-  padding: 7px 12px;
+  padding: 10px 14px;
   background: var(--accent);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s;
@@ -821,12 +829,13 @@ body {
 .lib-watch-btn:hover { background: var(--accent-hover); }
 
 .lib-delete-btn {
-  padding: 7px 10px;
+  flex: 1;
+  padding: 9px 12px;
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--text-muted);
   border-radius: var(--radius-sm);
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 }
@@ -835,12 +844,12 @@ body {
 .lib-delete-btn:disabled { opacity: 0.4; cursor: default; }
 
 .lib-sub-btn {
-  padding: 7px 10px;
+  padding: 9px 12px;
   background: var(--surface2);
   border: 1px solid var(--border);
   color: #4ade80;
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: .05em;
   cursor: pointer;
