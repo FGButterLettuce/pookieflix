@@ -1,3 +1,7 @@
+## v1.5.7 - 2026-07-15
+
+- Redesign home/library page (Hallmark) ([#20](https://github.com/FGButterLettuce/pookieflix/pull/20))
+
 ## v1.5.6 - 2026-07-15
 
 - Collapse library card actions into an overflow menu, add reset progress ([#19](https://github.com/FGButterLettuce/pookieflix/pull/19))
