@@ -1,3 +1,7 @@
+## v1.5.5 - 2026-07-15
+
+- Fix clashing button styles on library cards ([#18](https://github.com/FGButterLettuce/pookieflix/pull/18))
+
 ## v1.5.4 - 2026-07-15
 
 - Fix stuck HLS transcodes, serialize them, wider library cards ([#17](https://github.com/FGButterLettuce/pookieflix/pull/17))
