@@ -215,6 +215,7 @@ export function Home() {
   };
 
   const [transcodeBusy, setTranscodeBusy] = useState<string | null>(null);
+  const [openMenuFor, setOpenMenuFor] = useState<string | null>(null);
 
   const transcodeAction = async (filename: string, action: 'cancel' | 'pause' | 'resume' | 'restart') => {
     setTranscodeBusy(filename);
@@ -225,6 +226,16 @@ export function Home() {
       setError('Transcode action failed');
     } finally {
       setTranscodeBusy(null);
+    }
+  };
+
+  const resetProgress = async (filename: string) => {
+    setOpenMenuFor(null);
+    try {
+      await fetch(`/api/library/${encodeURIComponent(filename)}/reset-progress`, { method: 'POST' });
+      loadLibrary();
+    } catch {
+      setError('Reset failed');
     }
   };
 
@@ -407,7 +418,7 @@ export function Home() {
             <a className="primary-btn" href={uploadedRoomUrl} style={{ marginTop: 10 }}>
               Watch on PookieFlix →
             </a>
-            <button className="lib-delete-btn" style={{ marginTop: 8 }} onClick={() => setUploadedRoomUrl('')}>
+            <button className="secondary-btn" style={{ marginTop: 8 }} onClick={() => setUploadedRoomUrl('')}>
               Upload another
             </button>
           </div>
@@ -501,11 +512,17 @@ export function Home() {
                   <div className="lib-meta-row">
                     <span className="lib-size">{formatBytes(f.size)}</span>
                     {f.subtitleFetching && <span className="lib-sub-badge lib-sub-fetching" title="Fetching subtitles…">CC…</span>}
+                    {!f.subtitleFetching && f.hasSubtitles && (
+                      <span className="lib-sub-badge" title="Subtitles loaded">CC ✓ {langFlag(subtitleLang)}</span>
+                    )}
                     {f.transcodeStatus === 'running' && (
                       <span className="lib-sub-badge lib-sub-fetching" title="Transcoding to HLS…">HLS…</span>
                     )}
                     {f.transcodeStatus === 'paused' && (
                       <span className="lib-sub-badge" title="Transcode paused">HLS ⏸</span>
+                    )}
+                    {f.transcodeStatus === 'queued' && (
+                      <span className="lib-sub-badge" title="Waiting for another transcode to finish first">HLS queued</span>
                     )}
                     {f.lastTime > 5 && (
                       <span className="lib-resume" title="Resume position">
@@ -515,96 +532,107 @@ export function Home() {
                   </div>
                 </div>
 
-                {/* Actions — primary row (watch/subtitles), secondary row
-                    (transcode controls/delete) only when there's something
-                    there, so most cards just show one clean row. */}
+                {/* Actions — Watch/Resume is the only action that lives on
+                    the card itself. Everything else (subtitles, transcode
+                    controls, reset progress, delete) is one tap away in the
+                    "⋯" menu instead of crowding a card this small. */}
                 <div className="lib-actions">
                   <div className="lib-actions-row">
                     <button className="lib-watch-btn" onClick={() => createRoomFrom(f.filename)}>
                       {f.lastTime > 5 ? 'Resume' : 'Watch'}
                     </button>
-                    <button
-                      className={`lib-sub-btn${f.hasSubtitles ? ' lib-sub-btn--active' : ''}`}
-                      onClick={() => openSubPicker(f.filename)}
-                      title={f.hasSubtitles ? 'Subtitles loaded · click to change' : 'Add subtitles'}
-                    >
-                      CC{f.hasSubtitles ? ` ✓ ${langFlag(subtitleLang)}` : ''}
-                    </button>
-                  </div>
-                  <div className="lib-actions-row">
-                    {f.transcodeStatus === 'queued' && (
-                      <>
-                        <span className="lib-sub-badge" title="Waiting for another transcode to finish first">
-                          Queued
-                        </span>
-                        <button
-                          className="lib-transcode-btn"
-                          disabled={transcodeBusy === f.filename}
-                          onClick={() => void transcodeAction(f.filename, 'cancel')}
-                          title="Remove from transcode queue"
-                        >
-                          ⏹ Cancel
-                        </button>
-                      </>
-                    )}
-                    {f.transcodeStatus === 'running' && (
-                      <>
-                        <button
-                          className="lib-transcode-btn"
-                          disabled={transcodeBusy === f.filename}
-                          onClick={() => void transcodeAction(f.filename, 'pause')}
-                          title="Pause transcode"
-                        >
-                          ⏸ Pause
-                        </button>
-                        <button
-                          className="lib-transcode-btn"
-                          disabled={transcodeBusy === f.filename}
-                          onClick={() => void transcodeAction(f.filename, 'cancel')}
-                          title="Cancel transcode"
-                        >
-                          ⏹ Cancel
-                        </button>
-                      </>
-                    )}
-                    {f.transcodeStatus === 'paused' && (
-                      <>
-                        <button
-                          className="lib-transcode-btn"
-                          disabled={transcodeBusy === f.filename}
-                          onClick={() => void transcodeAction(f.filename, 'resume')}
-                          title="Resume transcode"
-                        >
-                          ▶ Resume
-                        </button>
-                        <button
-                          className="lib-transcode-btn"
-                          disabled={transcodeBusy === f.filename}
-                          onClick={() => void transcodeAction(f.filename, 'cancel')}
-                          title="Cancel transcode"
-                        >
-                          ⏹ Cancel
-                        </button>
-                      </>
-                    )}
-                    {(f.transcodeStatus === 'complete' || f.transcodeStatus === 'none') && (
+                    <div className="lib-menu-wrap">
                       <button
-                        className="lib-transcode-btn"
-                        disabled={transcodeBusy === f.filename}
-                        onClick={() => void transcodeAction(f.filename, 'restart')}
-                        title={f.transcodeStatus === 'complete' ? 'Re-transcode to HLS from scratch' : 'Transcode to HLS now'}
+                        className={`lib-menu-btn${openMenuFor === f.filename ? ' lib-menu-btn--open' : ''}`}
+                        onClick={() => setOpenMenuFor(openMenuFor === f.filename ? null : f.filename)}
+                        title="More actions"
                       >
-                        ↻ {f.transcodeStatus === 'complete' ? 'Re-transcode' : 'Transcode'}
+                        ⋯
                       </button>
-                    )}
-                    <button
-                      className="lib-delete-btn"
-                      disabled={deletingFile === f.filename}
-                      onClick={() => deleteFile(f.filename)}
-                      title="Delete from library"
-                    >
-                      {deletingFile === f.filename ? '…' : '🗑'}
-                    </button>
+                      {openMenuFor === f.filename && (
+                        <>
+                          <div className="lib-menu-backdrop" onClick={() => setOpenMenuFor(null)} />
+                          <div className="lib-menu">
+                            <button
+                              className={`lib-menu-item${f.hasSubtitles ? ' lib-menu-item--sub-active' : ''}`}
+                              onClick={() => { setOpenMenuFor(null); openSubPicker(f.filename); }}
+                            >
+                              {f.hasSubtitles ? `✓ Subtitles (${langFlag(subtitleLang)})` : 'Add subtitles'}
+                            </button>
+
+                            {f.transcodeStatus === 'queued' && (
+                              <button
+                                className="lib-menu-item"
+                                disabled={transcodeBusy === f.filename}
+                                onClick={() => void transcodeAction(f.filename, 'cancel')}
+                              >
+                                ⏹ Cancel (queued)
+                              </button>
+                            )}
+                            {f.transcodeStatus === 'running' && (
+                              <>
+                                <button
+                                  className="lib-menu-item"
+                                  disabled={transcodeBusy === f.filename}
+                                  onClick={() => void transcodeAction(f.filename, 'pause')}
+                                >
+                                  ⏸ Pause transcode
+                                </button>
+                                <button
+                                  className="lib-menu-item"
+                                  disabled={transcodeBusy === f.filename}
+                                  onClick={() => void transcodeAction(f.filename, 'cancel')}
+                                >
+                                  ⏹ Cancel transcode
+                                </button>
+                              </>
+                            )}
+                            {f.transcodeStatus === 'paused' && (
+                              <>
+                                <button
+                                  className="lib-menu-item"
+                                  disabled={transcodeBusy === f.filename}
+                                  onClick={() => void transcodeAction(f.filename, 'resume')}
+                                >
+                                  ▶ Resume transcode
+                                </button>
+                                <button
+                                  className="lib-menu-item"
+                                  disabled={transcodeBusy === f.filename}
+                                  onClick={() => void transcodeAction(f.filename, 'cancel')}
+                                >
+                                  ⏹ Cancel transcode
+                                </button>
+                              </>
+                            )}
+                            {(f.transcodeStatus === 'complete' || f.transcodeStatus === 'none') && (
+                              <button
+                                className="lib-menu-item"
+                                disabled={transcodeBusy === f.filename}
+                                onClick={() => void transcodeAction(f.filename, 'restart')}
+                              >
+                                ↻ {f.transcodeStatus === 'complete' ? 'Re-transcode' : 'Transcode now'}
+                              </button>
+                            )}
+
+                            {f.lastTime > 5 && (
+                              <button className="lib-menu-item" onClick={() => void resetProgress(f.filename)}>
+                                ↺ Start over
+                              </button>
+                            )}
+
+                            <div className="lib-menu-divider" />
+                            <button
+                              className="lib-menu-item lib-menu-item--danger"
+                              disabled={deletingFile === f.filename}
+                              onClick={() => { setOpenMenuFor(null); deleteFile(f.filename); }}
+                            >
+                              🗑 {deletingFile === f.filename ? 'Deleting…' : 'Delete'}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
