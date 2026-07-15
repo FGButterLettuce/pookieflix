@@ -1,3 +1,11 @@
+/* Hallmark · genre: playful · macrostructure: Ecosystem Index (app-adapted)
+ * theme: custom · vibe: "cozy, two-person movie night, playful but functional"
+ * paper: oklch(91% 0.015 320) · accent: oklch(58% 0.19 5)
+ * display: Figtree (wordmark only) · body: Plus Jakarta Sans
+ * axes: mid / rounded-sans / chromatic-other (dusty-rose ~5°)
+ * nav: custom minimal app-bar (2 genuine destinations) · footer: none (app page)
+ * studied: no · context: explicit · redesign of client/src/pages/Home.tsx
+ */
 @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
 *, *::before, *::after {
@@ -6,40 +14,87 @@
   padding: 0;
 }
 
+html { overflow-x: clip; }
+body { overflow-x: clip; }
+
+/* Token values below are OKLCH conversions of PookieFlix's established palette
+   (a saturated pink accent over warm purple-tinted neutrals) — kept as the
+   same custom-property names so Setup/Room/Settings, which also read these,
+   are unaffected. Pure #fff/#000 replaced with tinted equivalents per the
+   "no pure extremes" rule; everything else preserves the original hue. */
 :root, [data-theme="light"] {
-  --bg: #eae6ef;
-  --bg2: #f5f1f8;
-  --surface: #ffffff;
-  --surface2: #f5f1f8;
-  --border: rgba(52,32,63,0.1);
-  --text: #34203f;
-  --text-muted: #6b566f;
-  --text-subtle: #9a7bb5;
-  --accent: #e0457f;
-  --accent-hover: #c73569;
+  --bg: oklch(91% 0.015 320);
+  --bg2: oklch(95% 0.012 320);
+  --surface: oklch(98% 0.006 340);
+  --surface2: oklch(95% 0.012 320);
+  --surface3: oklch(92% 0.014 320);
+  --border: oklch(85% 0.02 320);
+  --text: oklch(24% 0.06 330);
+  --text-muted: oklch(42% 0.045 330);
+  --text-subtle: oklch(58% 0.08 300);
+  --accent: oklch(58% 0.19 5);
+  --accent-hover: oklch(48% 0.18 5);
+  --accent-ink: oklch(99% 0.004 340);
   --accent-rgb: 224,69,127;
-  --danger: #ef4444;
-  --success: #2f9e5c;
+  --focus: oklch(60% 0.21 5);
+  --danger: oklch(58% 0.19 25);
+  --success: oklch(52% 0.13 145);
   --radius: 16px;
   --radius-sm: 10px;
+  --radius-lg: 20px;
+  --shadow-card: 0 12px 28px -18px oklch(24% 0.06 330 / 0.28);
+  --shadow-raised: 0 16px 36px -16px oklch(24% 0.06 330 / 0.32);
 }
 
 [data-theme="dark"] {
-  --bg: #130b1c;
-  --bg2: #1a1028;
-  --surface: #1f1029;
-  --surface2: #2d1a3a;
-  --border: rgba(255,245,239,0.08);
-  --text: #fff5ef;
-  --text-muted: rgba(255,245,239,0.68);
-  --text-subtle: #9a7bb5;
-  --accent: #ff7fab;
-  --accent-hover: #ff9dbc;
+  --bg: oklch(14% 0.02 300);
+  --bg2: oklch(17% 0.022 300);
+  --surface: oklch(19% 0.025 300);
+  --surface2: oklch(24% 0.03 300);
+  --surface3: oklch(28% 0.032 300);
+  --border: oklch(32% 0.02 300);
+  --text: oklch(96% 0.012 60);
+  --text-muted: oklch(78% 0.012 60);
+  --text-subtle: oklch(64% 0.08 300);
+  --accent: oklch(74% 0.15 5);
+  --accent-hover: oklch(80% 0.12 5);
+  --accent-ink: oklch(16% 0.03 330);
   --accent-rgb: 255,127,171;
-  --danger: #ef4444;
-  --success: #4ade80;
+  --focus: oklch(78% 0.18 5);
+  --danger: oklch(64% 0.17 25);
+  --success: oklch(78% 0.17 145);
   --radius: 16px;
   --radius-sm: 10px;
+  --radius-lg: 20px;
+  --shadow-card: 0 12px 28px -16px oklch(6% 0.02 300 / 0.5);
+  --shadow-raised: 0 16px 36px -14px oklch(6% 0.02 300 / 0.55);
+}
+
+:root {
+  /* 4pt spacing scale, named by role */
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs:  0.5rem;
+  --space-sm:  0.75rem;
+  --space-md:  1rem;
+  --space-lg:  1.5rem;
+  --space-xl:  2.5rem;
+  --space-2xl: 4rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 400;
+  --z-toast: 500;
+
+  --radius-pill: 999px;
 }
 
 html, body, #root {
@@ -56,6 +111,19 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 150ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 150ms !important;
+  }
+}
+
 /* ── Home (new layout) ────────────────────────────────────────────────────── */
 
 .home-root {
@@ -68,8 +136,13 @@ body {
 .home-topbar {
   display: flex;
   align-items: center;
-  padding: 16px 28px;
+  padding: var(--space-md) var(--space-xl);
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: color-mix(in oklch, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .home-logo {
@@ -79,15 +152,16 @@ body {
 }
 
 .settings-link {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
   color: var(--text-muted);
-  text-decoration: none;
-  line-height: 1;
-  padding: 4px;
-  border-radius: 6px;
-  transition: color 0.15s;
+  transition: color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out);
 }
-.settings-link:hover { color: var(--text); }
+.settings-link:hover { background: var(--surface2); color: var(--text); }
 
 /* ── Setup / Onboarding ───────────────────────────────────────────────────── */
 
@@ -503,22 +577,22 @@ body {
 
 /* Upload zone */
 .upload-zone {
-  margin: 24px 28px 0;
+  margin: var(--space-lg) var(--space-xl) 0;
   border: 2px dashed var(--border);
-  border-radius: var(--radius);
-  padding: 28px 24px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl) var(--space-lg);
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out);
   color: var(--text-muted);
   font-size: 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs);
 }
 
-.upload-zone:hover { border-color: var(--accent); background: rgba(99,102,241,0.04); }
+.upload-zone:hover { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 6%, transparent); }
 .upload-zone.uploading { cursor: default; border-style: solid; border-color: var(--accent); }
 .upload-zone-lan { text-decoration: none; border-color: #fbbf24; color: var(--text-muted); }
 .upload-zone-lan:hover { border-color: #fbbf24; background: rgba(251,191,36,0.06); }
@@ -532,7 +606,7 @@ body {
 }
 .lan-upload-btn:hover { background: rgba(251,191,36,0.2); }
 
-.upload-icon { font-size: 26px; opacity: 0.5; }
+.upload-icon { display: flex; color: var(--text-subtle); }
 .upload-label { font-size: 15px; color: var(--text); font-weight: 500; }
 .upload-hint { font-size: 12px; opacity: 0.5; margin-top: 2px; }
 
@@ -639,34 +713,74 @@ body {
   text-align: center;
 }
 
-.library-empty-icon { font-size: 40px; margin-bottom: 4px; opacity: 0.4; }
+.library-empty-icon { display: flex; color: var(--text-subtle); margin-bottom: 4px; opacity: 0.6; }
 
 /* Library grid */
+/* ── Rails (Ecosystem Index) ──────────────────────────────────────────────
+   The library is split into discovery surfaces rather than one flat grid:
+   an optional horizontally-scrolling "Continue watching" rail up top, then
+   the full library as a fluid grid below. */
+.rail { padding: var(--space-lg) var(--space-xl) 0; }
+
+.rail-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.rail-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.rail-count { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.rail-scroll {
+  display: flex;
+  gap: var(--space-md);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: var(--space-xs);
+  margin-bottom: var(--space-2xs);
+}
+.rail-scroll::-webkit-scrollbar { height: 6px; }
+.rail-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+
+.rail-scroll > .lib-card { flex: 0 0 240px; scroll-snap-align: start; }
+
 .library-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-  gap: 20px;
-  padding: 24px 28px 0;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-md) var(--space-lg);
 }
 
 .lib-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   /* Not overflow:hidden — the actions menu below needs to pop out past the
      card's own bottom edge without being clipped. The thumbnail clips its
      own top corners instead (see .lib-thumb-wrap). */
   display: flex;
   flex-direction: column;
-  transition: border-color 0.15s, transform 0.1s;
+  transition: border-color var(--dur-short) var(--ease-out), transform var(--dur-short) var(--ease-out), box-shadow var(--dur-short) var(--ease-out);
 }
 
-.lib-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.lib-card:hover {
+  border-color: color-mix(in oklch, var(--accent) 50%, var(--border));
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-raised);
+}
 
 /* Thumbnail */
 .lib-thumb-wrap {
   position: relative;
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   aspect-ratio: 16/9;
   background: #000;
   cursor: pointer;
@@ -686,7 +800,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
   color: var(--text-muted);
   background: var(--surface2);
 }
@@ -707,16 +820,20 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
   background: rgba(0,0,0,0);
   color: rgba(255,255,255,0);
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out);
+}
+.lib-play-overlay svg {
+  transform: scale(0.85);
+  transition: transform var(--dur-short) var(--ease-out);
 }
 
 .lib-thumb-wrap:hover .lib-play-overlay {
   background: rgba(0,0,0,0.45);
-  color: rgba(255,255,255,0.9);
+  color: rgba(255,255,255,0.95);
 }
+.lib-thumb-wrap:hover .lib-play-overlay svg { transform: scale(1); }
 
 .lib-duration {
   position: absolute;
@@ -726,6 +843,7 @@ body {
   color: #fff;
   font-size: 11px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   padding: 2px 5px;
   border-radius: 4px;
 }
@@ -779,14 +897,14 @@ body {
   letter-spacing: .04em;
   padding: 1px 5px;
   border-radius: 4px;
-  background: #1e3a2f;
-  color: #4ade80;
-  border: 1px solid #2d5a44;
+  background: color-mix(in oklch, var(--success) 16%, var(--surface));
+  color: var(--success);
+  border: 1px solid color-mix(in oklch, var(--success) 40%, var(--border));
 }
 .lib-sub-fetching {
-  background: #1e2a3a;
-  color: #60a5fa;
-  border-color: #2d4a6a;
+  background: var(--surface2);
+  color: var(--text-subtle);
+  border-color: var(--border);
   animation: pulse 1.2s ease-in-out infinite;
 }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
@@ -798,7 +916,7 @@ body {
   margin-top: 4px;
 }
 
-.lib-size   { font-size: 11px; color: var(--text-muted); }
+.lib-size   { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .lib-resume { font-size: 11px; color: var(--accent-hover); }
 
 /* Actions — one row: the single primary action (Watch/Resume) plus a
@@ -814,20 +932,38 @@ body {
   gap: 8px;
 }
 
+/* Primary CTA — the one button that gets the full "press" treatment: a
+   solid colour edge (the button's thickness) + a soft cast shadow, lifting
+   on hover and physically depressing on click. Menu items stay flat —
+   this is the only push button on the card. */
 .lib-watch-btn {
+  --btn-edge: var(--accent-hover);
   flex: 1;
-  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2xs);
+  padding: 11px var(--space-md);
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s;
+  box-shadow: 0 3px 0 0 var(--btn-edge), 0 6px 14px -6px color-mix(in oklch, var(--accent) 55%, transparent);
+  transform: translateY(0);
+  transition: transform var(--dur-micro) var(--ease-out), box-shadow var(--dur-micro) var(--ease-out);
 }
-
-.lib-watch-btn:hover { background: var(--accent-hover); }
+.lib-watch-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 0 0 var(--btn-edge), 0 10px 20px -6px color-mix(in oklch, var(--accent) 55%, transparent);
+}
+.lib-watch-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 0 var(--btn-edge);
+  transition-duration: 70ms;
+}
 
 .lib-menu-wrap {
   position: relative;
@@ -835,17 +971,17 @@ body {
 }
 
 .lib-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 40px;
   height: 100%;
-  padding: 10px 0;
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--text-muted);
-  border-radius: var(--radius-sm);
-  font-size: 16px;
-  line-height: 1;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out);
 }
 .lib-menu-btn:hover, .lib-menu-btn--open { color: var(--text); border-color: var(--accent); }
 
@@ -855,46 +991,54 @@ body {
 .lib-menu-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-dropdown);
 }
 
 .lib-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + var(--space-xs));
   right: 0;
-  z-index: 50;
-  min-width: 190px;
+  z-index: calc(var(--z-dropdown) + 1);
+  min-width: 200px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 10px 28px rgba(0,0,0,0.4);
-  padding: 4px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-raised);
+  padding: var(--space-2xs);
+  animation: menu-in var(--dur-short) var(--ease-out);
+}
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
 }
 
 .lib-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-xs);
   width: 100%;
-  padding: 8px 10px;
+  padding: var(--space-xs) var(--space-sm);
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text);
   font-size: 13px;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background-color var(--dur-micro) var(--ease-out);
 }
+.lib-menu-item svg { flex-shrink: 0; color: var(--text-subtle); }
 .lib-menu-item:hover:not(:disabled) { background: var(--surface2); }
 .lib-menu-item:disabled { opacity: 0.4; cursor: default; }
-.lib-menu-item--sub-active { color: #4ade80; }
+.lib-menu-item--sub-active { color: var(--success); }
+.lib-menu-item--sub-active svg { color: var(--success); }
 .lib-menu-item--danger { color: var(--danger); }
+.lib-menu-item--danger svg { color: var(--danger); }
 
 .lib-menu-divider {
   height: 1px;
-  margin: 4px 2px;
+  margin: var(--space-2xs) 2px;
   background: var(--border);
 }
 
