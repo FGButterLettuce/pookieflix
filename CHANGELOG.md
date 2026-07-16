@@ -1,3 +1,7 @@
+## v1.5.10 - 2026-07-16
+
+- Fix Settings cohesion and Home visual weight ([#23](https://github.com/FGButterLettuce/pookieflix/pull/23))
+
 ## v1.5.9 - 2026-07-15
 
 - Roll out app-wide design system: tokens, Radix primitives, Settings rebuild ([#22](https://github.com/FGButterLettuce/pookieflix/pull/22))
