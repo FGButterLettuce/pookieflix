@@ -8,7 +8,7 @@ import { useTheme } from '../theme/ThemeContext';
 import type { LibraryFile } from '../types';
 import {
   Play, Pause, Square, RotateCw, History, Captions,
-  Trash2, MoreHorizontal, Settings, Upload, Check, Film,
+  Trash2, MoreHorizontal, Settings, Upload, Check, Film, LayoutGrid,
 } from 'lucide-react';
 
 
@@ -652,6 +652,7 @@ export function Home() {
           {continuing.length > 0 && (
             <section className="rail">
               <div className="rail-head">
+                <Play size={14} className="rail-title-icon" />
                 <span className="rail-title">Continue watching</span>
                 <span className="rail-count">{continuing.length}</span>
               </div>
@@ -663,6 +664,7 @@ export function Home() {
 
           <section className="rail">
             <div className="rail-head">
+              <LayoutGrid size={14} className="rail-title-icon" />
               <span className="rail-title">Your library</span>
               <span className="rail-count">{library.length}</span>
             </div>

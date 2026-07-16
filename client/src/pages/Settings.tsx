@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { ArrowLeft, Info } from 'lucide-react';
+import { ArrowLeft, Info, UserRound, Globe, SlidersHorizontal, Lock, Cloud } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { useTheme } from '../theme/ThemeContext';
 import { PasswordInput } from '../components/PasswordInput';
@@ -167,8 +167,9 @@ export function Settings() {
       <div className="settings-page">
         <h1 className="settings-page-title">Settings</h1>
 
+        <div className="settings-sections">
         <section className="settings-section">
-          <h2 className="settings-section-title">Account</h2>
+          <h2 className="settings-section-title"><UserRound size={17} /> Account</h2>
 
           <div className="settings-field">
             <label className="settings-label">Your name</label>
@@ -192,36 +193,36 @@ export function Settings() {
             <div className="setup-hint" style={{ marginBottom: 0 }}>Same, also used for domain suggestions</div>
           </div>
 
-          <div className="settings-divider" />
-
-          <div className="settings-subsection-label">Change password</div>
-          <div className="settings-field">
-            <label className="settings-label">New password</label>
-            <PasswordInput
-              className="setup-input"
-              placeholder="At least 6 characters"
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-            />
+          <div className="settings-subgroup">
+            <div className="settings-subgroup-label"><Lock size={14} /> Change password</div>
+            <div className="settings-field">
+              <label className="settings-label">New password</label>
+              <PasswordInput
+                className="setup-input"
+                placeholder="At least 6 characters"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+              />
+            </div>
+            <div className="settings-field">
+              <label className="settings-label">Confirm password</label>
+              <PasswordInput
+                className="setup-input"
+                placeholder="Repeat new password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && void changePassword()}
+              />
+            </div>
+            {pwError && <div className="home-error" style={{ marginBottom: 12 }}>{pwError}</div>}
+            <button className="primary-btn" style={{ width: 'auto', marginTop: 0 }} onClick={() => void changePassword()} disabled={pwSaving}>
+              {pwSaving ? 'Saving…' : pwSaved ? '✓ Password changed' : 'Change password'}
+            </button>
           </div>
-          <div className="settings-field">
-            <label className="settings-label">Confirm password</label>
-            <PasswordInput
-              className="setup-input"
-              placeholder="Repeat new password"
-              value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && void changePassword()}
-            />
-          </div>
-          {pwError && <div className="home-error" style={{ marginBottom: 12 }}>{pwError}</div>}
-          <button className="primary-btn" style={{ width: '100%', marginTop: 0 }} onClick={() => void changePassword()} disabled={pwSaving}>
-            {pwSaving ? 'Saving…' : pwSaved ? '✓ Password changed' : 'Change password'}
-          </button>
         </section>
 
         <section className="settings-section">
-          <h2 className="settings-section-title">Access</h2>
+          <h2 className="settings-section-title"><Globe size={17} /> Access</h2>
 
           <div className="settings-field">
             <label className="settings-label">Public domain</label>
@@ -247,56 +248,64 @@ export function Settings() {
             <div className="setup-hint" style={{ marginBottom: 0 }}>Direct upload path bypassing Cloudflare</div>
           </div>
 
-          <div className="settings-field">
-            <label className="settings-label">Cloudflare Tunnel</label>
-            <div className="tunnel-card">
-              <div className="tunnel-card-header">
-                <span
-                  className={`tunnel-status-dot tunnel-status-dot--${values.TUNNEL_CONFIGURED ? values.TUNNEL_STATUS.state : 'stopped'}`}
-                />
-                <span className="tunnel-status-label">
-                  {values.TUNNEL_CONFIGURED ? TUNNEL_STATUS_LABEL[values.TUNNEL_STATUS.state] : 'Not configured'}
-                </span>
-                {values.TUNNEL_STATUS.state === 'error' && values.TUNNEL_STATUS.message && (
-                  <Tooltip.Provider delayDuration={800}>
-                    <Tooltip.Root>
-                      <Tooltip.Trigger asChild>
-                        <button type="button" className="tunnel-status-detail-btn" aria-label="Connection error details">
-                          <Info size={14} />
-                        </button>
-                      </Tooltip.Trigger>
-                      <Tooltip.Portal>
-                        <Tooltip.Content className="tooltip-content" sideOffset={6}>
-                          {values.TUNNEL_STATUS.message}
-                          <Tooltip.Arrow className="tooltip-arrow" />
-                        </Tooltip.Content>
-                      </Tooltip.Portal>
-                    </Tooltip.Root>
-                  </Tooltip.Provider>
-                )}
-              </div>
+          {/* Flattened directly into Access — no nested bordered card. A
+              sibling section-in-a-section reads as clutter; a divider +
+              label carries the same "this is a distinct group" signal. */}
+          <div className="settings-subgroup">
+            <div className="settings-subgroup-label"><Cloud size={14} /> Cloudflare Tunnel</div>
 
-              <a
-                className="external-cta-btn"
-                href="https://dash.cloudflare.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                open dash.cloudflare.com ↗
-              </a>
+            <div className="tunnel-status-row">
+              <span
+                className={`tunnel-status-dot tunnel-status-dot--${values.TUNNEL_CONFIGURED ? values.TUNNEL_STATUS.state : 'stopped'}`}
+              />
+              <span className="tunnel-status-label">
+                {values.TUNNEL_CONFIGURED ? TUNNEL_STATUS_LABEL[values.TUNNEL_STATUS.state] : 'Not configured'}
+              </span>
+              {values.TUNNEL_STATUS.state === 'error' && values.TUNNEL_STATUS.message && (
+                <Tooltip.Provider delayDuration={800}>
+                  <Tooltip.Root>
+                    <Tooltip.Trigger asChild>
+                      <button type="button" className="tunnel-status-detail-btn" aria-label="Connection error details">
+                        <Info size={14} />
+                      </button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content className="tooltip-content" sideOffset={6}>
+                        {values.TUNNEL_STATUS.message}
+                        <Tooltip.Arrow className="tooltip-arrow" />
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+              )}
+            </div>
+
+            <div className="settings-field">
+              <label className="settings-label">Replace tunnel token <span className="settings-optional">(optional)</span></label>
               <PasteableInput
                 className="setup-input"
                 placeholder={values.TUNNEL_CONFIGURED ? 'Paste a new token to replace this tunnel' : 'Paste a token to enable a tunnel'}
                 value={tunnelToken}
                 onChange={e => setTunnelToken(e.target.value)}
               />
-              <div className="setup-hint" style={{ marginBottom: 12 }}>
+              <div className="setup-hint" style={{ marginBottom: 0 }}>
                 From your tunnel's "Install connector" step — paste the whole command shown there,
                 we'll find the token in it. PookieFlix runs and manages the tunnel itself, no separate
                 container or install needed.
               </div>
+            </div>
+
+            <div className="tunnel-actions">
+              <a
+                className="external-cta-btn external-cta-btn--ghost"
+                href="https://dash.cloudflare.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                open dash.cloudflare.com ↗
+              </a>
               {values.TUNNEL_CONFIGURED && (
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <>
                   <button
                     className="setup-back"
                     onClick={() => void reconnectTunnel()}
@@ -313,14 +322,14 @@ export function Settings() {
                   >
                     {removingTunnel ? 'Removing…' : 'Remove tunnel'}
                   </button>
-                </div>
+                </>
               )}
             </div>
           </div>
         </section>
 
         <section className="settings-section">
-          <h2 className="settings-section-title">Advanced</h2>
+          <h2 className="settings-section-title"><SlidersHorizontal size={17} /> Advanced</h2>
           <div className="settings-field">
             <label className="settings-label">OpenSubtitles API key <span className="settings-optional">(optional)</span></label>
             <PasteableInput
@@ -332,11 +341,18 @@ export function Settings() {
             <div className="setup-hint" style={{ marginBottom: 0 }}>Auto-fetch subtitles on upload</div>
           </div>
         </section>
+        </div>
+      </div>
 
-        {error && <div className="home-error" style={{ marginBottom: 12 }}>{error}</div>}
-        <button className="primary-btn" style={{ width: '100%' }} onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save settings'}
-        </button>
+      <div className="settings-save-footer">
+        <div className="settings-save-footer-inner">
+          <span className={error ? 'settings-save-footer-hint settings-save-footer-hint--error' : 'settings-save-footer-hint'}>
+            {error || 'Applies to Account, Access & Advanced above — password has its own Change password button'}
+          </span>
+          <button className="primary-btn" style={{ width: 'auto' }} onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save settings'}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -402,6 +402,19 @@ body {
 }
 .external-cta-btn:hover { background: var(--accent-hover); }
 
+/* Ghost variant — for a wayfinding link ("go look at this elsewhere")
+   sitting next to a real commit action (Change password). Two solid
+   glowing accent buttons in the same small area compete for attention;
+   only one action per area should be a solid fill. */
+.external-cta-btn--ghost {
+  background: transparent;
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+  box-shadow: none;
+  margin: 0;
+}
+.external-cta-btn--ghost:hover { background: rgba(var(--accent-rgb), 0.08); color: var(--accent); }
+
 /* A small visual step-flow (numbered icon chain) used in place of a bare
    text list wherever a screen has no other visual aid. */
 .step-flow {
@@ -521,7 +534,7 @@ body {
   max-width: 640px;
   width: 100%;
   margin: 0 auto;
-  padding: var(--space-xl) var(--space-lg) 64px;
+  padding: var(--space-xl) var(--space-lg) 40px;
 }
 .settings-page-title {
   font-family: 'Figtree', sans-serif;
@@ -530,6 +543,18 @@ body {
   color: var(--text);
   margin-bottom: 24px;
 }
+
+/* Above ~900px, three cards stacked in one narrow column leaves a full
+   desktop viewport of width unused and forces a long scroll for no
+   reason. CSS multi-column lets the browser balance section heights
+   across two columns itself, instead of manually guessing which
+   sections pair well by height. */
+@media (min-width: 900px) {
+  .settings-page { max-width: 940px; }
+  .settings-sections { columns: 2; column-gap: 22px; }
+  .settings-section { break-inside: avoid; }
+}
+
 .settings-section {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -538,23 +563,58 @@ body {
   margin-bottom: 20px;
 }
 .settings-section-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   font-family: 'Figtree', sans-serif;
   font-weight: 800;
   font-size: 16px;
   color: var(--text);
   margin-bottom: 18px;
 }
+.settings-section-title svg { color: var(--accent); flex-shrink: 0; }
 .settings-field { margin-bottom: 20px; }
 .settings-field:last-child { margin-bottom: 0; }
-.settings-divider { height: 1px; background: var(--border); margin: 20px 0; }
-.settings-subsection-label {
-  font-size: 12px;
+
+/* A sub-group inside a section (Change password, Cloudflare Tunnel) gets
+   a hairline divider + a plain muted label — same visual language as
+   every other label, not a second uppercase/tinted heading system
+   competing with the section title above it. */
+.settings-subgroup { border-top: 1px solid var(--border); margin-top: 22px; padding-top: 20px; }
+.settings-subgroup-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-subtle);
-  margin-bottom: 14px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
 }
+.settings-subgroup-label svg { flex-shrink: 0; }
+
+/* A full-bleed sticky footer, not a button living at the bottom of the
+   content flow — was previously a single .primary-btn stretched to the
+   full page width, which read as oversized and made it ambiguous
+   whether it saved only the last section (Advanced) or the whole page.
+   The sticky position itself signals "this is a page-level action." */
+.settings-save-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 24px -12px rgba(0,0,0,0.18);
+}
+.settings-save-footer-inner {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 14px var(--space-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.settings-save-footer-hint { font-size: 12.5px; color: var(--text-muted); }
+.settings-save-footer-hint--error { color: var(--danger); font-weight: 600; }
 
 /* ── Responsive scale-up for large desktop viewports ─────────────────────
    .setup-card's base sizing (max-width 520px, 15px body copy) is tuned for
@@ -599,18 +659,18 @@ body {
   .setup-card .domain-suggestion-card { padding: 18px 22px; }
 }
 
-.tunnel-card {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 14px;
-  margin-bottom: 4px;
-}
-.tunnel-card-header {
+.tunnel-status-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+}
+.tunnel-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
 }
 .tunnel-status-dot {
   width: 9px; height: 9px;
@@ -812,17 +872,19 @@ body {
 
 .rail-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-sm);
   margin-bottom: var(--space-sm);
 }
+
+.rail-title-icon { color: var(--accent); flex-shrink: 0; }
 
 .rail-title {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-subtle);
+  color: var(--text-muted);
 }
 
 .rail-count { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
@@ -838,7 +900,10 @@ body {
 .rail-scroll::-webkit-scrollbar { height: 6px; }
 .rail-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
 
-.rail-scroll > .lib-card { flex: 0 0 240px; scroll-snap-align: start; }
+/* Continue Watching is the single thing you're most likely to click, so
+   it gets a visibly larger card than the library grid below it instead
+   of matching size — earns the extra visual weight. */
+.rail-scroll > .lib-card { flex: 0 0 360px; scroll-snap-align: start; }
 
 .library-grid {
   display: grid;
