@@ -1120,11 +1120,11 @@ body {
 
 .lib-menu-btn {
   flex: 0 0 auto;
+  align-self: stretch;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 40px;
-  height: 100%;
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--text-muted);
