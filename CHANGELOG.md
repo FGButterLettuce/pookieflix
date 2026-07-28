@@ -1,3 +1,7 @@
+## v1.5.11 - 2026-07-28
+
+- Fix .lib-menu-btn height mismatch: height:100% doesn't reliably resolve inside an auto-height flex row across browsers, so it was collapsing to content size and rendering as a full pill instead of matching .lib-watch-btn's height. align-self:stretch doesn't depend on percentage resolution.
+
 ## v1.5.10 - 2026-07-16
 
 - Fix Settings cohesion and Home visual weight ([#23](https://github.com/FGButterLettuce/pookieflix/pull/23))
