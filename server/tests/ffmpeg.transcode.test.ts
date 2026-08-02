@@ -150,3 +150,49 @@ describe('manual transcode controls', () => {
     assert.equal(ffmpeg.getTranscodeStatus(shortVideo), 'complete');
   });
 });
+
+describe('HLS segment bitrate capping', () => {
+  let dataDir: string;
+  let noisyVideo: string;
+  let ffmpeg: typeof import('../src/ffmpeg');
+
+  before(async () => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pookieflix-bitrate-test-'));
+    process.env.DATA_DIR = dataDir;
+    ffmpeg = await import('../src/ffmpeg');
+
+    // Random per-pixel noise is essentially incompressible, so at a near-lossless
+    // CRF this fixture's own encoded bitrate (~7.5Mbps) sits well above any sane
+    // streaming cap — same shape as a real high-motion action scene spiking a
+    // source rip's bitrate, just exaggerated so the test doesn't need a multi-GB
+    // real movie to prove the point.
+    noisyVideo = path.join(dataDir, 'noisy.mp4');
+    spawnSync('ffmpeg', [
+      '-f', 'lavfi', '-i', 'nullsrc=size=320x240:rate=10:duration=5',
+      '-f', 'lavfi', '-i', 'sine=duration=5',
+      '-vf', 'geq=random(1)*255:128:128',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '4',
+      '-c:a', 'aac', '-y', noisyVideo,
+    ]);
+    assert.ok(fs.existsSync(noisyVideo), 'noisy test fixture failed to generate — is ffmpeg installed?');
+  });
+
+  after(() => {
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('re-encodes segments under a bitrate ceiling instead of preserving the source rate', async () => {
+    await ffmpeg.generateHLS(noisyVideo);
+
+    const dir = ffmpeg.hlsDir(noisyVideo);
+    const segments = fs.readdirSync(dir).filter(f => f.endsWith('.ts'));
+    assert.ok(segments.length > 0, 'expected at least one HLS segment');
+
+    const totalBytes = segments.reduce((sum, f) => sum + fs.statSync(path.join(dir, f)).size, 0);
+    const impliedKbps = (totalBytes * 8) / 1000 / 5; // fixture is a fixed 5s duration
+
+    // Source fixture is ~7500kbps; a real bitrate cap must land well under that,
+    // with generous headroom for VBV burst overshoot above the nominal maxrate.
+    assert.ok(impliedKbps < 4500, `expected capped output under ~4500kbps, got ${impliedKbps.toFixed(0)}kbps`);
+  });
+});

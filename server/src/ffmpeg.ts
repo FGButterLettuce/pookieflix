@@ -172,8 +172,14 @@ export function hasHLS(videoPath: string): boolean {
   return fs.existsSync(hlsManifestPath(videoPath));
 }
 
-// Segment video into HLS chunks (copy, no re-encode). Runs async — call and forget.
-const HLS_TIMEOUT_MS = 10 * 60 * 1000; // 10 min — stream copy should never take longer
+// Segment video into HLS chunks, re-encoding with a bitrate ceiling. Runs async — call and forget.
+// A plain stream-copy remux inherits the source rip's raw variable bitrate as-is, which can
+// spike 5-10x above baseline during high-motion scenes — large enough that, in a synced
+// watch-together session, two devices requesting the same oversized segment through one
+// Cloudflare Tunnel can't both get it delivered before the player's fragment timeout, so
+// playback stalls right at the moment picture complexity peaks.
+const MAX_VIDEO_BITRATE_KBPS = 6000;
+const HLS_TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 hours — re-encoding is far slower than stream copy
 
 export async function generateHLS(videoPath: string): Promise<boolean> {
   if (hasHLS(videoPath)) return true;
@@ -186,31 +192,35 @@ export async function generateHLS(videoPath: string): Promise<boolean> {
   return run;
 }
 
-async function runQueuedTranscode(videoPath: string): Promise<boolean> {
-  queuedPaths.delete(videoPath);
-  if (cancelledQueued.delete(videoPath)) return false; // cancelled before its turn came up
-  if (hasHLS(videoPath)) return true; // e.g. satisfied by another path while queued
-  const dir = hlsDir(videoPath);
-  fs.mkdirSync(dir, { recursive: true });
-  const manifest = hlsManifestPath(videoPath);
-  const ok = await new Promise<boolean>(resolve => {
-    // stdio: 'ignore' — ffmpeg writes continuous progress stats to stderr for
-    // the whole transcode. Left as default 'pipe' with nothing draining it,
-    // the OS pipe buffer (~64KB) fills partway through any real movie and
-    // ffmpeg's write() blocks forever: the process goes idle mid-transcode,
-    // no error, no exit, no further segments (confirmed live: two full-movie
-    // transcodes froze permanently within seconds of starting this way).
-    const ff = spawn('ffmpeg', [
-      '-fflags', '+genpts',
-      '-err_detect', 'ignore_err',
-      '-i', videoPath,
-      '-c', 'copy',
-      '-hls_time', '4',
-      '-hls_list_size', '0',
-      '-hls_playlist_type', 'vod',
-      '-hls_segment_filename', path.join(dir, 'seg%04d.ts'),
-      '-y', manifest,
-    ], { stdio: 'ignore' });
+// stdio: 'ignore' — ffmpeg writes continuous progress stats to stderr for the
+// whole transcode. Left as default 'pipe' with nothing draining it, the OS
+// pipe buffer (~64KB) fills partway through any real movie and ffmpeg's
+// write() blocks forever: the process goes idle mid-transcode, no error, no
+// exit, no further segments (confirmed live: two full-movie transcodes froze
+// permanently within seconds of starting this way).
+function buildEncodeArgs(mode: 'qsv' | 'software', videoPath: string, dir: string, manifest: string): string[] {
+  const videoArgs = mode === 'qsv'
+    ? ['-c:v', 'h264_qsv', '-preset', 'veryfast', '-b:v', `${Math.round(MAX_VIDEO_BITRATE_KBPS * 0.7)}k`]
+    : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20'];
+  return [
+    '-fflags', '+genpts',
+    '-err_detect', 'ignore_err',
+    '-i', videoPath,
+    ...videoArgs,
+    '-maxrate', `${MAX_VIDEO_BITRATE_KBPS}k`,
+    '-bufsize', `${MAX_VIDEO_BITRATE_KBPS * 2}k`,
+    '-c:a', 'copy',
+    '-hls_time', '4',
+    '-hls_list_size', '0',
+    '-hls_playlist_type', 'vod',
+    '-hls_segment_filename', path.join(dir, 'seg%04d.ts'),
+    '-y', manifest,
+  ];
+}
+
+function runFfmpeg(videoPath: string, args: string[]): Promise<boolean> {
+  return new Promise(resolve => {
+    const ff = spawn('ffmpeg', args, { stdio: 'ignore' });
     activeTranscodes.set(videoPath, { proc: ff, paused: false, startedAt: Date.now() });
     // Only clear the registry entry if it's still this exact process — a
     // cancelled-then-immediately-restarted job registers a new process under
@@ -223,6 +233,27 @@ async function runQueuedTranscode(videoPath: string): Promise<boolean> {
     ff.on('close', code => { clearTimeout(timer); clearIfCurrent(); resolve(code === 0); });
     ff.on('error', () => { clearTimeout(timer); clearIfCurrent(); resolve(false); });
   });
+}
+
+async function runQueuedTranscode(videoPath: string): Promise<boolean> {
+  queuedPaths.delete(videoPath);
+  if (cancelledQueued.delete(videoPath)) return false; // cancelled before its turn came up
+  if (hasHLS(videoPath)) return true; // e.g. satisfied by another path while queued
+  const dir = hlsDir(videoPath);
+  fs.mkdirSync(dir, { recursive: true });
+  const manifest = hlsManifestPath(videoPath);
+
+  // Prefer Intel Quick Sync hardware encoding — several times faster than
+  // software x264 for the same bitrate cap. Falls back to software whenever
+  // QSV init fails, which today means always (the container has no /dev/dri
+  // passed through yet), so this same code starts using hardware for free
+  // the moment that device gets wired in, no further changes needed.
+  let ok = await runFfmpeg(videoPath, buildEncodeArgs('qsv', videoPath, dir, manifest));
+  // If cancelTranscode() ran during the QSV attempt it already deleted `dir` —
+  // that's a real user cancellation, not a hardware failure, so don't retry.
+  if (!ok && fs.existsSync(dir)) {
+    ok = await runFfmpeg(videoPath, buildEncodeArgs('software', videoPath, dir, manifest));
+  }
   // Only clean up this call's own output. If a newer transcode has already
   // taken over this videoPath (e.g. a restart's fresh job registered before
   // this killed process's own close/error event got around to firing), the

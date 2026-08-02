@@ -39,7 +39,12 @@ FROM node:26-alpine AS runtime
 ARG TARGETARCH
 ARG CLOUDFLARED_VERSION=2026.7.1
 
-RUN apk add --no-cache ffmpeg curl
+# intel-media-driver is the VAAPI backend h264_qsv/h264_vaapi need at runtime to
+# actually talk to an Intel iGPU (ffmpeg being built with QSV support isn't enough
+# on its own). amd64-only — no such driver exists for arm64, and the app's HLS
+# encoder already falls back to software when hardware init fails.
+RUN apk add --no-cache ffmpeg curl && \
+    if [ "$TARGETARCH" = "amd64" ]; then apk add --no-cache intel-media-driver; fi
 COPY --from=alass-build /build/target/release/alass-cli /usr/local/bin/alass
 RUN chmod +x /usr/local/bin/alass
 
