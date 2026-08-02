@@ -2040,3 +2040,69 @@ body {
   color: var(--text-muted);
   font-size: 1rem;
 }
+
+/* Marathons list */
+.marathons-heading {
+  flex: 1;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 var(--space-sm);
+}
+
+.marathon-new-form {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.marathon-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+
+.marathon-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  text-decoration: none;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--dur-short) var(--ease-out);
+}
+
+.marathon-card:hover {
+  transform: translateY(-2px);
+}
+
+.marathon-card-name {
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: var(--space-2xs);
+}
+
+.marathon-card-progress {
+  color: var(--text-subtle);
+  font-size: 0.85rem;
+}
+
+.marathons-empty {
+  color: var(--text-subtle);
+  padding: var(--space-lg);
+}
+
+.marathons-signed-out {
+  padding: var(--space-xl);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.form-error {
+  color: var(--danger);
+  padding: 0 var(--space-md);
+  font-size: 0.85rem;
+}
