@@ -4,6 +4,7 @@ import { Home } from './pages/Home';
 import { Room } from './pages/Room';
 import { Setup } from './pages/Setup';
 import { Settings } from './pages/Settings';
+import { WhosWatching } from './pages/WhosWatching';
 import { ThemeToggle } from './components/ThemeToggle';
 
 // Hidden on /room/:token — the video player's native controls can span the
@@ -43,6 +44,7 @@ export function App() {
         <Route path="/" element={<Home />} />
         <Route path="/room/:token" element={<Room />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/whos-watching" element={<WhosWatching />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

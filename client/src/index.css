@@ -1980,3 +1980,63 @@ body {
   justify-content: center;
 }
 .cf-mockup-tab--dim { opacity: 0.45; }
+
+/* Who's watching */
+.whos-watching-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-lg);
+  background: var(--bg);
+  padding: var(--space-xl);
+}
+
+.whos-watching-title {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.whos-watching-tiles {
+  display: flex;
+  gap: var(--space-xl);
+}
+
+.profile-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-md);
+  border-radius: var(--radius-lg);
+  transition: transform var(--dur-short) var(--ease-out);
+}
+
+.profile-tile:hover,
+.profile-tile:focus-visible {
+  transform: scale(1.05);
+  outline: none;
+}
+
+.profile-avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-lg);
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.profile-name {
+  color: var(--text-muted);
+  font-size: 1rem;
+}
