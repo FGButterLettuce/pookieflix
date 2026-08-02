@@ -2106,3 +2106,90 @@ body {
   padding: 0 var(--space-md);
   font-size: 0.85rem;
 }
+
+/* Marathon detail */
+.marathon-item-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.marathon-item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-sm) var(--space-md);
+  flex-wrap: wrap;
+}
+
+.marathon-item-move {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.marathon-item-move button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.marathon-item-move button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.marathon-item-main {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+}
+
+.marathon-item-title {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.marathon-item-title-linked {
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--accent);
+  padding: 0;
+  font: inherit;
+}
+
+.marathon-item-scores {
+  display: flex;
+  gap: var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+}
+
+.marathon-status-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: var(--space-3xs) var(--space-xs);
+}
+
+.marathon-review-editor {
+  width: 100%;
+  display: flex;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-sm);
+  flex-wrap: wrap;
+}

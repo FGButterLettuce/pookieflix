@@ -6,6 +6,7 @@ import { Setup } from './pages/Setup';
 import { Settings } from './pages/Settings';
 import { WhosWatching } from './pages/WhosWatching';
 import { Marathons } from './pages/Marathons';
+import { MarathonDetail } from './pages/MarathonDetail';
 import { ThemeToggle } from './components/ThemeToggle';
 
 // Hidden on /room/:token — the video player's native controls can span the
@@ -46,6 +47,7 @@ export function App() {
         <Route path="/room/:token" element={<Room />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/marathons" element={<Marathons />} />
+        <Route path="/marathons/:id" element={<MarathonDetail />} />
         <Route path="/whos-watching" element={<WhosWatching />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
