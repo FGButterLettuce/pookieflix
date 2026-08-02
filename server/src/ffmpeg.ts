@@ -198,11 +198,19 @@ export async function generateHLS(videoPath: string): Promise<boolean> {
 // write() blocks forever: the process goes idle mid-transcode, no error, no
 // exit, no further segments (confirmed live: two full-movie transcodes froze
 // permanently within seconds of starting this way).
-function buildEncodeArgs(mode: 'qsv' | 'software', videoPath: string, dir: string, manifest: string): string[] {
-  const videoArgs = mode === 'qsv'
-    ? ['-c:v', 'h264_qsv', '-preset', 'veryfast', '-b:v', `${Math.round(MAX_VIDEO_BITRATE_KBPS * 0.7)}k`]
+// h264_qsv (oneVPL's dispatcher) fails to find an implementation on this box even
+// with the driver installed and VAAPI itself confirmed working via vainfo — likely
+// needs a separate oneVPL runtime package intel-media-driver doesn't provide.
+// h264_vaapi talks to the same Intel iHD driver directly and was confirmed working
+// end-to-end (real encode, ~9x realtime) against the actual hardware, so that's the
+// hardware path here instead of QSV's own encoder wrapper.
+function buildEncodeArgs(mode: 'vaapi' | 'software', videoPath: string, dir: string, manifest: string): string[] {
+  const deviceArgs = mode === 'vaapi' ? ['-vaapi_device', '/dev/dri/renderD128'] : [];
+  const videoArgs = mode === 'vaapi'
+    ? ['-vf', 'format=nv12,hwupload', '-c:v', 'h264_vaapi', '-b:v', `${Math.round(MAX_VIDEO_BITRATE_KBPS * 0.7)}k`]
     : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20'];
   return [
+    ...deviceArgs,
     '-fflags', '+genpts',
     '-err_detect', 'ignore_err',
     '-i', videoPath,
@@ -243,14 +251,14 @@ async function runQueuedTranscode(videoPath: string): Promise<boolean> {
   fs.mkdirSync(dir, { recursive: true });
   const manifest = hlsManifestPath(videoPath);
 
-  // Prefer Intel Quick Sync hardware encoding — several times faster than
-  // software x264 for the same bitrate cap. Falls back to software whenever
-  // QSV init fails, which today means always (the container has no /dev/dri
-  // passed through yet), so this same code starts using hardware for free
-  // the moment that device gets wired in, no further changes needed.
-  let ok = await runFfmpeg(videoPath, buildEncodeArgs('qsv', videoPath, dir, manifest));
-  // If cancelTranscode() ran during the QSV attempt it already deleted `dir` —
-  // that's a real user cancellation, not a hardware failure, so don't retry.
+  // Prefer Intel hardware encoding (VAAPI/Quick Sync) — several times faster
+  // than software x264 for the same bitrate cap. Falls back to software
+  // whenever hardware init fails (no GPU device passed through, wrong/no
+  // driver, different CPU vendor, etc.), so this same code just starts using
+  // hardware for free wherever it happens to be available.
+  let ok = await runFfmpeg(videoPath, buildEncodeArgs('vaapi', videoPath, dir, manifest));
+  // If cancelTranscode() ran during the hardware attempt it already deleted `dir`
+  // — that's a real user cancellation, not a hardware failure, so don't retry.
   if (!ok && fs.existsSync(dir)) {
     ok = await runFfmpeg(videoPath, buildEncodeArgs('software', videoPath, dir, manifest));
   }
