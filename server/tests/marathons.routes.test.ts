@@ -273,3 +273,46 @@ describe('marathon items', () => {
     );
   });
 });
+
+describe('marathon item reviews', () => {
+  let itemId: number;
+  let marathonId: number;
+
+  before(async () => {
+    const marathonRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Review Test Marathon' } });
+    marathonId = (marathonRes.json() as { marathon: { id: number } }).marathon.id;
+    const itemRes = await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Thor' } });
+    itemId = (itemRes.json() as { item: { id: number } }).item.id;
+  });
+
+  it('saves independent reviews per viewer', async () => {
+    await app.inject({
+      method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`,
+      payload: { viewer: 'user', score: 6, note: 'meh' },
+    });
+    await app.inject({
+      method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`,
+      payload: { viewer: 'partner', score: 5, note: null },
+    });
+
+    const detail = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+    const item = (detail.json() as { items: { reviews: { viewer: string; score: number | null; note: string | null }[] }[] }).items[0];
+    assert.deepEqual(item.reviews.find(r => r.viewer === 'user'), { viewer: 'user', score: 6, note: 'meh' });
+    assert.deepEqual(item.reviews.find(r => r.viewer === 'partner'), { viewer: 'partner', score: 5, note: null });
+  });
+
+  it('re-saving the same viewer updates rather than duplicates', async () => {
+    await app.inject({ method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`, payload: { viewer: 'user', score: 9, note: 'actually great' } });
+    const detail = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+    const item = (detail.json() as { items: { reviews: { viewer: string; score: number | null }[] }[] }).items[0];
+    assert.equal(item.reviews.filter(r => r.viewer === 'user').length, 1);
+    assert.equal(item.reviews.find(r => r.viewer === 'user')!.score, 9);
+  });
+
+  it('rejects an invalid viewer or out-of-range score', async () => {
+    const badViewer = await app.inject({ method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`, payload: { viewer: 'stranger', score: 5 } });
+    assert.equal(badViewer.statusCode, 400);
+    const badScore = await app.inject({ method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`, payload: { viewer: 'user', score: 11 } });
+    assert.equal(badScore.statusCode, 400);
+  });
+});

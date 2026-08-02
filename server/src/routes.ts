@@ -11,7 +11,7 @@ import {
   purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile, setSubtitleName,
   updateLibraryLastTime,
   createMarathon, listMarathons, getMarathon, renameMarathon, deleteMarathon, listMarathonItems,
-  addMarathonItem, getMarathonItem, updateMarathonItem, deleteMarathonItem, moveMarathonItem,
+  addMarathonItem, getMarathonItem, updateMarathonItem, deleteMarathonItem, moveMarathonItem, upsertMarathonReview,
 } from './db';
 import {
   generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
@@ -687,6 +687,24 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const item = getMarathonItem(Number(itemId));
     if (!item || item.marathon_id !== marathonId) return reply.status(404).send({ error: 'Not found' });
     deleteMarathonItem(item.id);
+    return reply.send({ ok: true });
+  });
+
+  // ── Marathon item reviews ──────────────────────────────────────────────────
+  app.put('/api/marathons/:id/items/:itemId/review', { preHandler: requireAdmin }, async (req, reply) => {
+    const { itemId } = req.params as { id: string; itemId: string };
+    const item = getMarathonItem(Number(itemId));
+    if (!item) return reply.status(404).send({ error: 'Not found' });
+    const body = req.body as { viewer?: string; score?: number | null; note?: string | null };
+    if (body.viewer !== 'user' && body.viewer !== 'partner') {
+      return reply.status(400).send({ error: 'Invalid viewer' });
+    }
+    if (body.score !== null && body.score !== undefined) {
+      if (!Number.isInteger(body.score) || body.score < 1 || body.score > 10) {
+        return reply.status(400).send({ error: 'Score must be an integer from 1 to 10' });
+      }
+    }
+    upsertMarathonReview(item.id, body.viewer, body.score ?? null, body.note?.trim() || null);
     return reply.send({ ok: true });
   });
 
