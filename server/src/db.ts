@@ -8,6 +8,14 @@ import type { RoomRow, LibraryMetaRow, LibraryFileInfo, MarathonRow, MarathonIte
 
 let _db: DatabaseSync | null = null;
 
+// For testing only: reset the database singleton so a fresh instance is created
+export function __resetDb(): void {
+  if (_db) {
+    try { _db.close(); } catch {}
+    _db = null;
+  }
+}
+
 export function getDb(): DatabaseSync {
   if (_db) return _db;
 

@@ -11,6 +11,7 @@ import {
   purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile, setSubtitleName,
   updateLibraryLastTime,
   createMarathon, listMarathons, getMarathon, renameMarathon, deleteMarathon, listMarathonItems,
+  addMarathonItem, getMarathonItem, updateMarathonItem, deleteMarathonItem, moveMarathonItem,
 } from './db';
 import {
   generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
@@ -625,6 +626,60 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const marathonId = Number(id);
     if (!getMarathon(marathonId)) return reply.status(404).send({ error: 'Not found' });
     deleteMarathon(marathonId);
+    return reply.send({ ok: true });
+  });
+
+  // ── Marathon items ─────────────────────────────────────────────────────────
+  app.post('/api/marathons/:id/items', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const marathonId = Number(id);
+    if (!getMarathon(marathonId)) return reply.status(404).send({ error: 'Not found' });
+    const body = req.body as { title?: string; libraryFilename?: string | null };
+    const title = body?.title?.trim();
+    if (!title) return reply.status(400).send({ error: 'Title is required' });
+    let libraryFilename: string | null = null;
+    if (body.libraryFilename) {
+      try { assertLibraryPath(body.libraryFilename); } catch { return reply.status(400).send({ error: 'Invalid library file' }); }
+      libraryFilename = body.libraryFilename;
+    }
+    const item = addMarathonItem(marathonId, title, libraryFilename);
+    return reply.status(201).send({ item });
+  });
+
+  app.patch('/api/marathons/:id/items/:itemId', { preHandler: requireAdmin }, async (req, reply) => {
+    const { itemId } = req.params as { id: string; itemId: string };
+    const item = getMarathonItem(Number(itemId));
+    if (!item) return reply.status(404).send({ error: 'Not found' });
+    const body = req.body as { title?: string; libraryFilename?: string | null; status?: string; move?: 'up' | 'down' };
+
+    if (body.move) {
+      moveMarathonItem(item.marathon_id, item.id, body.move);
+      return reply.send({ ok: true });
+    }
+
+    if (body.status && !['pending', 'done', 'skipped'].includes(body.status)) {
+      return reply.status(400).send({ error: 'Invalid status' });
+    }
+    let libraryFilename: string | null | undefined;
+    if (body.libraryFilename !== undefined) {
+      if (body.libraryFilename) {
+        try { assertLibraryPath(body.libraryFilename); } catch { return reply.status(400).send({ error: 'Invalid library file' }); }
+      }
+      libraryFilename = body.libraryFilename;
+    }
+    updateMarathonItem(item.id, {
+      title: body.title?.trim(),
+      libraryFilename,
+      status: body.status as 'pending' | 'done' | 'skipped' | undefined,
+    });
+    return reply.send({ ok: true });
+  });
+
+  app.delete('/api/marathons/:id/items/:itemId', { preHandler: requireAdmin }, async (req, reply) => {
+    const { itemId } = req.params as { id: string; itemId: string };
+    const item = getMarathonItem(Number(itemId));
+    if (!item) return reply.status(404).send({ error: 'Not found' });
+    deleteMarathonItem(item.id);
     return reply.send({ ok: true });
   });
 
