@@ -1,3 +1,7 @@
+## v1.5.14 - 2026-08-02
+
+- Switch hardware transcode path from QSV to VAAPI
+
 ## v1.5.13 - 2026-08-02
 
 - Cap HLS segment bitrate, prefer Quick Sync hardware encode
