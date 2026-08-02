@@ -1,3 +1,7 @@
+## v1.5.13 - 2026-08-02
+
+- Cap HLS segment bitrate, prefer Quick Sync hardware encode
+
 ## v1.5.12 - 2026-07-28
 
 - Fix premature sync while scrubbing forward
