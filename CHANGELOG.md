@@ -1,3 +1,7 @@
+## v1.5.12 - 2026-07-28
+
+- Fix premature sync while scrubbing forward
+
 ## v1.5.11 - 2026-07-28
 
 - Fix .lib-menu-btn height mismatch: height:100% doesn't reliably resolve inside an auto-height flex row across browsers, so it was collapsing to content size and rendering as a full pill instead of matching .lib-watch-btn's height. align-self:stretch doesn't depend on percentage resolution.
