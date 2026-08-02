@@ -38,6 +38,7 @@ export function MarathonDetail() {
   const [name, setName] = useState('');
   const [items, setItems] = useState<Item[]>([]);
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [libraryFiles, setLibraryFiles] = useState<LibraryFile[]>([]);
   const [newTitle, setNewTitle] = useState('');
   const [newLibraryFilename, setNewLibraryFilename] = useState('');
@@ -50,6 +51,7 @@ export function MarathonDetail() {
     fetch(`/api/marathons/${id}`)
       .then(r => {
         if (r.status === 401) { setAuthed(false); return null; }
+        if (!r.ok) { setAuthed(true); setNotFound(true); return null; }
         setAuthed(true);
         return r.json();
       })
@@ -173,6 +175,16 @@ export function MarathonDetail() {
           <Link to="/marathons" className="settings-link" title="Back to marathons"><ArrowLeft /></Link>
         </header>
         <div className="marathons-signed-out">Please sign in to view this marathon.</div>
+      </div>
+    );
+  }
+  if (notFound) {
+    return (
+      <div className="home-root">
+        <header className="home-topbar">
+          <Link to="/marathons" className="settings-link" title="Back to marathons"><ArrowLeft /></Link>
+        </header>
+        <div className="marathons-signed-out">This marathon doesn't exist or was deleted. <Link to="/marathons">Back to marathons</Link></div>
       </div>
     );
   }
