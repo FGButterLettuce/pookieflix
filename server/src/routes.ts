@@ -10,6 +10,7 @@ import {
   createRoom, getRoomByToken, listLibraryFiles,
   purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile, setSubtitleName,
   updateLibraryLastTime,
+  createMarathon, listMarathons, getMarathon, renameMarathon, deleteMarathon, listMarathonItems,
 } from './db';
 import {
   generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
@@ -584,6 +585,47 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     reply.header('Cache-Control', 'public, max-age=3600');
     reply.header('Access-Control-Allow-Origin', '*');
     return reply.send(fs.createReadStream(vttPath));
+  });
+
+  // ── Marathons ───────────────────────────────────────────────────────────
+  app.get('/api/marathons', { preHandler: requireAdmin }, async (_req, reply) => {
+    return reply.send({ marathons: listMarathons() });
+  });
+
+  app.post('/api/marathons', { preHandler: requireAdmin }, async (req, reply) => {
+    const body = req.body as { name?: string };
+    const name = body?.name?.trim();
+    if (!name) return reply.status(400).send({ error: 'Name is required' });
+    const marathon = createMarathon(name);
+    return reply.status(201).send({ marathon });
+  });
+
+  app.get('/api/marathons/:id', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const marathonId = Number(id);
+    const marathon = getMarathon(marathonId);
+    if (!marathon) return reply.status(404).send({ error: 'Not found' });
+    const items = listMarathonItems(marathonId);
+    return reply.send({ id: marathon.id, name: marathon.name, items });
+  });
+
+  app.patch('/api/marathons/:id', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const marathonId = Number(id);
+    if (!getMarathon(marathonId)) return reply.status(404).send({ error: 'Not found' });
+    const body = req.body as { name?: string };
+    const name = body?.name?.trim();
+    if (!name) return reply.status(400).send({ error: 'Name is required' });
+    renameMarathon(marathonId, name);
+    return reply.send({ ok: true });
+  });
+
+  app.delete('/api/marathons/:id', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const marathonId = Number(id);
+    if (!getMarathon(marathonId)) return reply.status(404).send({ error: 'Not found' });
+    deleteMarathon(marathonId);
+    return reply.send({ ok: true });
   });
 
   // ── Upload: save to library, generate thumb, create room ──────────────────
