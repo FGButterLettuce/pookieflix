@@ -9,26 +9,28 @@ import type { FastifyInstance } from 'fastify';
 // so requireAdmin() passes every request through open (see its early
 // `if (!getPasswordHash()) return;` in server/src/routes.ts) — no login/cookie
 // dance needed here. Auth enforcement itself is already covered by auth.test.ts.
+
+// Shared setup for all marathon tests — single app instance, single temp DATA_DIR
+let app: FastifyInstance;
+let dataDir: string;
+
+before(async () => {
+  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pookieflix-marathons-test-'));
+  process.env.DATA_DIR = dataDir;
+
+  const Fastify = (await import('fastify')).default;
+  const { registerRoutes } = await import('../src/routes');
+
+  app = Fastify();
+  await registerRoutes(app);
+});
+
+after(async () => {
+  await app.close();
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
 describe('marathons routes', () => {
-  let app: FastifyInstance;
-  let dataDir: string;
-
-  before(async () => {
-    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pookieflix-marathons-routes-test-'));
-    process.env.DATA_DIR = dataDir;
-
-    const Fastify = (await import('fastify')).default;
-    const { registerRoutes } = await import('../src/routes');
-
-    app = Fastify();
-    await registerRoutes(app);
-  });
-
-  after(async () => {
-    await app.close();
-    fs.rmSync(dataDir, { recursive: true, force: true });
-  });
-
   it('creates and lists a marathon', async () => {
     const createRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Avengers Marathon' } });
     assert.equal(createRes.statusCode, 201);
@@ -72,30 +74,10 @@ describe('marathons routes', () => {
 });
 
 describe('marathon items', () => {
-  let app: FastifyInstance;
-  let dataDir: string;
-  let marathonId: number;
-
-  before(async () => {
-    const { __resetDb } = await import('../src/db');
-    __resetDb();
-    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pookieflix-marathon-items-test-'));
-    process.env.DATA_DIR = dataDir;
-    const Fastify = (await import('fastify')).default;
-    const { registerRoutes } = await import('../src/routes');
-    app = Fastify();
-    await registerRoutes(app);
-
-    const createRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon' } });
-    marathonId = (createRes.json() as { marathon: { id: number } }).marathon.id;
-  });
-
-  after(async () => {
-    await app.close();
-    fs.rmSync(dataDir, { recursive: true, force: true });
-  });
-
   it('adds items and lists them in the marathon detail response', async () => {
+    const marathonRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 1' } });
+    const marathonId = (marathonRes.json() as { marathon: { id: number } }).marathon.id;
+
     await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Iron Man' } });
     await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Iron Man 2' } });
 
@@ -105,6 +87,9 @@ describe('marathon items', () => {
   });
 
   it('rejects an item with a library_filename that is not a real library file', async () => {
+    const marathonRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 2' } });
+    const marathonId = (marathonRes.json() as { marathon: { id: number } }).marathon.id;
+
     const res = await app.inject({
       method: 'POST',
       url: `/api/marathons/${marathonId}/items`,
@@ -113,7 +98,32 @@ describe('marathon items', () => {
     assert.equal(res.statusCode, 400);
   });
 
+  it('rejects PATCH with library_filename that is not a real library file', async () => {
+    const marathonRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 3' } });
+    const marathonId = (marathonRes.json() as { marathon: { id: number } }).marathon.id;
+
+    const itemRes = await app.inject({
+      method: 'POST',
+      url: `/api/marathons/${marathonId}/items`,
+      payload: { title: 'Valid item' },
+    });
+    const itemId = (itemRes.json() as { item: { id: number } }).item.id;
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/marathons/${marathonId}/items/${itemId}`,
+      payload: { libraryFilename: '../../etc/passwd' },
+    });
+    assert.equal(res.statusCode, 400);
+  });
+
   it('updates status and moves item order', async () => {
+    const marathonRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 4' } });
+    const marathonId = (marathonRes.json() as { marathon: { id: number } }).marathon.id;
+
+    await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Iron Man' } });
+    await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Iron Man 2' } });
+
     const detail = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
     const items = (detail.json() as { items: { id: number; title: string }[] }).items;
     const [ironMan, ironMan2] = items;
@@ -131,7 +141,42 @@ describe('marathon items', () => {
     assert.equal(afterItems.find(i => i.id === ironMan.id)!.status, 'done');
   });
 
+  it('rejects PATCH with empty/whitespace-only title', async () => {
+    const marathonRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 5' } });
+    const marathonId = (marathonRes.json() as { marathon: { id: number } }).marathon.id;
+
+    const itemRes = await app.inject({
+      method: 'POST',
+      url: `/api/marathons/${marathonId}/items`,
+      payload: { title: 'Original Title' },
+    });
+    const itemId = (itemRes.json() as { item: { id: number } }).item.id;
+
+    const emptyRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/marathons/${marathonId}/items/${itemId}`,
+      payload: { title: '' },
+    });
+    assert.equal(emptyRes.statusCode, 400);
+
+    const whitespaceRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/marathons/${marathonId}/items/${itemId}`,
+      payload: { title: '   ' },
+    });
+    assert.equal(whitespaceRes.statusCode, 400);
+
+    // Verify title was not changed
+    const checkRes = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+    const detail = checkRes.json() as { items: { id: number; title: string }[] };
+    const item = detail.items.find(i => i.id === itemId);
+    assert.equal(item!.title, 'Original Title');
+  });
+
   it('deletes an item', async () => {
+    const marathonRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 6' } });
+    const marathonId = (marathonRes.json() as { marathon: { id: number } }).marathon.id;
+
     const addRes = await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Deletable' } });
     const item = (addRes.json() as { item: { id: number } }).item;
     const delRes = await app.inject({ method: 'DELETE', url: `/api/marathons/${marathonId}/items/${item.id}` });
@@ -139,5 +184,92 @@ describe('marathon items', () => {
     const detail = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
     const items = (detail.json() as { items: { id: number }[] }).items;
     assert.ok(!items.some(i => i.id === item.id));
+  });
+
+  it('rejects PATCH/DELETE item with wrong marathon id in URL', async () => {
+    const marathon1 = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 7a' } });
+    const marathonId1 = (marathon1.json() as { marathon: { id: number } }).marathon.id;
+
+    const marathon2 = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 7b' } });
+    const marathonId2 = (marathon2.json() as { marathon: { id: number } }).marathon.id;
+
+    const itemRes = await app.inject({
+      method: 'POST',
+      url: `/api/marathons/${marathonId1}/items`,
+      payload: { title: 'Item in marathon 1' },
+    });
+    const itemId = (itemRes.json() as { item: { id: number } }).item.id;
+
+    // Try to PATCH item using wrong marathon id in URL
+    const patchRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/marathons/${marathonId2}/items/${itemId}`,
+      payload: { status: 'done' },
+    });
+    assert.equal(patchRes.statusCode, 404);
+
+    // Try to DELETE item using wrong marathon id in URL
+    const deleteRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/marathons/${marathonId2}/items/${itemId}`,
+    });
+    assert.equal(deleteRes.statusCode, 404);
+
+    // Verify item still exists in its original marathon
+    const checkRes = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId1}` });
+    const items = (checkRes.json() as { items: { id: number }[] }).items;
+    assert.ok(items.some(i => i.id === itemId));
+  });
+
+  it('move first item up is a no-op', async () => {
+    const marathonRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 8' } });
+    const marathonId = (marathonRes.json() as { marathon: { id: number } }).marathon.id;
+
+    await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'First' } });
+    await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Second' } });
+
+    const detail1 = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+    const items1 = (detail1.json() as { items: { id: number; title: string }[] }).items;
+    const firstItemId = items1[0].id;
+
+    // Try to move first item up (should no-op)
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/marathons/${marathonId}/items/${firstItemId}`,
+      payload: { move: 'up' },
+    });
+
+    const detail2 = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+    const items2 = (detail2.json() as { items: { id: number; title: string }[] }).items;
+    assert.deepEqual(
+      items2.map(i => i.title),
+      ['First', 'Second'],
+    );
+  });
+
+  it('move last item down is a no-op', async () => {
+    const marathonRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 9' } });
+    const marathonId = (marathonRes.json() as { marathon: { id: number } }).marathon.id;
+
+    await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'First' } });
+    await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Second' } });
+
+    const detail1 = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+    const items1 = (detail1.json() as { items: { id: number; title: string }[] }).items;
+    const lastItemId = items1[items1.length - 1].id;
+
+    // Try to move last item down (should no-op)
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/marathons/${marathonId}/items/${lastItemId}`,
+      payload: { move: 'down' },
+    });
+
+    const detail2 = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+    const items2 = (detail2.json() as { items: { id: number; title: string }[] }).items;
+    assert.deepEqual(
+      items2.map(i => i.title),
+      ['First', 'Second'],
+    );
   });
 });

@@ -647,14 +647,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.patch('/api/marathons/:id/items/:itemId', { preHandler: requireAdmin }, async (req, reply) => {
-    const { itemId } = req.params as { id: string; itemId: string };
+    const { id, itemId } = req.params as { id: string; itemId: string };
+    const marathonId = Number(id);
     const item = getMarathonItem(Number(itemId));
-    if (!item) return reply.status(404).send({ error: 'Not found' });
+    if (!item || item.marathon_id !== marathonId) return reply.status(404).send({ error: 'Not found' });
     const body = req.body as { title?: string; libraryFilename?: string | null; status?: string; move?: 'up' | 'down' };
 
     if (body.move) {
       moveMarathonItem(item.marathon_id, item.id, body.move);
       return reply.send({ ok: true });
+    }
+
+    if (body.title !== undefined) {
+      const trimmedTitle = body.title.trim();
+      if (!trimmedTitle) return reply.status(400).send({ error: 'Title cannot be empty' });
     }
 
     if (body.status && !['pending', 'done', 'skipped'].includes(body.status)) {
@@ -676,9 +682,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete('/api/marathons/:id/items/:itemId', { preHandler: requireAdmin }, async (req, reply) => {
-    const { itemId } = req.params as { id: string; itemId: string };
+    const { id, itemId } = req.params as { id: string; itemId: string };
+    const marathonId = Number(id);
     const item = getMarathonItem(Number(itemId));
-    if (!item) return reply.status(404).send({ error: 'Not found' });
+    if (!item || item.marathon_id !== marathonId) return reply.status(404).send({ error: 'Not found' });
     deleteMarathonItem(item.id);
     return reply.send({ ok: true });
   });
