@@ -262,11 +262,20 @@ export function Home() {
     if (!autolinkSuggestion) return;
     setAutolinking(true);
     try {
-      await fetch(`/api/marathons/${autolinkSuggestion.marathonId}/items/${autolinkSuggestion.itemId}`, {
+      const res = await fetch(`/api/marathons/${autolinkSuggestion.marathonId}/items/${autolinkSuggestion.itemId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ libraryFilename: autolinkSuggestion.filename }),
       });
+      if (!res.ok) {
+        // Never fail silently — a link that looks like it succeeded but
+        // didn't would leave the file untracked with no indication anything
+        // went wrong. Keep the banner up so the user can see the failure
+        // and retry, instead of clearing it as if the link went through.
+        const data = await res.json().catch(() => ({} as { error?: string }));
+        setError((data as { error?: string }).error ?? 'Failed to link to list item');
+        return;
+      }
       setAutolinkSuggestion(null);
     } catch {
       setError('Failed to link to list item');
