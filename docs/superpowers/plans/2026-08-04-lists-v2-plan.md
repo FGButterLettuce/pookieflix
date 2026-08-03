@@ -967,6 +967,105 @@ git commit -m "Rebuild list detail page: banner cards, quoted reviews, spring sl
 
 ---
 
+### Task 8b: Score column — support half-point precision end-to-end
+
+**Files:**
+- Modify: `server/src/db.ts` (schema, `upsertMarathonReview`)
+- Modify: `server/src/routes.ts` (review route validation)
+- Modify: `server/tests/marathons.routes.test.ts` (score-validation tests)
+- Modify: `client/src/pages/MarathonDetail.tsx` (remove the client-side rounding-to-integer added as a workaround in Task 8)
+
+**Why this exists:** Task 8's implementer correctly flagged that the approved mockup's slider uses half-point steps (e.g. 8.5), but the existing `marathon_reviews.score` column is `INTEGER` and the review route's validation rejects non-integers — so the slider's precision was silently rounded away on save. That's a real regression from the approved design (half-point scores were an explicit part of what was iterated on and approved), not a cosmetic gap. This task fixes it end-to-end rather than leaving it as a known limitation.
+
+**Interfaces:**
+- Changes `upsertMarathonReview`'s `score` parameter type from `number | null` (implicitly integer) to `number | null` (now genuinely accepting `x.5` values) — the TS signature doesn't change, only the validation/storage behavior does.
+- Changes the `PUT .../review` route's validation from "integer 1-10" to "a value on the 0.5 grid from 1 to 10" (i.e. `score * 2` must be an integer).
+
+- [ ] **Step 1: Write the failing test**
+
+In `server/tests/marathons.routes.test.ts`, find the existing test that rejects a non-integer score (something like `payload: { viewer: 'user', score: 5.5 }` currently expecting 400) and INVERT its expectation — a `.5` score should now be **accepted** (200/ok), not rejected. Add a new test alongside it:
+
+```ts
+it('accepts and persists a half-point score', async () => {
+  const res = await app.inject({
+    method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`,
+    payload: { viewer: 'user', score: 8.5, note: null },
+  });
+  assert.equal(res.statusCode, 200);
+
+  const detail = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+  const item = (detail.json() as { items: { reviews: { viewer: string; score: number | null }[] }[] }).items.find(i => i.id === itemId)!;
+  assert.equal(item.reviews.find(r => r.viewer === 'user')!.score, 8.5);
+});
+
+it('still rejects a score off the half-point grid, e.g. 8.3', async () => {
+  const res = await app.inject({
+    method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`,
+    payload: { viewer: 'user', score: 8.3, note: null },
+  });
+  assert.equal(res.statusCode, 400);
+});
+
+it('still rejects out-of-range scores like 0.5 or 10.5', async () => {
+  const low = await app.inject({ method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`, payload: { viewer: 'user', score: 0.5 } });
+  assert.equal(low.statusCode, 400);
+  const high = await app.inject({ method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`, payload: { viewer: 'user', score: 10.5 } });
+  assert.equal(high.statusCode, 400);
+});
+```
+
+(Adapt variable names — `marathonId`/`itemId` — to whatever the existing describe block in that file already uses; read the file first.)
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cd server && npx tsx --test tests/marathons.routes.test.ts`
+Expected: FAIL — current validation rejects `8.5`.
+
+- [ ] **Step 3: Update the schema, storage, and validation**
+
+In `server/src/db.ts`, the `marathon_reviews` table's `score` column is currently `INTEGER`. SQLite is dynamically typed (a column's declared type is a hint, not an enforced constraint — the existing `node:sqlite` usage elsewhere in this file already relies on this), so no `ALTER TABLE` migration is strictly required for existing rows to keep working; storing a `REAL` value into an `INTEGER`-declared column works fine in SQLite. Still, for correctness and so a fresh install's schema documents the real intent, change the column declaration in the `CREATE TABLE IF NOT EXISTS marathon_reviews (...)` block from `score INTEGER` to `score REAL`.
+
+In `server/src/routes.ts`, find the `PUT .../review` route's score validation (currently something like `if (!Number.isInteger(body.score) || body.score < 1 || body.score > 10))`. Change it to validate the value sits on the 0.5 grid:
+
+```ts
+if (body.score !== null && body.score !== undefined) {
+  const isOnHalfGrid = Number.isInteger(body.score * 2);
+  if (!isOnHalfGrid || body.score < 1 || body.score > 10) {
+    return reply.status(400).send({ error: 'Score must be in 0.5 increments from 1 to 10' });
+  }
+}
+```
+
+(Use `Math.round(body.score * 2) / 2 === body.score` if you're worried about floating-point representation of `body.score * 2` for values like `8.5` — check which is more robust and use it; `8.5 * 2 = 17` is exact in IEEE 754 for all values on this specific grid, so the simpler `Number.isInteger` check is almost certainly fine, but verify with a quick manual check across 1.0 through 10.0 in 0.5 steps if unsure.)
+
+- [ ] **Step 4: Remove the client-side rounding workaround**
+
+In `client/src/pages/MarathonDetail.tsx`, find wherever Task 8 added `Math.round(...)` on the score value before sending it in the `PUT .../review` request body (search for `Math.round` near the review-save logic). Remove that rounding — send the slider's raw value (already on the 0.5 grid via the `step={0.5}` input) directly.
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+Run: `cd server && npx tsx --test tests/marathons.routes.test.ts`
+Expected: PASS, including both new tests and the un-inverted existing one.
+
+- [ ] **Step 6: Typecheck both sides, build client**
+
+Run: `cd server && npx tsc --noEmit && cd ../client && npx tsc --noEmit && npm run build`
+Expected: no errors, build succeeds.
+
+- [ ] **Step 7: Full server suite sanity check**
+
+Run: `cd server && npx tsx --test tests/*.test.ts`
+Expected: only the known pre-existing `roomStateMachine.test.ts` failures remain.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add server/src/db.ts server/src/routes.ts server/tests/marathons.routes.test.ts client/src/pages/MarathonDetail.tsx
+git commit -m "Support half-point score precision end-to-end, not just in the slider UI"
+```
+
+---
+
 ### Task 9: Home screen — Lists rail, Continue Watching/library polish, autolink banner, LAN upload button
 
 **Files:**
