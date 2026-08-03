@@ -184,3 +184,45 @@ export interface LibraryFileInfo {
   subtitleName: string | null;
   transcodeStatus: 'none' | 'queued' | 'running' | 'paused' | 'complete';
 }
+
+export interface MarathonRow {
+  id: number;
+  name: string;
+  position: number;
+  created_at: string;
+}
+
+export interface MarathonItemRow {
+  id: number;
+  marathon_id: number;
+  position: number;
+  title: string;
+  library_filename: string | null;
+  status: 'pending' | 'done' | 'skipped';
+  created_at: string;
+}
+
+export interface MarathonReviewRow {
+  item_id: number;
+  viewer: 'user' | 'partner';
+  score: number | null;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface MarathonSummary {
+  id: number;
+  name: string;
+  position: number;
+  itemCount: number;
+  doneCount: number;
+}
+
+export interface MarathonItemDetail {
+  id: number;
+  position: number;
+  title: string;
+  libraryFilename: string | null;
+  status: 'pending' | 'done' | 'skipped';
+  reviews: { viewer: 'user' | 'partner'; score: number | null; note: string | null }[];
+}

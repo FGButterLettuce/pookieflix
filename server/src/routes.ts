@@ -10,6 +10,8 @@ import {
   createRoom, getRoomByToken, listLibraryFiles,
   purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile, setSubtitleName,
   updateLibraryLastTime,
+  createMarathon, listMarathons, getMarathon, renameMarathon, deleteMarathon, listMarathonItems,
+  addMarathonItem, getMarathonItem, updateMarathonItem, deleteMarathonItem, moveMarathonItem, upsertMarathonReview,
 } from './db';
 import {
   generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
@@ -584,6 +586,126 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     reply.header('Cache-Control', 'public, max-age=3600');
     reply.header('Access-Control-Allow-Origin', '*');
     return reply.send(fs.createReadStream(vttPath));
+  });
+
+  // ── Marathons ───────────────────────────────────────────────────────────
+  app.get('/api/marathons', { preHandler: requireAdmin }, async (_req, reply) => {
+    return reply.send({ marathons: listMarathons() });
+  });
+
+  app.post('/api/marathons', { preHandler: requireAdmin }, async (req, reply) => {
+    const body = req.body as { name?: string };
+    const name = body?.name?.trim();
+    if (!name) return reply.status(400).send({ error: 'Name is required' });
+    const marathon = createMarathon(name);
+    return reply.status(201).send({ marathon });
+  });
+
+  app.get('/api/marathons/:id', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const marathonId = Number(id);
+    const marathon = getMarathon(marathonId);
+    if (!marathon) return reply.status(404).send({ error: 'Not found' });
+    const items = listMarathonItems(marathonId);
+    return reply.send({ id: marathon.id, name: marathon.name, items });
+  });
+
+  app.patch('/api/marathons/:id', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const marathonId = Number(id);
+    if (!getMarathon(marathonId)) return reply.status(404).send({ error: 'Not found' });
+    const body = req.body as { name?: string };
+    const name = body?.name?.trim();
+    if (!name) return reply.status(400).send({ error: 'Name is required' });
+    renameMarathon(marathonId, name);
+    return reply.send({ ok: true });
+  });
+
+  app.delete('/api/marathons/:id', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const marathonId = Number(id);
+    if (!getMarathon(marathonId)) return reply.status(404).send({ error: 'Not found' });
+    deleteMarathon(marathonId);
+    return reply.send({ ok: true });
+  });
+
+  // ── Marathon items ─────────────────────────────────────────────────────────
+  app.post('/api/marathons/:id/items', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const marathonId = Number(id);
+    if (!getMarathon(marathonId)) return reply.status(404).send({ error: 'Not found' });
+    const body = req.body as { title?: string; libraryFilename?: string | null };
+    const title = body?.title?.trim();
+    if (!title) return reply.status(400).send({ error: 'Title is required' });
+    let libraryFilename: string | null = null;
+    if (body.libraryFilename) {
+      try { assertLibraryPath(body.libraryFilename); } catch { return reply.status(400).send({ error: 'Invalid library file' }); }
+      libraryFilename = body.libraryFilename;
+    }
+    const item = addMarathonItem(marathonId, title, libraryFilename);
+    return reply.status(201).send({ item });
+  });
+
+  app.patch('/api/marathons/:id/items/:itemId', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id, itemId } = req.params as { id: string; itemId: string };
+    const marathonId = Number(id);
+    const item = getMarathonItem(Number(itemId));
+    if (!item || item.marathon_id !== marathonId) return reply.status(404).send({ error: 'Not found' });
+    const body = req.body as { title?: string; libraryFilename?: string | null; status?: string; move?: 'up' | 'down' };
+
+    if (body.move) {
+      moveMarathonItem(item.marathon_id, item.id, body.move);
+      return reply.send({ ok: true });
+    }
+
+    if (body.title !== undefined) {
+      const trimmedTitle = body.title.trim();
+      if (!trimmedTitle) return reply.status(400).send({ error: 'Title cannot be empty' });
+    }
+
+    if (body.status && !['pending', 'done', 'skipped'].includes(body.status)) {
+      return reply.status(400).send({ error: 'Invalid status' });
+    }
+    let libraryFilename: string | null | undefined;
+    if (body.libraryFilename !== undefined) {
+      if (body.libraryFilename) {
+        try { assertLibraryPath(body.libraryFilename); } catch { return reply.status(400).send({ error: 'Invalid library file' }); }
+      }
+      libraryFilename = body.libraryFilename;
+    }
+    updateMarathonItem(item.id, {
+      title: body.title?.trim(),
+      libraryFilename,
+      status: body.status as 'pending' | 'done' | 'skipped' | undefined,
+    });
+    return reply.send({ ok: true });
+  });
+
+  app.delete('/api/marathons/:id/items/:itemId', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id, itemId } = req.params as { id: string; itemId: string };
+    const marathonId = Number(id);
+    const item = getMarathonItem(Number(itemId));
+    if (!item || item.marathon_id !== marathonId) return reply.status(404).send({ error: 'Not found' });
+    deleteMarathonItem(item.id);
+    return reply.send({ ok: true });
+  });
+
+  // ── Marathon item reviews ──────────────────────────────────────────────────
+  app.put('/api/marathons/:id/items/:itemId/review', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id, itemId } = req.params as { id: string; itemId: string };
+    const item = getMarathonItem(Number(itemId));
+    if (!item || item.marathon_id !== Number(id)) return reply.status(404).send({ error: 'Not found' });
+    const body = req.body as { viewer?: string; score?: number | null; note?: string | null };
+    if (body.viewer !== 'user' && body.viewer !== 'partner') {
+      return reply.status(400).send({ error: 'Invalid viewer' });
+    }
+    if (body.score !== null && body.score !== undefined) {
+      if (!Number.isInteger(body.score) || body.score < 1 || body.score > 10) {
+        return reply.status(400).send({ error: 'Score must be an integer from 1 to 10' });
+      }
+    }
+    upsertMarathonReview(item.id, body.viewer, body.score ?? null, body.note?.trim() || null);
+    return reply.send({ ok: true });
   });
 
   // ── Upload: save to library, generate thumb, create room ──────────────────

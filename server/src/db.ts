@@ -4,7 +4,7 @@ import fs from 'fs';
 import { config } from './config';
 import { hasSubtitles, isFetching } from './subtitles';
 import { getTranscodeStatus } from './ffmpeg';
-import type { RoomRow, LibraryMetaRow, LibraryFileInfo } from './types';
+import type { RoomRow, LibraryMetaRow, LibraryFileInfo, MarathonRow, MarathonItemRow, MarathonSummary, MarathonItemDetail } from './types';
 
 let _db: DatabaseSync | null = null;
 
@@ -35,8 +35,36 @@ export function getDb(): DatabaseSync {
       thumb_ready    INTEGER NOT NULL DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS marathons (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL,
+      position   INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS marathon_items (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      marathon_id       INTEGER NOT NULL,
+      position          INTEGER NOT NULL,
+      title             TEXT NOT NULL,
+      library_filename  TEXT,
+      status            TEXT NOT NULL DEFAULT 'pending',
+      created_at        TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS marathon_reviews (
+      item_id    INTEGER NOT NULL,
+      viewer     TEXT NOT NULL,
+      score      INTEGER,
+      note       TEXT,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (item_id, viewer)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_rooms_token   ON rooms(token);
     CREATE INDEX IF NOT EXISTS idx_rooms_expires ON rooms(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_marathon_items_marathon ON marathon_items(marathon_id);
+    CREATE INDEX IF NOT EXISTS idx_marathon_reviews_item ON marathon_reviews(item_id);
   `);
 
   try { _db.exec('ALTER TABLE library_meta ADD COLUMN subtitle_name TEXT DEFAULT NULL'); } catch {}
@@ -166,4 +194,151 @@ export function listLibraryFiles(): LibraryFileInfo[] {
       transcodeStatus: getTranscodeStatus(fullPath),
     };
   }).sort((a, b) => (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0) || a.filename.localeCompare(b.filename));
+}
+
+// ── Marathons ────────────────────────────────────────────────────────────────
+
+export function createMarathon(name: string): MarathonRow {
+  const db = getDb();
+  const position = (db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS next FROM marathons').get() as { next: number }).next;
+  const created_at = new Date().toISOString();
+  const result = db.prepare(
+    'INSERT INTO marathons (name, position, created_at) VALUES (?, ?, ?)'
+  ).run(name, position, created_at);
+  return { id: Number(result.lastInsertRowid), name, position, created_at };
+}
+
+export function listMarathons(): MarathonSummary[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT
+      m.id, m.name, m.position,
+      COUNT(mi.id) AS itemCount,
+      SUM(CASE WHEN mi.status = 'done' THEN 1 ELSE 0 END) AS doneCount
+    FROM marathons m
+    LEFT JOIN marathon_items mi ON mi.marathon_id = m.id
+    GROUP BY m.id
+    ORDER BY m.position ASC
+  `).all() as unknown as { id: number; name: string; position: number; itemCount: number; doneCount: number | null }[];
+  return rows.map(r => ({ id: r.id, name: r.name, position: r.position, itemCount: r.itemCount, doneCount: r.doneCount ?? 0 }));
+}
+
+export function getMarathon(id: number): MarathonRow | undefined {
+  const db = getDb();
+  return db.prepare('SELECT * FROM marathons WHERE id = ?').get(id) as unknown as MarathonRow | undefined;
+}
+
+export function renameMarathon(id: number, name: string): void {
+  const db = getDb();
+  db.prepare('UPDATE marathons SET name = ? WHERE id = ?').run(name, id);
+}
+
+export function deleteMarathon(id: number): void {
+  const db = getDb();
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM marathon_reviews WHERE item_id IN (SELECT id FROM marathon_items WHERE marathon_id = ?)').run(id);
+    db.prepare('DELETE FROM marathon_items WHERE marathon_id = ?').run(id);
+    db.prepare('DELETE FROM marathons WHERE id = ?').run(id);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+export function listMarathonItems(marathonId: number): MarathonItemDetail[] {
+  const db = getDb();
+  const items = db.prepare(
+    'SELECT * FROM marathon_items WHERE marathon_id = ? ORDER BY position ASC'
+  ).all(marathonId) as unknown as MarathonItemRow[];
+  const reviews = db.prepare(
+    'SELECT * FROM marathon_reviews WHERE item_id IN (SELECT id FROM marathon_items WHERE marathon_id = ?)'
+  ).all(marathonId) as unknown as { item_id: number; viewer: string; score: number | null; note: string | null }[];
+  return items.map(item => ({
+    id: item.id,
+    position: item.position,
+    title: item.title,
+    libraryFilename: item.library_filename,
+    status: item.status,
+    reviews: reviews
+      .filter(r => r.item_id === item.id)
+      .map(r => ({ viewer: r.viewer as 'user' | 'partner', score: r.score, note: r.note })),
+  }));
+}
+
+export function addMarathonItem(marathonId: number, title: string, libraryFilename: string | null): MarathonItemRow {
+  const db = getDb();
+  const position = (db.prepare(
+    'SELECT COALESCE(MAX(position), -1) + 1 AS next FROM marathon_items WHERE marathon_id = ?'
+  ).get(marathonId) as { next: number }).next;
+  const created_at = new Date().toISOString();
+  const result = db.prepare(
+    'INSERT INTO marathon_items (marathon_id, position, title, library_filename, status, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(marathonId, position, title, libraryFilename, 'pending', created_at);
+  return { id: Number(result.lastInsertRowid), marathon_id: marathonId, position, title, library_filename: libraryFilename, status: 'pending', created_at };
+}
+
+export function getMarathonItem(id: number): MarathonItemRow | undefined {
+  const db = getDb();
+  return db.prepare('SELECT * FROM marathon_items WHERE id = ?').get(id) as unknown as MarathonItemRow | undefined;
+}
+
+export function updateMarathonItem(id: number, fields: { title?: string; libraryFilename?: string | null; status?: 'pending' | 'done' | 'skipped' }): void {
+  const db = getDb();
+  const current = getMarathonItem(id);
+  if (!current) return;
+  const title = fields.title ?? current.title;
+  const libraryFilename = fields.libraryFilename !== undefined ? fields.libraryFilename : current.library_filename;
+  const status = fields.status ?? current.status;
+  db.prepare('UPDATE marathon_items SET title = ?, library_filename = ?, status = ? WHERE id = ?')
+    .run(title, libraryFilename, status, id);
+}
+
+export function deleteMarathonItem(id: number): void {
+  const db = getDb();
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM marathon_reviews WHERE item_id = ?').run(id);
+    db.prepare('DELETE FROM marathon_items WHERE id = ?').run(id);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+export function moveMarathonItem(marathonId: number, itemId: number, direction: 'up' | 'down'): void {
+  const db = getDb();
+  const items = db.prepare(
+    'SELECT id, position FROM marathon_items WHERE marathon_id = ? ORDER BY position ASC'
+  ).all(marathonId) as unknown as { id: number; position: number }[];
+  const index = items.findIndex(i => i.id === itemId);
+  if (index === -1) return;
+  const swapIndex = direction === 'up' ? index - 1 : index + 1;
+  if (swapIndex < 0 || swapIndex >= items.length) return;
+  const a = items[index];
+  const b = items[swapIndex];
+  db.exec('BEGIN');
+  try {
+    db.prepare('UPDATE marathon_items SET position = ? WHERE id = ?').run(b.position, a.id);
+    db.prepare('UPDATE marathon_items SET position = ? WHERE id = ?').run(a.position, b.id);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+export function upsertMarathonReview(itemId: number, viewer: 'user' | 'partner', score: number | null, note: string | null): void {
+  const db = getDb();
+  const updated_at = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO marathon_reviews (item_id, viewer, score, note, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(item_id, viewer) DO UPDATE SET
+      score = excluded.score,
+      note = excluded.note,
+      updated_at = excluded.updated_at
+  `).run(itemId, viewer, score, note, updated_at);
 }

@@ -1980,3 +1980,261 @@ body {
   justify-content: center;
 }
 .cf-mockup-tab--dim { opacity: 0.45; }
+
+/* Who's watching */
+.whos-watching-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-lg);
+  background: var(--bg);
+  padding: var(--space-xl);
+}
+
+.whos-watching-title {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.whos-watching-tiles {
+  display: flex;
+  gap: var(--space-xl);
+}
+
+.profile-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-md);
+  border-radius: var(--radius-lg);
+  transition: transform var(--dur-short) var(--ease-out);
+}
+
+.profile-tile:hover,
+.profile-tile:focus-visible {
+  transform: scale(1.05);
+  outline: none;
+}
+
+.profile-avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-lg);
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.profile-name {
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+/* Marathons list */
+.marathons-heading {
+  flex: 1;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 var(--space-sm);
+}
+
+.marathon-new-form {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.marathon-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+
+.marathon-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  text-decoration: none;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--dur-short) var(--ease-out);
+}
+
+.marathon-card:hover {
+  transform: translateY(-2px);
+}
+
+.marathon-card-name {
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: var(--space-2xs);
+}
+
+.marathon-card-progress {
+  color: var(--text-subtle);
+  font-size: 0.85rem;
+}
+
+.marathons-empty {
+  color: var(--text-subtle);
+  padding: var(--space-lg);
+}
+
+.marathons-signed-out {
+  padding: var(--space-xl);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.form-error {
+  color: var(--danger);
+  padding: 0 var(--space-md);
+  font-size: 0.85rem;
+}
+
+/* Marathon detail */
+.marathon-item-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.marathon-item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-sm) var(--space-md);
+  flex-wrap: wrap;
+}
+
+.marathon-item-move {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.marathon-item-move button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.marathon-item-move button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.marathon-item-main {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+}
+
+.marathon-item-title {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.marathon-item-title-linked {
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--accent);
+  padding: 0;
+  font: inherit;
+}
+
+.marathon-item-scores {
+  display: flex;
+  gap: var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+}
+
+.marathon-status-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: var(--space-3xs) var(--space-xs);
+}
+
+.marathon-review-editor {
+  width: 100%;
+  display: flex;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* .setup-input / .primary-btn default to width:100% with stacked-form
+   margins for the onboarding flow — override to inline sizing when nested
+   in these marathon flex rows so fields sit side by side instead of each
+   wrapping onto its own line. */
+.marathon-new-form .setup-input,
+.marathon-review-editor .setup-input {
+  width: auto;
+  flex: 1;
+  min-width: 160px;
+  margin-bottom: 0;
+}
+
+/* The review editor's score field is a narrow numeric 1-10 input, not a
+   text field that should flex to fill the row. */
+.marathon-review-editor input[type='number'].setup-input {
+  flex: 0 0 auto;
+  width: 90px;
+  min-width: 0;
+}
+
+.marathon-new-form .primary-btn,
+.marathon-review-editor .primary-btn {
+  width: auto;
+  margin-top: 0;
+}
+
+/* Small inline text-button treatment for actions like Review/Cancel that
+   don't fit .settings-link's fixed 36x36 icon-only box. Reuses
+   .secondary-btn's visual language without its width:100% stacked-form
+   sizing. */
+.marathon-text-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  transition: color 0.15s, border-color 0.15s, transform 0.1s;
+}
+.marathon-text-btn:hover { border-color: var(--accent); color: var(--accent-hover); }
+.marathon-text-btn:active { transform: translateY(1px); }
