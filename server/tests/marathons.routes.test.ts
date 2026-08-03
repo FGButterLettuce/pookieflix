@@ -389,4 +389,12 @@ describe('marathon item reviews', () => {
     const high = await app.inject({ method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`, payload: { viewer: 'user', score: 10.5 } });
     assert.equal(high.statusCode, 400);
   });
+
+  it('rejects score when coerced from non-numeric types (e.g. string "8.5")', async () => {
+    const stringScore = await app.inject({
+      method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`,
+      payload: { viewer: 'user', score: '8.5' as unknown as number },
+    });
+    assert.equal(stringScore.statusCode, 400);
+  });
 });

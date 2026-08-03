@@ -787,7 +787,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Invalid viewer' });
     }
     if (body.score !== null && body.score !== undefined) {
-      const isOnHalfGrid = Number.isInteger(body.score * 2);
+      const isOnHalfGrid = typeof body.score === 'number' && Number.isInteger(body.score * 2);
       if (!isOnHalfGrid || body.score < 1 || body.score > 10) {
         return reply.status(400).send({ error: 'Score must be in 0.5 increments from 1 to 10' });
       }
