@@ -55,7 +55,7 @@ export function getDb(): DatabaseSync {
     CREATE TABLE IF NOT EXISTS marathon_reviews (
       item_id    INTEGER NOT NULL,
       viewer     TEXT NOT NULL,
-      score      INTEGER,
+      score      REAL,
       note       TEXT,
       updated_at TEXT NOT NULL,
       PRIMARY KEY (item_id, viewer)

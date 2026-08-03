@@ -362,4 +362,31 @@ describe('marathon item reviews', () => {
     const checkItem = (checkRes.json() as { items: { reviews: { viewer: string }[] }[] }).items[0];
     assert.equal(checkItem.reviews.length, 0);
   });
+
+  it('accepts and persists a half-point score', async () => {
+    const res = await app.inject({
+      method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`,
+      payload: { viewer: 'user', score: 8.5, note: null },
+    });
+    assert.equal(res.statusCode, 200);
+
+    const detail = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+    const item = (detail.json() as { items: { reviews: { viewer: string; score: number | null }[] }[] }).items.find(i => i.id === itemId)!;
+    assert.equal(item.reviews.find(r => r.viewer === 'user')!.score, 8.5);
+  });
+
+  it('still rejects a score off the half-point grid, e.g. 8.3', async () => {
+    const res = await app.inject({
+      method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`,
+      payload: { viewer: 'user', score: 8.3, note: null },
+    });
+    assert.equal(res.statusCode, 400);
+  });
+
+  it('still rejects out-of-range scores like 0.5 or 10.5', async () => {
+    const low = await app.inject({ method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`, payload: { viewer: 'user', score: 0.5 } });
+    assert.equal(low.statusCode, 400);
+    const high = await app.inject({ method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`, payload: { viewer: 'user', score: 10.5 } });
+    assert.equal(high.statusCode, 400);
+  });
 });

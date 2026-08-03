@@ -234,19 +234,14 @@ export function MarathonDetail() {
     }
   };
 
-  // The score column/route is integer-only (1-10) — the slider itself keeps
-  // the mockup's half-point steps for a smooth drag feel and readout, but
-  // the value that actually gets persisted is rounded to the nearest whole
-  // number on save. See task-8 report for the full note on this constraint.
   const saveReview = async (itemId: number, score: number, note: string) => {
     if (!viewer) return;
-    const roundedScore = Math.round(score);
     setError('');
     try {
       const res = await fetch(`/api/marathons/${id}/items/${itemId}/review`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ viewer, score: roundedScore, note: note.trim() || null }),
+        body: JSON.stringify({ viewer, score, note: note.trim() || null }),
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) throw new Error(data.error ?? 'Failed to save review');

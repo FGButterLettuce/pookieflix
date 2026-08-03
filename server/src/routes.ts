@@ -787,8 +787,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Invalid viewer' });
     }
     if (body.score !== null && body.score !== undefined) {
-      if (!Number.isInteger(body.score) || body.score < 1 || body.score > 10) {
-        return reply.status(400).send({ error: 'Score must be an integer from 1 to 10' });
+      const isOnHalfGrid = Number.isInteger(body.score * 2);
+      if (!isOnHalfGrid || body.score < 1 || body.score > 10) {
+        return reply.status(400).send({ error: 'Score must be in 0.5 increments from 1 to 10' });
       }
     }
     upsertMarathonReview(item.id, body.viewer, body.score ?? null, body.note?.trim() || null);
