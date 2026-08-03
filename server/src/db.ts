@@ -385,6 +385,16 @@ export function updateMarathonItemPoster(itemId: number, posterPath: string | nu
   db.prepare('UPDATE marathon_items SET poster_path = ?, tmdb_id = ? WHERE id = ?').run(posterPath, tmdbId, itemId);
 }
 
+export function listUntrackedItemTitles(): { marathonId: number; marathonName: string; itemId: number; itemTitle: string }[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT m.id AS marathonId, m.name AS marathonName, mi.id AS itemId, mi.title AS itemTitle
+    FROM marathon_items mi
+    JOIN marathons m ON m.id = mi.marathon_id
+    WHERE mi.library_filename IS NULL
+  `).all() as unknown as { marathonId: number; marathonName: string; itemId: number; itemTitle: string }[];
+}
+
 // ── Watch history (derived from orphaned HLS caches) ───────────────────
 export function scanForOrphanedHlsEntries(): { hlsDirName: string; title: string; detectedAtMs: number }[] {
   const libraryDir = path.join(config.mediaDir, 'library');

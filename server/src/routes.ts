@@ -13,6 +13,7 @@ import {
   createMarathon, listMarathons, getMarathon, renameMarathon, deleteMarathon, listMarathonItems,
   addMarathonItem, getMarathonItem, updateMarathonItem, deleteMarathonItem, moveMarathonItem, upsertMarathonReview,
   moveMarathonItemToPosition, scanForOrphanedHlsEntries, recordWatchHistoryEntries, listWatchHistory, dismissWatchHistoryEntry,
+  listUntrackedItemTitles,
 } from './db';
 import {
   generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
@@ -154,6 +155,41 @@ function assertLibraryPath(filename: string): string {
   const full = path.resolve(base, filename);
   if (!full.startsWith(base + path.sep)) throw new Error('Invalid path');
   return full;
+}
+
+// ── Autolink filename matching ────────────────────────────────────────────────
+// Strips common release-group/quality/codec junk tokens and normalizes
+// punctuation/case, then checks whether any candidate title appears in the
+// cleaned filename (or vice versa, for a short candidate title against a
+// longer cleaned name). Deliberately simple substring matching, not a
+// fuzzy/edit-distance library — good enough for "does this upload look like
+// a title I already typed", and a false negative just means no suggestion
+// banner rather than a wrong link, so erring conservative is fine.
+const JUNK_TOKENS = /\b(1080p|720p|2160p|4k|bluray|blu-ray|webrip|web-dl|hdrip|dvdrip|x264|x265|h264|h265|hevc|yify|yts|transcode|extended|remastered|directors?[._-]?cut)\b/gi;
+
+function cleanTitleToken(raw: string): string {
+  return raw
+    .replace(/\.[a-z0-9]+$/i, '') // drop file extension
+    .replace(/[._]/g, ' ')
+    .replace(JUNK_TOKENS, ' ')
+    .replace(/\b(19|20)\d{2}\b/g, ' ') // drop a bare 4-digit year
+    .replace(/[^a-z0-9 ]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+export function matchFilenameToUntrackedItem(filename: string, candidateTitles: string[]): string | null {
+  const cleanedFilename = cleanTitleToken(filename);
+  if (!cleanedFilename) return null;
+  for (const title of candidateTitles) {
+    const cleanedTitle = cleanTitleToken(title);
+    if (!cleanedTitle) continue;
+    if (cleanedFilename.includes(cleanedTitle) || cleanedTitle.includes(cleanedFilename)) {
+      return title;
+    }
+  }
+  return null;
 }
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -784,6 +820,19 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     updateMarathonItem(item.id, { status: 'done' });
 
     return reply.status(201).send({ marathonId: marathon.id, item });
+  });
+
+  // ── Autolink match ────────────────────────────────────────────────────────
+  app.get('/api/marathons/match', { preHandler: requireAdmin }, async (req, reply) => {
+    const { filename } = req.query as { filename?: string };
+    if (!filename?.trim()) return reply.status(400).send({ error: 'filename is required' });
+
+    const candidates = listUntrackedItemTitles();
+    const matchedTitle = matchFilenameToUntrackedItem(filename, candidates.map(c => c.itemTitle));
+    if (!matchedTitle) return reply.send({ match: null });
+
+    const match = candidates.find(c => c.itemTitle === matchedTitle)!;
+    return reply.send({ match });
   });
 
   // ── Upload: save to library, generate thumb, create room ──────────────────
