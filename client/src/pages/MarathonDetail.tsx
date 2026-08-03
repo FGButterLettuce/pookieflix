@@ -53,6 +53,7 @@ export function MarathonDetail() {
         if (r.status === 401) { setAuthed(false); return null; }
         if (!r.ok) { setAuthed(true); setNotFound(true); return null; }
         setAuthed(true);
+        setNotFound(false);
         return r.json();
       })
       .then((d: { name: string; items: Item[] } | null) => {
