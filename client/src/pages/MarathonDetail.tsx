@@ -417,7 +417,7 @@ export function MarathonDetail() {
                       <EditableText
                         value={item.title}
                         onSave={next => renameItem(item.id, next)}
-                        className={'item-title' + (playable ? ' linked' : '')}
+                        className="item-title"
                       />
                       {!item.libraryFilename && <div className="item-hint">{STATUS_HINT_UNLINKED}</div>}
                       {item.libraryFilename && !playable && <div className="item-hint">{STATUS_HINT_MISSING}</div>}

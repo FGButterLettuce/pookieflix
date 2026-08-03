@@ -2138,93 +2138,6 @@ body {
   font-size: 0.85rem;
 }
 
-/* Marathon detail */
-.marathon-item-list {
-  list-style: none;
-  margin: 0;
-  padding: var(--space-md);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.marathon-item-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-sm) var(--space-md);
-  flex-wrap: wrap;
-}
-
-.marathon-item-move {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.marathon-item-move button {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.marathon-item-move button:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.marathon-item-main {
-  flex: 1;
-  min-width: 160px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3xs);
-}
-
-.marathon-item-title {
-  color: var(--text);
-  font-weight: 500;
-}
-
-.marathon-item-title-linked {
-  background: none;
-  border: none;
-  text-align: left;
-  cursor: pointer;
-  color: var(--accent);
-  padding: 0;
-  font: inherit;
-}
-
-.marathon-item-scores {
-  display: flex;
-  gap: var(--space-sm);
-  font-size: 0.8rem;
-  color: var(--text-subtle);
-}
-
-.marathon-status-select {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  padding: var(--space-3xs) var(--space-xs);
-}
-
-.marathon-review-editor {
-  width: 100%;
-  display: flex;
-  gap: var(--space-sm);
-  padding-top: var(--space-sm);
-  border-top: 1px solid var(--border);
-  margin-top: var(--space-sm);
-  flex-wrap: wrap;
-}
-
 /* .setup-input / .primary-btn default to width:100% with stacked-form
    margins for the onboarding flow — override to inline sizing when nested
    in this marathon flex row so fields sit side by side instead of each
@@ -2307,9 +2220,17 @@ input.marathons-heading {
 .item-body { padding: 1.05rem 1.15rem 1.1rem; }
 .item-row { display: flex; align-items: flex-start; gap: 0.75rem; }
 .item-main { flex: 1; min-width: 0; }
-.item-title { font-weight: 800; font-size: 1.28rem; line-height: 1.25; display: flex; align-items: center; gap: 0.5rem; cursor: text; }
-.item-title.linked { cursor: text; }
-.item-title.linked:hover { color: var(--accent); }
+/* A neutral "this is editable text" hover cue (background tint, matching the
+   topbar title's .editable treatment), the same for linked and unlinked
+   items — an accent-color hover here would read as "click to play", but
+   that action lives on the thumbnail now; title click is rename-only for
+   every item regardless of library link status. */
+.item-title {
+  font-weight: 800; font-size: 1.28rem; line-height: 1.25; display: flex; align-items: center; gap: 0.5rem; cursor: text;
+  border-radius: var(--radius-sm); padding: 0.1rem 0.4rem; margin: -0.1rem -0.4rem;
+  transition: background-color var(--dur-short) var(--ease-out);
+}
+.item-title:hover { background: var(--surface2); }
 .item-hint { font-size: 0.88rem; color: var(--text-subtle); margin-top: 0.3rem; }
 input.item-title {
   border: 1px solid var(--accent); background: var(--surface2); border-radius: var(--radius-sm);
