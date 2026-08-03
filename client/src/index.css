@@ -2047,6 +2047,12 @@ body {
 }
 
 /* Marathons list */
+.marathons-page-body {
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
 .marathons-heading {
   flex: 1;
   font-size: 1.1rem;

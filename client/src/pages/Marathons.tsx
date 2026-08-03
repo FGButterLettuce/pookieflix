@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Users } from 'lucide-react';
 import { clearViewer } from '../lib/viewer';
+import { ListCard } from '../components/ListCard';
 
 interface MarathonSummary {
   id: number;
@@ -65,7 +66,7 @@ export function Marathons() {
         <header className="home-topbar">
           <Link to="/" className="settings-link" title="Back to library"><ArrowLeft /></Link>
         </header>
-        <div className="marathons-signed-out">Please sign in to view marathons.</div>
+        <div className="marathons-signed-out">Please sign in to view lists.</div>
       </div>
     );
   }
@@ -75,33 +76,32 @@ export function Marathons() {
     <div className="home-root">
       <header className="home-topbar">
         <Link to="/" className="settings-link" title="Back to library"><ArrowLeft /></Link>
-        <h1 className="marathons-heading">Marathons</h1>
+        <h1 className="marathons-heading">Lists</h1>
         <button className="settings-link" title="Switch profile" onClick={switchProfile}><Users /></button>
       </header>
 
-      <form className="marathon-new-form" onSubmit={createMarathon}>
-        <input
-          className="setup-input"
-          placeholder="New marathon name"
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-        />
-        <button type="submit" className="primary-btn" disabled={creating || !newName.trim()}>
-          <Plus size={16} /> Create
-        </button>
-      </form>
-      {error && <div className="form-error">{error}</div>}
+      <div className="marathons-page-body">
+        <form className="marathon-new-form" onSubmit={createMarathon}>
+          <input
+            className="setup-input"
+            placeholder="New list name"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+          />
+          <button type="submit" className="primary-btn" disabled={creating || !newName.trim()}>
+            <Plus size={16} /> Create
+          </button>
+        </form>
+        {error && <div className="form-error">{error}</div>}
 
-      <div className="marathon-card-grid">
-        {marathons.map(m => (
-          <Link key={m.id} to={`/marathons/${m.id}`} className="marathon-card">
-            <div className="marathon-card-name">{m.name}</div>
-            <div className="marathon-card-progress">{m.doneCount}/{m.itemCount} done</div>
-          </Link>
-        ))}
-        {marathons.length === 0 && (
-          <div className="marathons-empty">No marathons yet — create one above.</div>
-        )}
+        <div className="marathon-card-grid">
+          {marathons.map(m => (
+            <ListCard key={m.id} {...m} />
+          ))}
+          {marathons.length === 0 && (
+            <div className="marathons-empty">No lists yet — create one above.</div>
+          )}
+        </div>
       </div>
     </div>
   );
