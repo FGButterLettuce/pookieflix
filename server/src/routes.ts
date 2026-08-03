@@ -159,12 +159,11 @@ function assertLibraryPath(filename: string): string {
 
 // ── Autolink filename matching ────────────────────────────────────────────────
 // Strips common release-group/quality/codec junk tokens and normalizes
-// punctuation/case, then checks whether any candidate title appears in the
-// cleaned filename (or vice versa, for a short candidate title against a
-// longer cleaned name). Deliberately simple substring matching, not a
-// fuzzy/edit-distance library — good enough for "does this upload look like
-// a title I already typed", and a false negative just means no suggestion
-// banner rather than a wrong link, so erring conservative is fine.
+// punctuation/case, then checks whether the cleaned filename and candidate
+// title contain the exact same set of tokens (order-independent, but every
+// token must match exactly). This is strictly conservative: avoids false
+// positives on numbered sequels (e.g., "Iron Man 2" won't match "Iron Man"),
+// while still matching exact title matches after junk-token cleanup.
 const JUNK_TOKENS = /\b(1080p|720p|2160p|4k|bluray|blu-ray|webrip|web-dl|hdrip|dvdrip|x264|x265|h264|h265|hevc|yify|yts|transcode|extended|remastered|directors?[._-]?cut)\b/gi;
 
 function cleanTitleToken(raw: string): string {
@@ -179,13 +178,27 @@ function cleanTitleToken(raw: string): string {
     .toLowerCase();
 }
 
+function tokenize(s: string): string[] {
+  return s.split(' ').filter(Boolean).sort();
+}
+
+function tokensEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 export function matchFilenameToUntrackedItem(filename: string, candidateTitles: string[]): string | null {
   const cleanedFilename = cleanTitleToken(filename);
   if (!cleanedFilename) return null;
+  const filenameTokens = tokenize(cleanedFilename);
   for (const title of candidateTitles) {
     const cleanedTitle = cleanTitleToken(title);
     if (!cleanedTitle) continue;
-    if (cleanedFilename.includes(cleanedTitle) || cleanedTitle.includes(cleanedFilename)) {
+    const titleTokens = tokenize(cleanedTitle);
+    if (tokensEqual(filenameTokens, titleTokens)) {
       return title;
     }
   }

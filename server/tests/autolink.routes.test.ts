@@ -26,6 +26,11 @@ describe('autolink matching', () => {
     const cleaned = matchFilenameToUntrackedItem('captain_america_the_winter_soldier_2014.mkv', ['Captain America: The Winter Soldier']);
     assert.equal(cleaned, 'Captain America: The Winter Soldier');
   });
+
+  it('does not falsely match numbered sequels (regression: Iron Man 2 vs Iron Man)', () => {
+    const cleaned = matchFilenameToUntrackedItem('Iron.Man.2.2010.1080p.BluRay.mp4', ['Iron Man']);
+    assert.equal(cleaned, null);
+  });
 });
 
 describe('autolink match route', () => {
