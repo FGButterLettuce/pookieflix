@@ -5,10 +5,12 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { PasswordInput } from '../components/PasswordInput';
 import { useTheme } from '../theme/ThemeContext';
+import { getViewer, clearViewer } from '../lib/viewer';
 import type { LibraryFile } from '../types';
 import {
   Play, Pause, Square, RotateCw, History, Captions,
   Trash2, MoreHorizontal, Settings, Upload, Check, Film, LayoutGrid,
+  ListChecks, Users,
 } from 'lucide-react';
 
 
@@ -102,6 +104,12 @@ export function Home() {
       if (c.subtitleLang) setSubtitleLang(c.subtitleLang);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (authed && !getViewer()) {
+      navigate('/whos-watching');
+    }
+  }, [authed, navigate]);
 
   useEffect(() => {
     if (!authed) return;
@@ -584,6 +592,8 @@ export function Home() {
     <div className="home-root">
       <header className="home-topbar">
         <span className="home-logo"><Logo size="sm" variant={theme} /></span>
+        <Link to="/marathons" className="settings-link" title="Marathons"><ListChecks /></Link>
+        <button className="settings-link" title="Switch profile" onClick={() => { clearViewer(); navigate('/whos-watching'); }}><Users /></button>
         <Link to="/settings" className="settings-link" title="Settings"><Settings /></Link>
       </header>
 
