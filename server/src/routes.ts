@@ -263,11 +263,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/settings', { preHandler: requireAdmin }, async (_req, reply) => {
     const persisted = readPersistedConfig();
     const osKey = process.env.OPENSUBTITLES_API_KEY ?? persisted.OPENSUBTITLES_API_KEY ?? '';
+    const tmdbKey = process.env.TMDB_API_KEY ?? persisted.TMDB_API_KEY ?? '';
     const tunnelToken = process.env.TUNNEL_TOKEN ?? persisted.TUNNEL_TOKEN ?? '';
     return reply.send({
       APP_BASE_URL: process.env.APP_BASE_URL ?? persisted.APP_BASE_URL ?? '',
       UPLOAD_URL: process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? '',
       OPENSUBTITLES_API_KEY: osKey ? '••••••••' : '',  // mask — never expose key over HTTP
+      TMDB_API_KEY: tmdbKey ? '••••••••' : '',  // mask — never expose key over HTTP
       USER_NAME: persisted.USER_NAME ?? '',
       PARTNER_NAME: persisted.PARTNER_NAME ?? '',
       TUNNEL_CONFIGURED: !!tunnelToken,  // write-only field — never expose the token itself
@@ -282,6 +284,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       APP_BASE_URL: body.APP_BASE_URL?.trim() || undefined,
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
       OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
+      TMDB_API_KEY: body.TMDB_API_KEY?.trim() || undefined,
       USER_NAME: body.USER_NAME?.trim() || undefined,
       PARTNER_NAME: body.PARTNER_NAME?.trim() || undefined,
       // Omit entirely (rather than sending undefined) when blank, so an
@@ -319,6 +322,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       APP_BASE_URL: body.APP_BASE_URL.trim(),
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
       OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
+      TMDB_API_KEY: body.TMDB_API_KEY?.trim() || undefined,
       USER_NAME: body.USER_NAME?.trim() || undefined,
       PARTNER_NAME: body.PARTNER_NAME?.trim() || undefined,
       TUNNEL_TOKEN: tunnelToken,
@@ -326,6 +330,34 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     });
     if (tunnelToken) startTunnel(tunnelToken);
     return reply.send({ ok: true });
+  });
+
+  // ── TMDB search (optional — gated on TMDB_API_KEY) ─────────────────────────
+  app.get('/api/tmdb/search', { preHandler: requireAdmin }, async (req, reply) => {
+    const { query } = req.query as { query?: string };
+    if (!query?.trim()) return reply.status(400).send({ error: 'query is required' });
+
+    // Read fresh from persisted config each time so a newly-saved key takes
+    // effect without a server restart — same pattern as GET /api/settings.
+    const persisted = readPersistedConfig();
+    const apiKey = process.env.TMDB_API_KEY ?? persisted.TMDB_API_KEY ?? '';
+    if (!apiKey) return reply.status(503).send({ error: 'TMDB_API_KEY not configured' });
+
+    try {
+      const url = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query)}&api_key=${encodeURIComponent(apiKey)}`;
+      const tmdbRes = await fetch(url);
+      if (!tmdbRes.ok) return reply.status(502).send({ error: 'TMDB request failed' });
+      const data = await tmdbRes.json() as { results: { id: number; title: string; release_date?: string; poster_path: string | null }[] };
+      const results = data.results.slice(0, 8).map(r => ({
+        tmdbId: r.id,
+        title: r.title,
+        year: r.release_date ? r.release_date.slice(0, 4) : null,
+        posterPath: r.poster_path,
+      }));
+      return reply.send({ results });
+    } catch {
+      return reply.status(502).send({ error: 'TMDB request failed' });
+    }
   });
 
   // ── Library: list files with metadata ─────────────────────────────────────

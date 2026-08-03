@@ -18,6 +18,7 @@ interface SettingsData {
   APP_BASE_URL: string;
   UPLOAD_URL: string;
   OPENSUBTITLES_API_KEY: string;
+  TMDB_API_KEY: string;
   USER_NAME: string;
   PARTNER_NAME: string;
   TUNNEL_CONFIGURED: boolean;
@@ -37,6 +38,7 @@ export function Settings() {
     APP_BASE_URL: '',
     UPLOAD_URL: '',
     OPENSUBTITLES_API_KEY: '',
+    TMDB_API_KEY: '',
     USER_NAME: '',
     PARTNER_NAME: '',
     TUNNEL_CONFIGURED: false,
@@ -339,6 +341,17 @@ export function Settings() {
               onChange={set('OPENSUBTITLES_API_KEY')}
             />
             <div className="setup-hint" style={{ marginBottom: 0 }}>Auto-fetch subtitles on upload</div>
+          </div>
+
+          <div className="settings-field">
+            <label className="settings-label">TMDB API key <span className="settings-optional">(optional)</span></label>
+            <PasteableInput
+              className="setup-input"
+              placeholder="Your API key"
+              value={values.TMDB_API_KEY}
+              onChange={set('TMDB_API_KEY')}
+            />
+            <div className="setup-hint" style={{ marginBottom: 0 }}>Used to fetch poster art for movies not in your library. Get a free key at themoviedb.org — optional, poster art is skipped without one.</div>
           </div>
         </section>
         </div>
