@@ -10,10 +10,10 @@ export interface ListCardProps {
 export function ListCard({ id, name, itemCount, doneCount }: ListCardProps) {
   const pct = itemCount > 0 ? Math.round((doneCount / itemCount) * 100) : 0;
   return (
-    <Link to={`/marathons/${id}`} className="list-card">
-      <div className="list-card-name">{name}</div>
+    <Link to={`/marathons/${id}`} className="marathon-card">
+      <div className="marathon-card-name">{name}</div>
       <div className="progress-track"><div className="progress-fill" style={{ width: `${pct}%` }} /></div>
-      <div className="list-card-progress">{doneCount}/{itemCount} done</div>
+      <div className="marathon-card-progress">{doneCount}/{itemCount} done</div>
     </Link>
   );
 }
