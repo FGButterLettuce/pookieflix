@@ -42,6 +42,7 @@ body { overflow-x: clip; }
   --focus: oklch(60% 0.21 5);
   --danger: oklch(58% 0.19 25);
   --success: oklch(52% 0.13 145);
+  --success-ink: #fff;
   --radius: 16px;
   --radius-sm: 10px;
   --radius-lg: 20px;
@@ -66,6 +67,7 @@ body { overflow-x: clip; }
   --focus: oklch(78% 0.18 5);
   --danger: oklch(64% 0.17 25);
   --success: oklch(78% 0.17 145);
+  --success-ink: oklch(16% 0.03 330);
   --radius: 16px;
   --radius-sm: 10px;
   --radius-lg: 20px;
@@ -163,6 +165,10 @@ body {
   border-radius: var(--radius);
   color: var(--text-muted);
   transition: color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
 }
 .settings-link:hover { background: var(--surface2); color: var(--text); }
 
@@ -2221,45 +2227,276 @@ body {
 
 /* .setup-input / .primary-btn default to width:100% with stacked-form
    margins for the onboarding flow — override to inline sizing when nested
-   in these marathon flex rows so fields sit side by side instead of each
+   in this marathon flex row so fields sit side by side instead of each
    wrapping onto its own line. */
-.marathon-new-form .setup-input,
-.marathon-review-editor .setup-input {
+.marathon-new-form .setup-input {
   width: auto;
   flex: 1;
   min-width: 160px;
   margin-bottom: 0;
 }
 
-/* The review editor's score field is a narrow numeric 1-10 input, not a
-   text field that should flex to fill the row. */
-.marathon-review-editor input[type='number'].setup-input {
-  flex: 0 0 auto;
-  width: 90px;
-  min-width: 0;
-}
-
-.marathon-new-form .primary-btn,
-.marathon-review-editor .primary-btn {
+.marathon-new-form .primary-btn {
   width: auto;
   margin-top: 0;
 }
 
-/* Small inline text-button treatment for actions like Review/Cancel that
-   don't fit .settings-link's fixed 36x36 icon-only box. Reuses
-   .secondary-btn's visual language without its width:100% stacked-form
-   sizing. */
-.marathon-text-btn {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
-  padding: var(--space-2xs) var(--space-sm);
+/* Editable list/item title — click to rename (EditableText). Single class
+   reused for both the display <span> and the edit-mode <input> (tag-qualified
+   selector below supplies the input-only overrides), matching the mockup's
+   .topbar-title.editable treatment but sized to this app's already-shipped
+   .marathons-heading weight/size instead of introducing a competing class. */
+.marathons-heading.editable {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: text;
   border-radius: var(--radius-sm);
-  transition: color 0.15s, border-color 0.15s, transform 0.1s;
+  padding: 0.15rem 0.4rem;
+  margin: -0.15rem -0.4rem;
+  transition: background-color var(--dur-short) var(--ease-out);
 }
-.marathon-text-btn:hover { border-color: var(--accent); color: var(--accent-hover); }
-.marathon-text-btn:active { transform: translateY(1px); }
+.marathons-heading.editable:hover { background: var(--surface2); }
+.marathons-heading.editable .pencil { opacity: 0.45; flex-shrink: 0; transition: opacity var(--dur-short) var(--ease-out); }
+.marathons-heading.editable:hover .pencil { opacity: 0.9; }
+input.marathons-heading {
+  border: 1px solid var(--accent);
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 0.15rem 0.5rem;
+  margin: -0.15rem -0.4rem;
+  outline: none;
+  width: auto;
+}
+
+/* ── List detail — item cards ──────────────────────────────────────────
+   Ported verbatim (same property values) from the approved mockup
+   (pookieflix-lists-mockup.html). Everywhere the mockup used its demo
+   `.icon-btn` class, this app's real `.settings-link` icon-button class is
+   used instead (see the fix above making it work on <button> too) — same
+   idea, this app's already-established convention. */
+.items { display: flex; flex-direction: column; gap: 0.85rem; padding: var(--space-md); }
+
+.item-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.item-thumb {
+  width: 100%; aspect-ratio: 3.6 / 1; position: relative; overflow: hidden;
+  background: var(--surface3);
+}
+.item-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.item-thumb .placeholder-texture {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 30% 30%, rgba(255,255,255,0.08), transparent 60%),
+              linear-gradient(0deg, rgba(0,0,0,0.25), transparent 50%);
+}
+.item-thumb .placeholder-watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0.16; }
+.item-thumb .placeholder-watermark svg { width: 56px; height: 56px; color: white; }
+.item-thumb.no-file { display: flex; align-items: center; justify-content: center; color: var(--text-subtle); background: var(--surface3); }
+.item-thumb.no-file svg { width: 36px; height: 36px; opacity: 0.4; }
+.item-thumb .play-badge {
+  position: absolute; bottom: 0.7rem; right: 0.7rem; width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(15,8,15,0.55); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center;
+  transition: transform var(--dur-micro) var(--ease-out);
+}
+.item-thumb:hover .play-badge { transform: scale(1.08); }
+.item-thumb .play-badge svg { width: 18px; height: 18px; fill: white; }
+
+.item-body { padding: 1.05rem 1.15rem 1.1rem; }
+.item-row { display: flex; align-items: flex-start; gap: 0.75rem; }
+.item-main { flex: 1; min-width: 0; }
+.item-title { font-weight: 800; font-size: 1.28rem; line-height: 1.25; display: flex; align-items: center; gap: 0.5rem; cursor: text; }
+.item-title.linked { cursor: text; }
+.item-title.linked:hover { color: var(--accent); }
+.item-hint { font-size: 0.88rem; color: var(--text-subtle); margin-top: 0.3rem; }
+input.item-title {
+  border: 1px solid var(--accent); background: var(--surface2); border-radius: var(--radius-sm);
+  padding: 0.1rem 0.4rem; margin: -0.1rem -0.4rem; outline: none; width: 100%;
+}
+
+.status-group { display: flex; align-items: center; gap: 0.35rem; flex-shrink: 0; margin-top: 0.1rem; }
+
+/* Native HTML5 drag-and-drop — no library, browser-built-in. Replaces the
+   old move-up/move-down buttons entirely. draggable lives ONLY on the
+   handle icon, not the whole card, so it doesn't intercept pointer-drag on
+   the score slider. */
+.drag-handle {
+  background: none; border: none; color: var(--text-subtle); cursor: grab; padding: 0.3rem;
+  display: flex; align-items: center; flex-shrink: 0; margin-top: 0.1rem; margin-left: -0.3rem;
+  border-radius: var(--radius-sm); transition: background-color var(--dur-short), color var(--dur-short);
+}
+.drag-handle:hover { background: var(--surface2); color: var(--text-muted); }
+.drag-handle:active { cursor: grabbing; }
+.item-card.dragging { opacity: 0.45; }
+.item-card.drag-over { outline: 2px dashed var(--accent); outline-offset: 2px; }
+
+/* ── Reviews accordion — collapsed by default, ring-avatar preview ──── */
+.reviews-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+  margin-top: 1rem; padding: 0.75rem 0.9rem; border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text); font: inherit; font-weight: 700; font-size: 0.95rem;
+  cursor: pointer; transition: background-color var(--dur-short);
+}
+.reviews-toggle:hover { background: var(--surface3); }
+.reviews-toggle-right { display: flex; align-items: center; gap: 0.7rem; }
+.ring-avatars { display: flex; }
+.ring-avatar {
+  width: 30px; height: 30px; border-radius: 50%; background: var(--surface);
+  color: var(--text-muted); font-family: 'Figtree', sans-serif; font-weight: 900; font-size: 0.82rem;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  border: 2.5px solid var(--ring, var(--border)); margin-left: -9px;
+}
+.ring-avatar:first-child { margin-left: 0; }
+.reviews-toggle svg { width: 18px; height: 18px; transition: transform 200ms var(--ease-out); }
+.reviews-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.reviews-panel { display: none; }
+.reviews-panel.open { display: block; }
+
+.btn-done {
+  height: 40px; padding: 0 1.1rem; border-radius: var(--radius-sm); border: 1.5px solid var(--accent);
+  background: transparent; color: var(--accent); font: inherit; font-weight: 700; font-size: 0.92rem;
+  display: flex; align-items: center; gap: 0.45rem; cursor: pointer; white-space: nowrap;
+  transition: background-color var(--dur-short), color var(--dur-short);
+}
+.btn-done:hover { background: var(--accent); color: var(--accent-ink); }
+
+.status-badge {
+  height: 40px; padding: 0 1rem; border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 0.45rem; font-weight: 700; font-size: 0.92rem;
+  white-space: nowrap; cursor: default;
+}
+.status-badge.done { background: color-mix(in oklch, var(--success) 18%, var(--surface)); color: var(--success); }
+.status-badge.skipped { background: var(--surface3); color: var(--text-subtle); }
+
+.item-menu-wrap { position: relative; flex-shrink: 0; }
+
+/* Chat-style review thread — avatar alternates side per person, bubble
+   always spans the full row width regardless of side. */
+.reviews-thread { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
+.review-msg { display: flex; gap: 0.7rem; }
+.review-msg.from-partner { flex-direction: row-reverse; }
+.review-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: var(--surface3); color: var(--text-muted); font-family: 'Figtree', sans-serif; font-weight: 900;
+  font-size: 0.9rem; display: flex; align-items: center; justify-content: center;
+}
+.review-msg.from-partner .review-avatar { background: color-mix(in oklch, var(--accent) 30%, var(--surface3)); color: var(--accent); }
+.review-bubble { flex: 1; position: relative; background: var(--surface2); border-radius: var(--radius-sm); padding: 0.9rem 1.05rem; overflow: hidden; }
+.review-msg.from-partner .review-bubble { background: color-mix(in oklch, var(--accent) 13%, var(--surface2)); }
+.review-bubble::before {
+  content: '\201C'; position: absolute; top: -0.5rem; right: 0.4rem;
+  font-family: 'Figtree', sans-serif; font-weight: 900; font-size: 5rem; line-height: 1;
+  color: var(--text); opacity: 0.05; pointer-events: none;
+}
+.review-meta { display: flex; align-items: center; margin-bottom: 0.55rem; position: relative; }
+.review-score-num { font-family: 'Figtree', sans-serif; font-weight: 900; font-size: 2.1rem; line-height: 1; }
+
+.review-note-text {
+  position: relative; margin: 0; padding-left: 0.9rem; border-left: 3px solid var(--rule-color, var(--border));
+  font-size: 1.03rem; font-style: italic; color: var(--text-muted); line-height: 1.5;
+}
+.review-note-text::before { content: '\201C'; }
+.review-note-text::after { content: '\201D'; }
+.review-note-text.empty { border-left-color: transparent; padding-left: 0; }
+.review-note-text.empty::before, .review-note-text.empty::after { content: ''; }
+
+.link-btn {
+  background: none; border: none; color: var(--text-muted); font: inherit; font-size: 0.92rem;
+  font-weight: 700; cursor: pointer; padding: 0; transition: color var(--dur-short);
+}
+.link-btn:hover { color: var(--accent); }
+.add-review-prompt { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); text-align: center; }
+
+.review-editor { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.85rem; }
+.score-field-label { font-size: 0.85rem; font-weight: 700; color: var(--text-muted); }
+.review-editor-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+.note-input { flex: 1; min-width: 180px; height: 44px; padding: 0 0.85rem; border-radius: var(--radius-sm); background: var(--surface2); border: 1px solid var(--border); color: var(--text); font: inherit; font-size: 0.98rem; }
+.note-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn-save { height: 44px; padding: 0 1.15rem; border-radius: var(--radius-sm); border: none; background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 700; font-size: 0.92rem; cursor: pointer; }
+.btn-save:hover { background: var(--accent-hover); }
+.btn-cancel { height: 44px; padding: 0 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: none; color: var(--text-muted); font: inherit; font-weight: 600; font-size: 0.92rem; cursor: pointer; }
+.btn-cancel:hover { background: var(--surface2); color: var(--text); }
+
+/* ── Score slider — spring-animated readout (see useSpringValue) ────── */
+.score-slider-wrap { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+.score-slider-value {
+  font-family: 'Figtree', sans-serif; font-weight: 900; font-size: 3.2rem; line-height: 1;
+  text-align: center; font-variant-numeric: tabular-nums;
+}
+.score-slider {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 16px; border-radius: 999px;
+  background: var(--surface3); outline: none; cursor: pointer; margin: 0.9rem 0;
+}
+.score-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 36px; height: 36px; border-radius: 50%;
+  background: var(--accent); border: 4px solid var(--surface); box-shadow: var(--shadow-card);
+  cursor: grab; transition: transform 120ms;
+}
+.score-slider::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.1); }
+.score-slider::-moz-range-thumb {
+  width: 28px; height: 28px; border-radius: 50%; background: var(--accent); border: 4px solid var(--surface);
+  box-shadow: var(--shadow-card); cursor: grab;
+}
+.score-slider::-moz-range-track { height: 16px; border-radius: 999px; background: var(--surface3); }
+.score-slider-ticks { display: flex; justify-content: space-between; padding: 0 4px; font-size: 0.8rem; color: var(--text-subtle); font-weight: 700; }
+
+/* ── Add movies: library-first, like adding to a playlist ─────────────── */
+.add-section { padding: 1.1rem 1.35rem 1.35rem; border-top: 1px solid var(--border); }
+.add-section-title { font-weight: 800; font-size: 1.05rem; margin-bottom: 0.7rem; }
+.library-search { position: relative; margin-bottom: 0.85rem; }
+.library-search svg { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--text-subtle); }
+.library-search input {
+  width: 100%; height: 48px; padding: 0 1rem 0 2.6rem; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--border); color: var(--text); font: inherit; font-size: 0.95rem;
+}
+.library-search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* padding on all sides, not just bottom, so the scroll container doesn't
+   clip the hover outline (outline-offset pushes it outside the box) or the
+   "In list" badge at the top/left edge — the clipping bug found in review. */
+.library-strip { display: flex; gap: 0.75rem; overflow-x: auto; overflow-y: visible; padding: 0.4rem 0.3rem 0.4rem; margin: -0.4rem -0.3rem 0; scrollbar-width: thin; }
+.library-tile { flex-shrink: 0; width: 128px; cursor: pointer; background: none; border: none; text-align: left; font: inherit; color: inherit; padding: 0; }
+.library-tile-thumb { width: 128px; height: 72px; border-radius: var(--radius-sm); position: relative; overflow: hidden; background: var(--surface3); }
+.library-tile-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.library-tile-thumb .add-badge {
+  position: absolute; inset: 0; background: rgba(20,10,20,0.45); opacity: 0; display: flex; align-items: center; justify-content: center;
+  transition: opacity var(--dur-short);
+}
+.library-tile-thumb .add-badge svg { width: 30px; height: 30px; color: white; }
+.library-tile:hover .library-tile-thumb .add-badge { opacity: 1; }
+.library-tile:hover .library-tile-thumb { outline: 2px solid var(--accent); outline-offset: 1px; }
+.library-tile-name { font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-top: 0.4rem; line-height: 1.3; }
+.already-added { position: relative; cursor: default; }
+.already-added .library-tile-thumb { opacity: 0.4; }
+.already-added-badge {
+  position: absolute; top: 6px; left: 6px; background: var(--success); color: var(--success-ink);
+  font-size: 0.68rem; font-weight: 800; padding: 0.15rem 0.4rem; border-radius: 999px;
+}
+
+.add-manual-toggle { margin-top: 0.9rem; }
+.add-item-row { display: flex; gap: 0.6rem; padding-top: 0.9rem; flex-wrap: wrap; }
+.add-item-row .setup-input { flex: 1; min-width: 200px; margin-bottom: 0; }
+.add-item-row .primary-btn { width: auto; margin-top: 0; }
+.add-poster-btn {
+  display: flex; align-items: center; gap: 0.35rem; margin-top: 0.5rem; background: none; border: none;
+  color: var(--text-subtle); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: default; opacity: 0.7;
+}
+.add-poster-btn svg { width: 14px; height: 14px; }
+
+.dropdown-menu {
+  position: absolute; top: 46px; right: 0; z-index: var(--z-dropdown); min-width: 190px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card); padding: 0.4rem; display: none; flex-direction: column; gap: 0.1rem;
+}
+.dropdown-menu.open { display: flex; }
+.dropdown-item {
+  display: flex; align-items: center; gap: 0.65rem; padding: 0.6rem 0.7rem; border-radius: var(--radius-sm);
+  background: none; border: none; color: var(--text); font: inherit; font-size: 0.95rem; text-align: left;
+  cursor: pointer; width: 100%;
+}
+.dropdown-item:hover { background: var(--surface3); }
+.dropdown-item.danger { color: var(--danger); }
+.dropdown-item svg { width: 17px; height: 17px; flex-shrink: 0; opacity: 0.8; }
+
+.caption { padding: 0 1.35rem 1rem; color: var(--text-subtle); font-size: 0.92rem; line-height: 1.5; }
