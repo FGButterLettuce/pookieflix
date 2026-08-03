@@ -245,7 +245,7 @@ export function MarathonDetail() {
               <option value="skipped">{STATUS_LABEL.skipped}</option>
             </select>
 
-            <button className="settings-link" title="Rate" onClick={() => startEditingReview(item)}>Review</button>
+            <button className="marathon-text-btn" title="Rate" onClick={() => startEditingReview(item)}>Review</button>
             <button className="settings-link" title="Delete item" onClick={() => deleteItem(item.id)}><Trash2 size={14} /></button>
 
             {editingItemId === item.id && (
@@ -266,7 +266,7 @@ export function MarathonDetail() {
                   onChange={e => setDraftNote(e.target.value)}
                 />
                 <button className="primary-btn" onClick={() => saveReview(item.id)}>Save</button>
-                <button className="settings-link" onClick={() => setEditingItemId(null)}>Cancel</button>
+                <button className="marathon-text-btn" onClick={() => setEditingItemId(null)}>Cancel</button>
               </div>
             )}
           </li>

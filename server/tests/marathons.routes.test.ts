@@ -315,4 +315,32 @@ describe('marathon item reviews', () => {
     const badScore = await app.inject({ method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`, payload: { viewer: 'user', score: 11 } });
     assert.equal(badScore.statusCode, 400);
   });
+
+  it('rejects PUT review with wrong marathon id in URL', async () => {
+    const marathon1 = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Review Test Marathon 2a' } });
+    const marathonId1 = (marathon1.json() as { marathon: { id: number } }).marathon.id;
+
+    const marathon2 = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Review Test Marathon 2b' } });
+    const marathonId2 = (marathon2.json() as { marathon: { id: number } }).marathon.id;
+
+    const itemRes = await app.inject({
+      method: 'POST',
+      url: `/api/marathons/${marathonId1}/items`,
+      payload: { title: 'Item in marathon 1' },
+    });
+    const wrongItemId = (itemRes.json() as { item: { id: number } }).item.id;
+
+    // Try to PUT a review using the other marathon's id in the URL
+    const putRes = await app.inject({
+      method: 'PUT',
+      url: `/api/marathons/${marathonId2}/items/${wrongItemId}/review`,
+      payload: { viewer: 'user', score: 8, note: 'sneaky' },
+    });
+    assert.equal(putRes.statusCode, 404);
+
+    // Verify no review was saved against the item in its real marathon
+    const checkRes = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId1}` });
+    const checkItem = (checkRes.json() as { items: { reviews: { viewer: string }[] }[] }).items[0];
+    assert.equal(checkItem.reviews.length, 0);
+  });
 });

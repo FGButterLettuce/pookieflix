@@ -692,9 +692,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Marathon item reviews ──────────────────────────────────────────────────
   app.put('/api/marathons/:id/items/:itemId/review', { preHandler: requireAdmin }, async (req, reply) => {
-    const { itemId } = req.params as { id: string; itemId: string };
+    const { id, itemId } = req.params as { id: string; itemId: string };
     const item = getMarathonItem(Number(itemId));
-    if (!item) return reply.status(404).send({ error: 'Not found' });
+    if (!item || item.marathon_id !== Number(id)) return reply.status(404).send({ error: 'Not found' });
     const body = req.body as { viewer?: string; score?: number | null; note?: string | null };
     if (body.viewer !== 'user' && body.viewer !== 'partner') {
       return reply.status(400).send({ error: 'Invalid viewer' });

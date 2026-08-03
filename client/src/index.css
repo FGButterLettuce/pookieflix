@@ -2193,3 +2193,48 @@ body {
   margin-top: var(--space-sm);
   flex-wrap: wrap;
 }
+
+/* .setup-input / .primary-btn default to width:100% with stacked-form
+   margins for the onboarding flow — override to inline sizing when nested
+   in these marathon flex rows so fields sit side by side instead of each
+   wrapping onto its own line. */
+.marathon-new-form .setup-input,
+.marathon-review-editor .setup-input {
+  width: auto;
+  flex: 1;
+  min-width: 160px;
+  margin-bottom: 0;
+}
+
+/* The review editor's score field is a narrow numeric 1-10 input, not a
+   text field that should flex to fill the row. */
+.marathon-review-editor input[type='number'].setup-input {
+  flex: 0 0 auto;
+  width: 90px;
+  min-width: 0;
+}
+
+.marathon-new-form .primary-btn,
+.marathon-review-editor .primary-btn {
+  width: auto;
+  margin-top: 0;
+}
+
+/* Small inline text-button treatment for actions like Review/Cancel that
+   don't fit .settings-link's fixed 36x36 icon-only box. Reuses
+   .secondary-btn's visual language without its width:100% stacked-form
+   sizing. */
+.marathon-text-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  transition: color 0.15s, border-color 0.15s, transform 0.1s;
+}
+.marathon-text-btn:hover { border-color: var(--accent); color: var(--accent-hover); }
+.marathon-text-btn:active { transform: translateY(1px); }
