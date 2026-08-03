@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Users, X } from 'lucide-react';
+import { ArrowLeft, Users, X } from 'lucide-react';
 import { clearViewer } from '../lib/viewer';
 
 interface HistoryEntry {
@@ -23,7 +23,6 @@ export function WatchHistory() {
   const [addName, setAddName] = useState('Watched');
   const [adding, setAdding] = useState(false);
   const [dismissingId, setDismissingId] = useState<number | null>(null);
-  const [promotedIds, setPromotedIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState('');
 
   const load = useCallback(() => {
@@ -71,8 +70,12 @@ export function WatchHistory() {
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) throw new Error(data.error ?? 'Failed to add to list');
-      setPromotedIds(prev => new Set([...prev, entryId]));
+      // The server dismisses the history entry as part of promoting it, so
+      // reload from the server rather than tracking "added" in local state —
+      // local-only state would be lost on refresh, letting a second promote
+      // after reload create a duplicate list item.
       setAddingId(null);
+      load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add to list');
     } finally {
@@ -84,7 +87,14 @@ export function WatchHistory() {
     setDismissingId(entryId);
     setError('');
     try {
-      await fetch(`/api/history/${entryId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/history/${entryId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        // Never fail silently — same res.ok-check pattern as linkAutolink in
+        // Home.tsx (Task 9): keep the row up so the user can see the
+        // dismiss didn't take instead of optimistically removing it anyway.
+        setError('Failed to dismiss');
+        return;
+      }
       setEntries(prev => prev.filter(e => e.id !== entryId));
     } catch {
       setError('Failed to dismiss');
@@ -124,9 +134,7 @@ export function WatchHistory() {
                 <div className="history-card-date">{formatDetectedDate(entry.detectedAt)}</div>
               </div>
               <div className="history-card-actions">
-                {promotedIds.has(entry.id) ? (
-                  <span className="status-badge done"><Check size={16} /> Added</span>
-                ) : addingId === entry.id ? (
+                {addingId === entry.id ? (
                   <form className="history-add-form" onSubmit={e => submitAdd(e, entry.id)}>
                     <input
                       className="setup-input"

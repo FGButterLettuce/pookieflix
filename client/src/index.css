@@ -2498,7 +2498,8 @@ input.item-title {
   background: none; border: none; color: var(--text); font: inherit; font-size: 0.95rem; text-align: left;
   cursor: pointer; width: 100%;
 }
-.dropdown-item:hover { background: var(--surface3); }
+.dropdown-item:hover:not(:disabled) { background: var(--surface3); }
+.dropdown-item:disabled { opacity: 0.45; cursor: default; }
 .dropdown-item.danger { color: var(--danger); }
 .dropdown-item svg { width: 17px; height: 17px; flex-shrink: 0; opacity: 0.8; }
 

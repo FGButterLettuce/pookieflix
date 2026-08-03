@@ -79,6 +79,22 @@ describe('watch history routes', () => {
     const marathonsRes = await app.inject({ method: 'GET', url: '/api/marathons' });
     const marathons = (marathonsRes.json() as { marathons: { id: number; name: string }[] }).marathons;
     assert.ok(marathons.some(m => m.id === body.marathonId && m.name === 'Watched Archive'));
+
+    // Promotion must dismiss the history entry server-side, so it's gone on
+    // reload — not just hidden behind local-only React state that a page
+    // refresh would forget, which is what let a repeat promote after reload
+    // create a duplicate list item.
+    const afterPromoteRes = await app.inject({ method: 'GET', url: '/api/history' });
+    const afterPromoteEntries = (afterPromoteRes.json() as { entries: { id: number }[] }).entries;
+    assert.ok(!afterPromoteEntries.some(e => e.id === movieEntry.id), 'promoted entry must be dismissed, not just left for the client to remember');
+
+    // A repeat promote attempt on the now-dismissed entry must not create a
+    // second item — since listWatchHistory only returns non-dismissed rows,
+    // it 404s instead of duplicating.
+    const repeatRes = await app.inject({
+      method: 'POST', url: `/api/history/${movieEntry.id}/promote`, payload: { marathonName: 'Watched Archive' },
+    });
+    assert.equal(repeatRes.statusCode, 404);
   });
 
   it('promoting into the same-named list again reuses it instead of duplicating', async () => {

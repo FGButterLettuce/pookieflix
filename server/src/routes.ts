@@ -309,6 +309,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Setup / Settings ──────────────────────────────────────────────────────
+  // GET masks configured secrets with this placeholder rather than exposing
+  // them over HTTP. POST must never persist this literal string back as the
+  // "real" key — see the omit-if-blank-or-masked handling below.
+  const SETTINGS_MASKED_VALUE = '••••••••';
+
   app.get('/api/settings', { preHandler: requireAdmin }, async (_req, reply) => {
     const persisted = readPersistedConfig();
     const osKey = process.env.OPENSUBTITLES_API_KEY ?? persisted.OPENSUBTITLES_API_KEY ?? '';
@@ -317,8 +322,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       APP_BASE_URL: process.env.APP_BASE_URL ?? persisted.APP_BASE_URL ?? '',
       UPLOAD_URL: process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? '',
-      OPENSUBTITLES_API_KEY: osKey ? '••••••••' : '',  // mask — never expose key over HTTP
-      TMDB_API_KEY: tmdbKey ? '••••••••' : '',  // mask — never expose key over HTTP
+      OPENSUBTITLES_API_KEY: osKey ? SETTINGS_MASKED_VALUE : '',  // mask — never expose key over HTTP
+      TMDB_API_KEY: tmdbKey ? SETTINGS_MASKED_VALUE : '',  // mask — never expose key over HTTP
       LAN_URL: process.env.LAN_URL ?? persisted.LAN_URL ?? '',  // plain URL, not a secret — safe to expose as-is
       USER_NAME: persisted.USER_NAME ?? '',
       PARTNER_NAME: persisted.PARTNER_NAME ?? '',
@@ -330,11 +335,22 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/settings', { preHandler: requireAdmin }, async (req, reply) => {
     const body = req.body as Record<string, string>;
     const newTunnelToken = body.TUNNEL_TOKEN?.trim();
+    // The client round-trips whatever GET /api/settings sent it, including
+    // the masked placeholder when a key is already configured. Treat blank
+    // OR the mask itself as "no change" and omit the key entirely — same
+    // omit-if-blank shape as TUNNEL_TOKEN below — so a save that only
+    // touches an unrelated field (e.g. LAN_URL) can never clobber an
+    // already-configured OPENSUBTITLES_API_KEY/TMDB_API_KEY with the literal
+    // bullet string.
+    const osKeyInput = body.OPENSUBTITLES_API_KEY?.trim();
+    const newOsKey = osKeyInput && osKeyInput !== SETTINGS_MASKED_VALUE ? osKeyInput : undefined;
+    const tmdbKeyInput = body.TMDB_API_KEY?.trim();
+    const newTmdbKey = tmdbKeyInput && tmdbKeyInput !== SETTINGS_MASKED_VALUE ? tmdbKeyInput : undefined;
     writePersistedConfig({
       APP_BASE_URL: body.APP_BASE_URL?.trim() || undefined,
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
-      OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
-      TMDB_API_KEY: body.TMDB_API_KEY?.trim() || undefined,
+      ...(newOsKey ? { OPENSUBTITLES_API_KEY: newOsKey } : {}),
+      ...(newTmdbKey ? { TMDB_API_KEY: newTmdbKey } : {}),
       LAN_URL: body.LAN_URL?.trim() || undefined,
       USER_NAME: body.USER_NAME?.trim() || undefined,
       PARTNER_NAME: body.PARTNER_NAME?.trim() || undefined,
@@ -543,6 +559,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const newSub = subtitlePath(newPath);
     if (fs.existsSync(oldSub)) {
       try { fs.renameSync(oldSub, newSub); } catch { /* ignore */ }
+    }
+
+    // Rename the HLS cache dir too — otherwise the old dir is left behind
+    // under the old name, and the watch-history orphan scan (which treats
+    // any *.hls dir without a matching *.mp4 as "watched and removed") would
+    // wrongly report the still-present, just-renamed file as watch history.
+    const oldHls = hlsDir(oldPath);
+    const newHls = hlsDir(newPath);
+    if (fs.existsSync(oldHls)) {
+      try { fs.renameSync(oldHls, newHls); } catch { /* ignore */ }
     }
 
     renameLibraryFile(filename, newFilename, oldPath, newPath);
@@ -848,6 +874,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const marathon = existing ? getMarathon(existing.id)! : createMarathon(name);
     const item = addMarathonItem(marathon.id, entry.title, null);
     updateMarathonItem(item.id, { status: 'done' });
+
+    // Promotion resolves the history entry — dismiss it server-side (same
+    // dismiss the DELETE /api/history/:id route uses) so a page reload
+    // doesn't lose the "already added" fact and let a repeat promote create
+    // a duplicate list item. The client no longer needs to track this in
+    // local-only state.
+    dismissWatchHistoryEntry(entry.id);
 
     return reply.status(201).send({ marathonId: marathon.id, item });
   });

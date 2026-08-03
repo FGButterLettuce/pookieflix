@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Drag
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Users, Trash2, Plus, Pencil, GripVertical, ChevronDown, Search, Film, RotateCcw,
-  Check, MoreVertical, Play, Archive, ImagePlus,
+  Check, MoreVertical, Play, Archive, ImagePlus, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { getViewer, clearViewer, type Viewer } from '../lib/viewer';
 import type { LibraryFile } from '../types';
@@ -269,7 +269,7 @@ export function MarathonDetail() {
   };
 
   const deleteItem = async (itemId: number) => {
-    if (!window.confirm('Remove this item from the marathon?')) return;
+    if (!window.confirm('Remove this item from the list?')) return;
     await fetch(`/api/marathons/${id}/items/${itemId}`, { method: 'DELETE' });
     load();
   };
@@ -345,7 +345,13 @@ export function MarathonDetail() {
   // only on the grip handle so it doesn't intercept pointer-drag on the
   // score slider. On drop, PATCH the server with the target's index and let
   // the reloaded list be the source of truth (no local reorder + trust). ──
-  const handleDragStart = (itemId: number) => setDraggedItemId(itemId);
+  const handleDragStart = (e: DragEvent, itemId: number) => {
+    // Firefox won't initiate an HTML5 drag at all unless dataTransfer.setData
+    // is called from dragstart — Chrome/Safari are more lenient about this,
+    // which is how the omission went unnoticed.
+    e.dataTransfer.setData('text/plain', String(itemId));
+    setDraggedItemId(itemId);
+  };
   const handleDragEnd = () => { setDraggedItemId(null); setDragOverItemId(null); };
   const handleDragOver = (e: DragEvent, itemId: number) => {
     e.preventDefault();
@@ -370,13 +376,28 @@ export function MarathonDetail() {
     load();
   };
 
+  // Fallback reorder path for touch and keyboard users — HTML5 drag-and-drop
+  // (above) doesn't work on iOS Safari / Android Chrome, and the grip handle
+  // has no keyboard handler either. Calls the server's existing {move}
+  // PATCH branch and moveMarathonItem in db.ts, both already in place and
+  // tested from before this branch's drag-and-drop rework, just unused
+  // until now.
+  const moveItem = async (itemId: number, direction: 'up' | 'down') => {
+    await fetch(`/api/marathons/${id}/items/${itemId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ move: direction }),
+    });
+    load();
+  };
+
   if (authed === false) {
     return (
       <div className="home-root">
         <header className="home-topbar">
-          <Link to="/marathons" className="settings-link" title="Back to marathons"><ArrowLeft /></Link>
+          <Link to="/marathons" className="settings-link" title="Back to lists"><ArrowLeft /></Link>
         </header>
-        <div className="marathons-signed-out">Please sign in to view this marathon.</div>
+        <div className="marathons-signed-out">Please sign in to view this list.</div>
       </div>
     );
   }
@@ -384,9 +405,9 @@ export function MarathonDetail() {
     return (
       <div className="home-root">
         <header className="home-topbar">
-          <Link to="/marathons" className="settings-link" title="Back to marathons"><ArrowLeft /></Link>
+          <Link to="/marathons" className="settings-link" title="Back to lists"><ArrowLeft /></Link>
         </header>
-        <div className="marathons-signed-out">This marathon doesn't exist or was deleted. <Link to="/marathons">Back to marathons</Link></div>
+        <div className="marathons-signed-out">This list doesn't exist or was deleted. <Link to="/marathons">Back to lists</Link></div>
       </div>
     );
   }
@@ -414,7 +435,7 @@ export function MarathonDetail() {
         {error && <div className="form-error">{error}</div>}
 
         <div className="items">
-          {items.map(item => {
+          {items.map((item, index) => {
             const libraryFile = libraryFileFor(item.libraryFilename);
             const playable = !!item.libraryFilename && isLinkedFileAvailable(item.libraryFilename);
             const thumbSrc = libraryFile?.thumbReady && !thumbErrorIds.has(item.id)
@@ -465,7 +486,7 @@ export function MarathonDetail() {
                       draggable
                       title="Drag to reorder"
                       aria-label="Drag to reorder"
-                      onDragStart={() => handleDragStart(item.id)}
+                      onDragStart={e => handleDragStart(e, item.id)}
                       onDragEnd={handleDragEnd}
                     >
                       <GripVertical />
@@ -535,6 +556,20 @@ export function MarathonDetail() {
                         </button>
                         {openMenuItemId === item.id && (
                           <div className="dropdown-menu open">
+                            <button
+                              className="dropdown-item"
+                              disabled={index === 0}
+                              onClick={() => { setOpenMenuItemId(null); void moveItem(item.id, 'up'); }}
+                            >
+                              <ArrowUp /> Move up
+                            </button>
+                            <button
+                              className="dropdown-item"
+                              disabled={index === items.length - 1}
+                              onClick={() => { setOpenMenuItemId(null); void moveItem(item.id, 'down'); }}
+                            >
+                              <ArrowDown /> Move down
+                            </button>
                             {item.status !== 'skipped' && (
                               <button className="dropdown-item" onClick={() => { setOpenMenuItemId(null); setStatus(item.id, 'skipped'); }}>
                                 <Archive /> Skip
