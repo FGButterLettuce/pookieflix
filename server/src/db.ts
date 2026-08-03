@@ -410,7 +410,7 @@ export function recordWatchHistoryEntries(entries: { hlsDirName: string; title: 
   const stmt = db.prepare(`
     INSERT INTO watch_history (hls_dir_name, title, detected_at, dismissed)
     VALUES (?, ?, ?, 0)
-    ON CONFLICT(hls_dir_name) DO UPDATE SET dismissed = 0, detected_at = excluded.detected_at
+    ON CONFLICT(hls_dir_name) DO NOTHING
   `);
   for (const entry of entries) {
     stmt.run(entry.hlsDirName, entry.title, new Date(entry.detectedAtMs).toISOString());
