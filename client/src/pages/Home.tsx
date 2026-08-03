@@ -840,6 +840,7 @@ export function Home() {
           </button>
         )}
         <Link to="/marathons" className="settings-link" title="Lists"><ListChecks /></Link>
+        <Link to="/history" className="settings-link" title="Watch History"><History /></Link>
         <button className="settings-link" title="Switch profile" onClick={() => { clearViewer(); navigate('/whos-watching'); }}><Users /></button>
         <Link to="/settings" className="settings-link" title="Settings"><Settings /></Link>
       </header>

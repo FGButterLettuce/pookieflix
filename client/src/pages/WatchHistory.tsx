@@ -1,0 +1,166 @@
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Check, Users, X } from 'lucide-react';
+import { clearViewer } from '../lib/viewer';
+
+interface HistoryEntry {
+  id: number;
+  title: string;
+  detectedAt: string;
+}
+
+function formatDetectedDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+export function WatchHistory() {
+  const navigate = useNavigate();
+  const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [addingId, setAddingId] = useState<number | null>(null);
+  const [addName, setAddName] = useState('Watched');
+  const [adding, setAdding] = useState(false);
+  const [dismissingId, setDismissingId] = useState<number | null>(null);
+  const [promotedIds, setPromotedIds] = useState<Set<number>>(new Set());
+  const [error, setError] = useState('');
+
+  const load = useCallback(() => {
+    fetch('/api/history')
+      .then(r => {
+        if (r.status === 401) { setAuthed(false); return null; }
+        setAuthed(true);
+        return r.json();
+      })
+      .then((d: { entries: HistoryEntry[] } | null) => { if (d) setEntries(d.entries); })
+      .catch(() => {});
+  }, []);
+
+  // Re-scanning is idempotent (already-recorded and dismissed entries are
+  // never re-added) so it's safe to kick off on every visit to this page —
+  // it just picks up anything newly orphaned since the last visit.
+  useEffect(() => {
+    fetch('/api/history/scan', { method: 'POST' }).catch(() => {}).finally(load);
+  }, [load]);
+
+  const switchProfile = () => {
+    clearViewer();
+    navigate('/whos-watching');
+  };
+
+  const openAdd = (entry: HistoryEntry) => {
+    setError('');
+    setAddingId(entry.id);
+    setAddName('Watched');
+  };
+
+  const cancelAdd = () => setAddingId(null);
+
+  const submitAdd = async (e: FormEvent, entryId: number) => {
+    e.preventDefault();
+    const marathonName = addName.trim();
+    if (!marathonName) return;
+    setAdding(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/history/${entryId}/promote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marathonName }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? 'Failed to add to list');
+      setPromotedIds(prev => new Set([...prev, entryId]));
+      setAddingId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add to list');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const dismiss = async (entryId: number) => {
+    setDismissingId(entryId);
+    setError('');
+    try {
+      await fetch(`/api/history/${entryId}`, { method: 'DELETE' });
+      setEntries(prev => prev.filter(e => e.id !== entryId));
+    } catch {
+      setError('Failed to dismiss');
+    } finally {
+      setDismissingId(null);
+    }
+  };
+
+  if (authed === false) {
+    return (
+      <div className="home-root">
+        <header className="home-topbar">
+          <Link to="/" className="settings-link" title="Back to home"><ArrowLeft /></Link>
+        </header>
+        <div className="marathons-signed-out">Please sign in to view watch history.</div>
+      </div>
+    );
+  }
+  if (authed === null) return null;
+
+  return (
+    <div className="home-root">
+      <header className="home-topbar">
+        <Link to="/" className="settings-link" title="Back to home"><ArrowLeft /></Link>
+        <h1 className="marathons-heading">Watch History</h1>
+        <button className="settings-link" title="Switch profile" onClick={switchProfile}><Users /></button>
+      </header>
+
+      <div className="marathons-page-body">
+        {error && <div className="form-error">{error}</div>}
+
+        <div className="history-list">
+          {entries.map(entry => (
+            <div className="history-card" key={entry.id}>
+              <div className="history-card-info">
+                <div className="history-card-title">{entry.title}</div>
+                <div className="history-card-date">{formatDetectedDate(entry.detectedAt)}</div>
+              </div>
+              <div className="history-card-actions">
+                {promotedIds.has(entry.id) ? (
+                  <span className="status-badge done"><Check size={16} /> Added</span>
+                ) : addingId === entry.id ? (
+                  <form className="history-add-form" onSubmit={e => submitAdd(e, entry.id)}>
+                    <input
+                      className="setup-input"
+                      value={addName}
+                      autoFocus
+                      onChange={e => setAddName(e.target.value)}
+                      placeholder="List name"
+                    />
+                    <button type="submit" className="primary-btn" disabled={adding || !addName.trim()}>
+                      {adding ? 'Adding…' : 'Add'}
+                    </button>
+                    <button type="button" className="link-btn" onClick={cancelAdd}>Cancel</button>
+                  </form>
+                ) : (
+                  <button className="link-btn" onClick={() => openAdd(entry)}>+ Add to a list</button>
+                )}
+                <button
+                  className="settings-link"
+                  title="Dismiss"
+                  onClick={() => dismiss(entry.id)}
+                  disabled={dismissingId === entry.id}
+                >
+                  <X />
+                </button>
+              </div>
+            </div>
+          ))}
+          {entries.length === 0 && (
+            <div className="marathons-empty">
+              Nothing here yet — this fills in automatically from movies you've watched and removed from your library.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

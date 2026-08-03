@@ -27,6 +27,13 @@ interface Item {
   tmdbId: number | null;
 }
 
+interface TmdbCandidate {
+  tmdbId: number;
+  title: string;
+  year: string | null;
+  posterPath: string | null;
+}
+
 // Same red -> green language everywhere a score shows up: chat bubbles, the
 // slider's fill + big readout number. Only ever computes the 0-100 position;
 // CSS resolves the actual color via color-mix() against the app's real
@@ -105,6 +112,14 @@ export function MarathonDetail() {
   const [draggedItemId, setDraggedItemId] = useState<number | null>(null);
   const [dragOverItemId, setDragOverItemId] = useState<number | null>(null);
   const [error, setError] = useState('');
+
+  // TMDB poster picker — offered automatically right after a manually-tracked
+  // (no library file) item is created, and re-offerable any time afterward
+  // via the item's "Add poster" control for anything still posterless.
+  const [posterSearchingId, setPosterSearchingId] = useState<number | null>(null);
+  const [posterPickerItemId, setPosterPickerItemId] = useState<number | null>(null);
+  const [posterCandidates, setPosterCandidates] = useState<TmdbCandidate[]>([]);
+  const [settingPoster, setSettingPoster] = useState(false);
 
   const load = useCallback(() => {
     fetch(`/api/marathons/${id}`)
@@ -188,13 +203,60 @@ export function MarathonDetail() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, libraryFilename: null }),
       });
-      const data = await res.json() as { error?: string };
+      const data = await res.json() as { item?: { id: number }; error?: string };
       if (!res.ok) throw new Error(data.error ?? 'Failed');
       setNewTitle('');
       load();
+      if (data.item) void searchAndOfferPoster(data.item.id, title);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
     }
+  };
+
+  // Looks up TMDB for the given title and, if any candidates with a poster
+  // come back, opens the picker for itemId. TMDB being unconfigured (503),
+  // a bad/empty response, or a network error are all treated the same way —
+  // silently do nothing, matching "gracefully hidden when unconfigured"
+  // rather than surfacing an error for what's an optional nicety.
+  const searchAndOfferPoster = async (itemId: number, title: string) => {
+    setPosterSearchingId(itemId);
+    try {
+      const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(title)}`);
+      if (!res.ok) return;
+      const data = await res.json() as { results: TmdbCandidate[] };
+      const withPosters = (data.results ?? []).filter(r => r.posterPath);
+      if (withPosters.length > 0) {
+        setPosterCandidates(withPosters);
+        setPosterPickerItemId(itemId);
+      }
+    } catch {
+      // ignore — poster search is a nicety, never block or error the add flow
+    } finally {
+      setPosterSearchingId(null);
+    }
+  };
+
+  const selectPoster = async (itemId: number, candidate: TmdbCandidate) => {
+    setSettingPoster(true);
+    try {
+      await fetch(`/api/marathons/${id}/items/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posterPath: candidate.posterPath, tmdbId: candidate.tmdbId }),
+      });
+      setPosterPickerItemId(null);
+      setPosterCandidates([]);
+      load();
+    } catch {
+      setError('Failed to set poster');
+    } finally {
+      setSettingPoster(false);
+    }
+  };
+
+  const skipPoster = () => {
+    setPosterPickerItemId(null);
+    setPosterCandidates([]);
   };
 
   const setStatus = async (itemId: number, status: Status) => {
@@ -416,9 +478,34 @@ export function MarathonDetail() {
                       />
                       {!item.libraryFilename && <div className="item-hint">{STATUS_HINT_UNLINKED}</div>}
                       {item.libraryFilename && !playable && <div className="item-hint">{STATUS_HINT_MISSING}</div>}
-                      {!item.libraryFilename && !item.posterPath && (
-                        <button className="add-poster-btn" title="Poster search is coming soon" disabled>
-                          <ImagePlus /> Add poster
+                      {!item.libraryFilename && !item.posterPath && posterPickerItemId === item.id && (
+                        <div className="poster-picker">
+                          <div className="poster-picker-title">Choose a poster</div>
+                          <div className="poster-picker-strip">
+                            {posterCandidates.map(c => (
+                              <button
+                                key={c.tmdbId}
+                                type="button"
+                                className="poster-candidate"
+                                title={c.year ? `${c.title} (${c.year})` : c.title}
+                                disabled={settingPoster}
+                                onClick={() => selectPoster(item.id, c)}
+                              >
+                                <img src={`https://image.tmdb.org/t/p/w185${c.posterPath}`} alt="" />
+                              </button>
+                            ))}
+                          </div>
+                          <button type="button" className="link-btn poster-picker-skip" onClick={skipPoster}>Skip</button>
+                        </div>
+                      )}
+                      {!item.libraryFilename && !item.posterPath && posterPickerItemId !== item.id && (
+                        <button
+                          className="add-poster-btn"
+                          title="Search TMDB for a poster"
+                          disabled={posterSearchingId === item.id}
+                          onClick={() => searchAndOfferPoster(item.id, item.title)}
+                        >
+                          <ImagePlus /> {posterSearchingId === item.id ? 'Searching…' : 'Add poster'}
                         </button>
                       )}
                     </div>
