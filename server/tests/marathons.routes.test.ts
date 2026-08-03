@@ -272,6 +272,25 @@ describe('marathon items', () => {
       ['First', 'Second'],
     );
   });
+
+  it('reorders via a direct position instead of move up/down', async () => {
+    const marathonRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 10' } });
+    const marathonId = (marathonRes.json() as { marathon: { id: number } }).marathon.id;
+
+    const addA = await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Pos A' } });
+    const addB = await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Pos B' } });
+    const addC = await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Pos C' } });
+    const itemC = (addC.json() as { item: { id: number } }).item;
+
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/marathons/${marathonId}/items/${itemC.id}`, payload: { position: 0 },
+    });
+    assert.equal(res.statusCode, 200);
+
+    const detail = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+    const titles = (detail.json() as { items: { title: string }[] }).items.map(i => i.title);
+    assert.deepEqual(titles.slice(0, 3), ['Pos C', 'Pos A', 'Pos B']);
+  });
 });
 
 describe('marathon item reviews', () => {

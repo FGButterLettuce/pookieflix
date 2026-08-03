@@ -12,6 +12,7 @@ import {
   updateLibraryLastTime,
   createMarathon, listMarathons, getMarathon, renameMarathon, deleteMarathon, listMarathonItems,
   addMarathonItem, getMarathonItem, updateMarathonItem, deleteMarathonItem, moveMarathonItem, upsertMarathonReview,
+  moveMarathonItemToPosition, scanForOrphanedHlsEntries, recordWatchHistoryEntries, listWatchHistory, dismissWatchHistoryEntry,
 } from './db';
 import {
   generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
@@ -651,7 +652,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const marathonId = Number(id);
     const item = getMarathonItem(Number(itemId));
     if (!item || item.marathon_id !== marathonId) return reply.status(404).send({ error: 'Not found' });
-    const body = req.body as { title?: string; libraryFilename?: string | null; status?: string; move?: 'up' | 'down' };
+    const body = req.body as { title?: string; libraryFilename?: string | null; status?: string; move?: 'up' | 'down'; position?: number };
+
+    if (typeof body.position === 'number') {
+      moveMarathonItemToPosition(item.marathon_id, item.id, body.position);
+      return reply.send({ ok: true });
+    }
 
     if (body.move) {
       moveMarathonItem(item.marathon_id, item.id, body.move);
@@ -706,6 +712,46 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
     upsertMarathonReview(item.id, body.viewer, body.score ?? null, body.note?.trim() || null);
     return reply.send({ ok: true });
+  });
+
+  // ── Watch history ──────────────────────────────────────────────────────
+  app.post('/api/history/scan', { preHandler: requireAdmin }, async (_req, reply) => {
+    const found = scanForOrphanedHlsEntries();
+    recordWatchHistoryEntries(found);
+    return reply.send({ ok: true, found: found.length });
+  });
+
+  app.get('/api/history', { preHandler: requireAdmin }, async (_req, reply) => {
+    const entries = listWatchHistory().map(e => ({
+      id: e.id,
+      title: e.title,
+      detectedAt: e.detected_at,
+    }));
+    return reply.send({ entries });
+  });
+
+  app.delete('/api/history/:id', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    dismissWatchHistoryEntry(Number(id));
+    return reply.send({ ok: true });
+  });
+
+  app.post('/api/history/:id/promote', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { marathonName?: string };
+    const name = body?.marathonName?.trim();
+    if (!name) return reply.status(400).send({ error: 'marathonName is required' });
+
+    const history = listWatchHistory();
+    const entry = history.find(h => h.id === Number(id));
+    if (!entry) return reply.status(404).send({ error: 'Not found' });
+
+    const existing = listMarathons().find(m => m.name === name);
+    const marathon = existing ? getMarathon(existing.id)! : createMarathon(name);
+    const item = addMarathonItem(marathon.id, entry.title, null);
+    updateMarathonItem(item.id, { status: 'done' });
+
+    return reply.status(201).send({ marathonId: marathon.id, item });
   });
 
   // ── Upload: save to library, generate thumb, create room ──────────────────
