@@ -894,8 +894,13 @@ body {
   gap: var(--space-md);
   overflow-x: auto;
   scroll-snap-type: x proximity;
-  padding-bottom: var(--space-xs);
-  margin-bottom: var(--space-2xs);
+  /* top/side padding, not just bottom — .lib-card:hover lifts via
+     translateY(-3px) and :focus-visible adds a 2px outline-offset ring;
+     with zero top padding both were getting clipped by this container's
+     own edge, cutting off the top of the card (and its play-icon overlay)
+     on hover. */
+  padding: var(--space-xs) var(--space-3xs) var(--space-xs);
+  margin: calc(var(--space-xs) * -1) calc(var(--space-3xs) * -1) var(--space-2xs);
 }
 .rail-scroll::-webkit-scrollbar { height: 6px; }
 .rail-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
