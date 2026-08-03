@@ -869,60 +869,106 @@ body {
 
 .library-empty-icon { display: flex; color: var(--text-subtle); margin-bottom: 4px; opacity: 0.6; }
 
-/* Library grid */
-/* ── Rails (Ecosystem Index) ──────────────────────────────────────────────
-   The library is split into discovery surfaces rather than one flat grid:
-   an optional horizontally-scrolling "Continue watching" rail up top, then
-   the full library as a fluid grid below. */
-.rail { padding: var(--space-lg) var(--space-xl) 0; }
+/* ── Home sections ──────────────────────────────────────────────────────────
+   Continue watching / Your lists / Your library all share one section-header
+   treatment instead of each inventing its own — ported from the Lists mockup
+   so Home reads as one consistent surface with the Lists page. */
+.home-section { padding: var(--space-lg) var(--space-xl) 0; }
 
-.rail-head {
+.home-section-header {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   margin-bottom: var(--space-sm);
-}
-
-.rail-title-icon { color: var(--accent); flex-shrink: 0; }
-
-.rail-title {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 13px;
+  font-weight: 800;
   color: var(--text-muted);
 }
+.home-section-header svg { width: 18px; height: 18px; color: var(--accent); }
 
-.rail-count { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.home-section-count { color: var(--text-subtle); font-weight: 700; font-variant-numeric: tabular-nums; }
 
-.rail-scroll {
+/* Autolink suggestion — appears right after an upload finishes, only when
+   the filename plausibly matches an untracked (no library link yet) item
+   somewhere in Your lists. One tap to confirm or dismiss, never silent — a
+   wrong auto-match would misattribute reviews to the wrong movie. */
+.autolink-toast {
+  display: flex; align-items: center; gap: var(--space-sm);
+  background: color-mix(in oklch, var(--accent) 10%, var(--surface));
+  border: 1px solid color-mix(in oklch, var(--accent) 35%, var(--border));
+  border-radius: var(--radius); padding: 0.9rem 1.1rem;
+}
+.autolink-toast-icon { flex-shrink: 0; width: 34px; height: 34px; color: var(--accent); }
+.autolink-toast-icon svg { width: 100%; height: 100%; }
+.autolink-toast-body { flex: 1; min-width: 0; }
+.autolink-toast-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.15rem; }
+.autolink-toast-sub { font-size: 0.9rem; color: var(--text-muted); }
+.autolink-toast-actions { display: flex; align-items: center; gap: 0.9rem; flex-shrink: 0; }
+
+/* Continue Watching — one prominent banner-style card per in-progress title
+   (bigger than the library grid cards below), since it's the single thing
+   you're most likely to click next. */
+.continue-list { display: flex; flex-direction: column; gap: var(--space-md); }
+
+.continue-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.continue-thumb { position: relative; width: 100%; aspect-ratio: 2.4 / 1; overflow: hidden; cursor: pointer; background: #000; }
+.continue-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.continue-thumb .continue-time {
+  position: absolute; bottom: 0.7rem; right: 0.7rem; background: rgba(15,8,15,0.6); backdrop-filter: blur(3px);
+  color: white; font-weight: 700; font-size: 0.85rem; padding: 0.2rem 0.55rem; border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+.continue-thumb .progress-rail { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,0.25); }
+.continue-thumb .progress-rail-fill { height: 100%; background: var(--accent); }
+.continue-body { padding: 1.05rem 1.15rem 1.15rem; }
+.continue-title { font-weight: 800; font-size: 1.15rem; margin-bottom: 0.5rem; word-break: break-word; cursor: text; }
+.continue-meta { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.meta-pill {
+  display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; font-weight: 700;
+  color: var(--text-muted); background: var(--surface2); border-radius: var(--radius-sm); padding: 0.2rem 0.55rem;
+}
+.meta-pill.cc { color: var(--success); background: color-mix(in oklch, var(--success) 16%, var(--surface2)); }
+.continue-actions { display: flex; gap: 0.6rem; }
+.btn-resume {
+  flex: 1; height: 50px; border-radius: var(--radius-sm); border: none; background: var(--accent);
+  color: var(--accent-ink); font: inherit; font-weight: 800; font-size: 1rem; display: flex; align-items: center;
+  justify-content: center; gap: 0.5rem; cursor: pointer; transition: background-color 180ms;
+}
+.btn-resume:hover { background: var(--accent-hover); }
+.btn-resume svg { width: 18px; height: 18px; }
+
+/* Your lists — reuses .marathon-card from the full Lists page, laid out as
+   a horizontal scroll strip here instead of a grid. */
+.home-rail {
   display: flex;
   gap: var(--space-md);
   overflow-x: auto;
-  scroll-snap-type: x proximity;
-  /* top/side padding, not just bottom — .lib-card:hover lifts via
-     translateY(-3px) and :focus-visible adds a 2px outline-offset ring;
-     with zero top padding both were getting clipped by this container's
-     own edge, cutting off the top of the card (and its play-icon overlay)
-     on hover. */
-  padding: var(--space-xs) var(--space-3xs) var(--space-xs);
-  margin: calc(var(--space-xs) * -1) calc(var(--space-3xs) * -1) var(--space-2xs);
+  scrollbar-width: thin;
+  /* top/side padding + matching negative margin, not just bottom — same
+     hover/focus-ring clipping fix as the old rail-scroll container. */
+  padding: var(--space-xs) var(--space-3xs) var(--space-sm);
+  margin: calc(var(--space-xs) * -1) calc(var(--space-3xs) * -1) 0;
 }
-.rail-scroll::-webkit-scrollbar { height: 6px; }
-.rail-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+.home-rail::-webkit-scrollbar { height: 6px; }
+.home-rail::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+.home-rail .marathon-card { flex-shrink: 0; width: 220px; }
 
-/* Continue Watching is the single thing you're most likely to click, so
-   it gets a visibly larger card than the library grid below it instead
-   of matching size — earns the extra visual weight. */
-.rail-scroll > .lib-card { flex: 0 0 360px; scroll-snap-align: start; }
-
+/* Library grid */
 .library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: var(--space-md) var(--space-lg);
 }
 
-.lib-card {
+.library-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -935,7 +981,7 @@ body {
   transition: border-color var(--dur-short) var(--ease-out), transform var(--dur-short) var(--ease-out), box-shadow var(--dur-short) var(--ease-out);
 }
 
-.lib-card:hover {
+.library-card:hover {
   border-color: color-mix(in oklch, var(--accent) 50%, var(--border));
   transform: translateY(-3px);
   box-shadow: var(--shadow-raised);

@@ -9,9 +9,10 @@ import { getViewer, clearViewer } from '../lib/viewer';
 import type { LibraryFile } from '../types';
 import {
   Play, Pause, Square, RotateCw, History, Captions,
-  Trash2, MoreHorizontal, Settings, Upload, Check, Film, LayoutGrid,
+  Trash2, MoreHorizontal, Settings, Upload, Check, CheckCircle2, Film, LayoutGrid,
   ListChecks, Users,
 } from 'lucide-react';
+import { ListCard } from '../components/ListCard';
 
 
 
@@ -49,6 +50,22 @@ function progressPct(lastTime: number, duration: number): number {
   return Math.min(100, (lastTime / duration) * 100);
 }
 
+interface MarathonSummary {
+  id: number;
+  name: string;
+  position: number;
+  itemCount: number;
+  doneCount: number;
+}
+
+interface AutolinkSuggestion {
+  marathonId: number;
+  marathonName: string;
+  itemId: number;
+  itemTitle: string;
+  filename: string;
+}
+
 export function Home() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,6 +101,11 @@ export function Home() {
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
+  const [marathons, setMarathons] = useState<MarathonSummary[]>([]);
+  const [lanUrl, setLanUrl] = useState('');
+  const [autolinkSuggestion, setAutolinkSuggestion] = useState<AutolinkSuggestion | null>(null);
+  const [autolinking, setAutolinking] = useState(false);
+
   const loadLibrary = useCallback(() => {
     fetch('/api/library')
       .then(r => {
@@ -117,6 +139,22 @@ export function Home() {
     const interval = setInterval(loadLibrary, 3000);
     return () => clearInterval(interval);
   }, [authed, loadLibrary]);
+
+  useEffect(() => {
+    if (!authed) return;
+    fetch('/api/marathons')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { marathons: MarathonSummary[] } | null) => { if (d) setMarathons(d.marathons); })
+      .catch(() => {});
+  }, [authed]);
+
+  useEffect(() => {
+    if (!authed) return;
+    fetch('/api/settings')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { LAN_URL?: string } | null) => { if (d?.LAN_URL) setLanUrl(d.LAN_URL); })
+      .catch(() => {});
+  }, [authed]);
 
   const login = async () => {
     setLoginLoading(true);
@@ -173,7 +211,7 @@ export function Home() {
       const formData = new FormData();
       formData.append('video', file);
 
-      const result = await new Promise<{ roomToken: string; roomUrl: string }>((resolve, reject) => {
+      const result = await new Promise<{ roomToken: string; roomUrl: string; filename: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', uploadUrl && !onUploadOrigin ? `${uploadUrl}/api/upload` : '/api/upload');
         xhr.withCredentials = true;
@@ -194,10 +232,46 @@ export function Home() {
       setUploadedRoomUrl(result.roomUrl);
       setUploading(false);
       setUploadingName('');
+      loadLibrary();
+      checkAutolink(result.filename);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
       setUploading(false);
       setUploadingName('');
+    }
+  };
+
+  // After an upload finishes, see if the filename plausibly matches an
+  // untracked (no library link yet) item somewhere in a list — never links
+  // automatically, just surfaces a one-tap suggestion (a wrong auto-match
+  // would misattribute reviews to the wrong movie).
+  const checkAutolink = (filename: string) => {
+    fetch(`/api/marathons/match?filename=${encodeURIComponent(filename)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { match: { marathonId: number; marathonName: string; itemId: number; itemTitle: string } | null } | null) => {
+        if (d?.match) {
+          setAutolinkSuggestion({ ...d.match, filename });
+        }
+      })
+      .catch(() => {});
+  };
+
+  const dismissAutolink = () => setAutolinkSuggestion(null);
+
+  const linkAutolink = async () => {
+    if (!autolinkSuggestion) return;
+    setAutolinking(true);
+    try {
+      await fetch(`/api/marathons/${autolinkSuggestion.marathonId}/items/${autolinkSuggestion.itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ libraryFilename: autolinkSuggestion.filename }),
+      });
+      setAutolinkSuggestion(null);
+    } catch {
+      setError('Failed to link to list item');
+    } finally {
+      setAutolinking(false);
     }
   };
 
@@ -383,7 +457,7 @@ export function Home() {
     const hasThumb = f.thumbReady && !thumbErrors.has(f.filename);
 
     return (
-      <div key={f.filename} className="lib-card">
+      <div key={f.filename} className="library-card">
         {/* Thumbnail */}
         <div className="lib-thumb-wrap" onClick={() => createRoomFrom(f.filename)}>
           {hasThumb ? (
@@ -563,6 +637,161 @@ export function Home() {
     );
   }
 
+  // Continue Watching gets its own bigger, banner-style card instead of the
+  // small library grid card — it's the single thing you're most likely to
+  // click next. Same data/actions as renderCard above, just a different
+  // container.
+  function renderContinueCard(f: LibraryFile) {
+    const pct = progressPct(f.lastTime, f.duration);
+    const hasThumb = f.thumbReady && !thumbErrors.has(f.filename);
+
+    return (
+      <div key={f.filename} className="continue-card">
+        <div className="continue-thumb" onClick={() => createRoomFrom(f.filename)}>
+          {hasThumb ? (
+            <img
+              src={`${f.thumbUrl}?v=${f.lastPlayedAt}`}
+              alt=""
+              onError={() => setThumbErrors(s => new Set([...s, f.filename]))}
+            />
+          ) : (
+            <div className="lib-thumb-placeholder">
+              {f.thumbReady ? <Film size={28} /> : <span className="thumb-spinner" />}
+            </div>
+          )}
+          {f.duration > 0 && <span className="continue-time">{formatDuration(f.duration)}</span>}
+          <div className="progress-rail"><div className="progress-rail-fill" style={{ width: `${pct}%` }} /></div>
+        </div>
+
+        <div className="continue-body">
+          {renamingFile === f.filename ? (
+            <input
+              className="lib-rename-input"
+              value={renameValue}
+              autoFocus
+              onChange={e => setRenameValue(e.target.value)}
+              onBlur={() => commitRename(f.filename)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') commitRename(f.filename);
+                if (e.key === 'Escape') setRenamingFile(null);
+              }}
+            />
+          ) : (
+            <div className="continue-title" title={`Click to rename ${f.filename}`} onClick={() => startRename(f.filename)}>
+              {f.filename}
+            </div>
+          )}
+
+          <div className="continue-meta">
+            <span className="meta-pill">{formatBytes(f.size)}</span>
+            {f.subtitleFetching && <span className="meta-pill" title="Fetching subtitles…">CC…</span>}
+            {!f.subtitleFetching && f.hasSubtitles && (
+              <span className="meta-pill cc"><Check size={13} /> CC {langFlag(subtitleLang)}</span>
+            )}
+            {f.transcodeStatus === 'running' && <span className="meta-pill" title="Transcoding to HLS…">HLS…</span>}
+            {f.transcodeStatus === 'paused' && <span className="meta-pill" title="Transcode paused">HLS paused</span>}
+            {f.transcodeStatus === 'queued' && <span className="meta-pill" title="Waiting for another transcode to finish first">HLS queued</span>}
+          </div>
+
+          <div className="continue-actions">
+            <button className="btn-resume" onClick={() => createRoomFrom(f.filename)}>
+              <Play size={18} />
+              Resume
+            </button>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button className="lib-menu-btn" title="More actions">
+                  <MoreHorizontal />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content className="lib-menu" align="end" sideOffset={8} collisionPadding={8}>
+                  <DropdownMenu.Item
+                    className={`lib-menu-item${f.hasSubtitles ? ' lib-menu-item--sub-active' : ''}`}
+                    onSelect={() => openSubPicker(f.filename)}
+                  >
+                    <Captions />
+                    {f.hasSubtitles ? `Subtitles (${langFlag(subtitleLang)})` : 'Add subtitles'}
+                  </DropdownMenu.Item>
+
+                  {f.transcodeStatus === 'queued' && (
+                    <DropdownMenu.Item
+                      className="lib-menu-item"
+                      disabled={transcodeBusy === f.filename}
+                      onSelect={() => void transcodeAction(f.filename, 'cancel')}
+                    >
+                      <Square /> Cancel (queued)
+                    </DropdownMenu.Item>
+                  )}
+                  {f.transcodeStatus === 'running' && (
+                    <>
+                      <DropdownMenu.Item
+                        className="lib-menu-item"
+                        disabled={transcodeBusy === f.filename}
+                        onSelect={() => void transcodeAction(f.filename, 'pause')}
+                      >
+                        <Pause /> Pause transcode
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        className="lib-menu-item"
+                        disabled={transcodeBusy === f.filename}
+                        onSelect={() => void transcodeAction(f.filename, 'cancel')}
+                      >
+                        <Square /> Cancel transcode
+                      </DropdownMenu.Item>
+                    </>
+                  )}
+                  {f.transcodeStatus === 'paused' && (
+                    <>
+                      <DropdownMenu.Item
+                        className="lib-menu-item"
+                        disabled={transcodeBusy === f.filename}
+                        onSelect={() => void transcodeAction(f.filename, 'resume')}
+                      >
+                        <Play /> Resume transcode
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        className="lib-menu-item"
+                        disabled={transcodeBusy === f.filename}
+                        onSelect={() => void transcodeAction(f.filename, 'cancel')}
+                      >
+                        <Square /> Cancel transcode
+                      </DropdownMenu.Item>
+                    </>
+                  )}
+                  {(f.transcodeStatus === 'complete' || f.transcodeStatus === 'none') && (
+                    <DropdownMenu.Item
+                      className="lib-menu-item"
+                      disabled={transcodeBusy === f.filename}
+                      onSelect={() => void transcodeAction(f.filename, 'restart')}
+                    >
+                      <RotateCw /> {f.transcodeStatus === 'complete' ? 'Re-transcode' : 'Transcode now'}
+                    </DropdownMenu.Item>
+                  )}
+
+                  {f.lastTime > 5 && (
+                    <DropdownMenu.Item className="lib-menu-item" onSelect={() => void resetProgress(f.filename)}>
+                      <History /> Start over
+                    </DropdownMenu.Item>
+                  )}
+
+                  <DropdownMenu.Separator className="lib-menu-divider" />
+                  <DropdownMenu.Item
+                    className="lib-menu-item lib-menu-item--danger"
+                    disabled={deletingFile === f.filename}
+                    onSelect={() => deleteFile(f.filename)}
+                  >
+                    <Trash2 /> {deletingFile === f.filename ? 'Deleting…' : 'Delete'}
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (authed === false) {
     return (
       <div className="home-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
@@ -592,7 +821,16 @@ export function Home() {
     <div className="home-root">
       <header className="home-topbar">
         <span className="home-logo"><Logo size="sm" variant={theme} /></span>
-        <Link to="/marathons" className="settings-link" title="Marathons"><ListChecks /></Link>
+        {lanUrl && (
+          <button
+            className="settings-link"
+            title="Upload (opens your LAN address — large video uploads are unreliable over the public tunnel)"
+            onClick={() => window.open(lanUrl, '_blank', 'noopener,noreferrer')}
+          >
+            <Upload />
+          </button>
+        )}
+        <Link to="/marathons" className="settings-link" title="Lists"><ListChecks /></Link>
         <button className="settings-link" title="Switch profile" onClick={() => { clearViewer(); navigate('/whos-watching'); }}><Users /></button>
         <Link to="/settings" className="settings-link" title="Settings"><Settings /></Link>
       </header>
@@ -646,9 +884,61 @@ export function Home() {
         </div>
       )}
 
+      {/* Autolink suggestion — appears right after an upload finishes, only
+          when the filename plausibly matches an untracked (no library link
+          yet) item somewhere in a list. Never links automatically. */}
+      {autolinkSuggestion && (
+        <div className="home-section" style={{ paddingBottom: 0 }}>
+          <div className="autolink-toast">
+            <div className="autolink-toast-icon"><CheckCircle2 /></div>
+            <div className="autolink-toast-body">
+              <div className="autolink-toast-title">"{autolinkSuggestion.filename}" looks like a match</div>
+              <div className="autolink-toast-sub">
+                Link it to "{autolinkSuggestion.itemTitle}" in <b>{autolinkSuggestion.marathonName}</b>?
+              </div>
+            </div>
+            <div className="autolink-toast-actions">
+              <button className="primary-btn" style={{ width: 'auto', height: 40, padding: '0 1rem', fontSize: '0.9rem', margin: 0 }} onClick={() => void linkAutolink()} disabled={autolinking}>
+                {autolinking ? 'Linking…' : 'Link it'}
+              </button>
+              <button className="link-btn" onClick={dismissAutolink}>Dismiss</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Library — split into discovery surfaces rather than one flat grid:
-          an in-progress rail up top (when anything's mid-watch), then the
-          full library below. Same card renderer, two contexts. */}
+          a prominent "Continue watching" section up top (when anything's
+          mid-watch), the lists rail, then the full library below. */}
+      {continuing.length > 0 && (
+        <div className="home-section">
+          <div className="home-section-header">
+            <Play />
+            Continue watching <span className="home-section-count">{continuing.length}</span>
+          </div>
+          <div className="continue-list">
+            {continuing.map(f => renderContinueCard(f))}
+          </div>
+        </div>
+      )}
+
+      {marathons.length > 0 && (
+        <div className="home-section">
+          <div className="home-section-header" style={{ justifyContent: 'space-between' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+              <ListChecks />
+              Your lists <span className="home-section-count">{marathons.length}</span>
+            </span>
+            <Link to="/marathons" className="link-btn" style={{ textTransform: 'none', letterSpacing: 'normal', fontSize: '0.9rem' }}>
+              See all →
+            </Link>
+          </div>
+          <div className="home-rail">
+            {marathons.map(m => <ListCard key={m.id} {...m} />)}
+          </div>
+        </div>
+      )}
+
       {library.length === 0 && !uploading ? (
         <div className="library-empty">
           <div className="library-empty-icon"><Film size={40} /></div>
@@ -658,31 +948,15 @@ export function Home() {
           </div>
         </div>
       ) : (
-        <>
-          {continuing.length > 0 && (
-            <section className="rail">
-              <div className="rail-head">
-                <Play size={14} className="rail-title-icon" />
-                <span className="rail-title">Continue watching</span>
-                <span className="rail-count">{continuing.length}</span>
-              </div>
-              <div className="rail-scroll">
-                {continuing.map(f => renderCard(f))}
-              </div>
-            </section>
-          )}
-
-          <section className="rail">
-            <div className="rail-head">
-              <LayoutGrid size={14} className="rail-title-icon" />
-              <span className="rail-title">Your library</span>
-              <span className="rail-count">{library.length}</span>
-            </div>
-            <div className="library-grid">
-              {library.map(f => renderCard(f))}
-            </div>
-          </section>
-        </>
+        <div className="home-section">
+          <div className="home-section-header">
+            <LayoutGrid />
+            Your library <span className="home-section-count">{library.length}</span>
+          </div>
+          <div className="library-grid">
+            {library.map(f => renderCard(f))}
+          </div>
+        </div>
       )}
 
       {/* Subtitle modal */}

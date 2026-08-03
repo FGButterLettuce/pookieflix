@@ -319,6 +319,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       UPLOAD_URL: process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? '',
       OPENSUBTITLES_API_KEY: osKey ? '••••••••' : '',  // mask — never expose key over HTTP
       TMDB_API_KEY: tmdbKey ? '••••••••' : '',  // mask — never expose key over HTTP
+      LAN_URL: process.env.LAN_URL ?? persisted.LAN_URL ?? '',  // plain URL, not a secret — safe to expose as-is
       USER_NAME: persisted.USER_NAME ?? '',
       PARTNER_NAME: persisted.PARTNER_NAME ?? '',
       TUNNEL_CONFIGURED: !!tunnelToken,  // write-only field — never expose the token itself
@@ -334,6 +335,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
       OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
       TMDB_API_KEY: body.TMDB_API_KEY?.trim() || undefined,
+      LAN_URL: body.LAN_URL?.trim() || undefined,
       USER_NAME: body.USER_NAME?.trim() || undefined,
       PARTNER_NAME: body.PARTNER_NAME?.trim() || undefined,
       // Omit entirely (rather than sending undefined) when blank, so an

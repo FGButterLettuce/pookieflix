@@ -19,6 +19,7 @@ interface SettingsData {
   UPLOAD_URL: string;
   OPENSUBTITLES_API_KEY: string;
   TMDB_API_KEY: string;
+  LAN_URL: string;
   USER_NAME: string;
   PARTNER_NAME: string;
   TUNNEL_CONFIGURED: boolean;
@@ -39,6 +40,7 @@ export function Settings() {
     UPLOAD_URL: '',
     OPENSUBTITLES_API_KEY: '',
     TMDB_API_KEY: '',
+    LAN_URL: '',
     USER_NAME: '',
     PARTNER_NAME: '',
     TUNNEL_CONFIGURED: false,
@@ -248,6 +250,21 @@ export function Settings() {
               onChange={set('UPLOAD_URL')}
             />
             <div className="setup-hint" style={{ marginBottom: 0 }}>Direct upload path bypassing Cloudflare</div>
+          </div>
+
+          <div className="settings-field">
+            <label className="settings-label">LAN address <span className="settings-optional">(optional)</span></label>
+            <PasteableInput
+              className="setup-input"
+              type="url"
+              placeholder="http://192.168.0.91:3000"
+              value={values.LAN_URL}
+              onChange={set('LAN_URL')}
+            />
+            <div className="setup-hint" style={{ marginBottom: 0 }}>
+              Your PookieFlix box's local network address (e.g. http://192.168.0.91:3000) — used for the Upload
+              shortcut, since large video uploads are unreliable over the public tunnel.
+            </div>
           </div>
 
           {/* Flattened directly into Access — no nested bordered card. A
