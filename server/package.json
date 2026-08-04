@@ -1,6 +1,6 @@
 {
   "name": "pookieflix-server",
-  "version": "1.5.25",
+  "version": "1.5.26",
   "private": true,
   "type": "commonjs",
   "scripts": {
