@@ -1,3 +1,7 @@
+## v1.5.15 - 2026-08-03
+
+- Merge branch 'movie-marathon-tracker'
+
 ## v1.5.14 - 2026-08-02
 
 - Switch hardware transcode path from QSV to VAAPI
