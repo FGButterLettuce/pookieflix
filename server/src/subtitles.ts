@@ -138,12 +138,29 @@ function backupPath(videoPath: string): string {
   return subtitlePath(videoPath) + '.presync.bak';
 }
 
-function runAlass(referencePath: string, inputSrt: string, outputSrt: string): Promise<boolean> {
+interface AlassResult { ok: boolean; stderr: string; timedOut: boolean; }
+
+function runAlass(referencePath: string, inputSrt: string, outputSrt: string): Promise<AlassResult> {
   return new Promise(resolve => {
     const proc = spawn('alass', [referencePath, inputSrt, outputSrt]);
-    const timer = setTimeout(() => { try { proc.kill(); } catch {} resolve(false); }, SYNC_TIMEOUT_MS);
-    proc.on('close', code => { clearTimeout(timer); resolve(code === 0); });
-    proc.on('error', () => { clearTimeout(timer); resolve(false); });
+    let stderr = '';
+    proc.stderr?.on('data', chunk => { stderr += chunk.toString(); });
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { proc.kill(); } catch { /* ignore */ }
+    }, SYNC_TIMEOUT_MS);
+    // alass's own progress bar overwrites itself with \r — only the tail after
+    // the last one is meaningful, the rest is just terminal-width noise.
+    const lastLine = () => stderr.split('\r').pop()?.trim().slice(-300) ?? '';
+    proc.on('close', code => {
+      clearTimeout(timer);
+      resolve({ ok: code === 0, stderr: lastLine(), timedOut });
+    });
+    proc.on('error', err => {
+      clearTimeout(timer);
+      resolve({ ok: false, stderr: err.message, timedOut: false });
+    });
   });
 }
 
@@ -160,8 +177,13 @@ export async function syncSubtitles(videoPath: string): Promise<{ ok: true } | {
     const vttContent = fs.readFileSync(vttPath, 'utf8');
     fs.writeFileSync(tmpSrtIn, vttToSrt(vttContent), 'utf8');
 
-    const ok = await runAlass(videoPath, tmpSrtIn, tmpSrtOut);
-    if (!ok) return { ok: false, error: 'alass failed to align subtitles' };
+    const result = await runAlass(videoPath, tmpSrtIn, tmpSrtOut);
+    if (!result.ok) {
+      const reason = result.timedOut
+        ? `timed out after ${SYNC_TIMEOUT_MS / 1000}s`
+        : result.stderr || 'no error output';
+      return { ok: false, error: `alass failed to align subtitles: ${reason}` };
+    }
 
     // Back up the pre-sync content only now that we know the sync succeeded —
     // backing this up unconditionally at the top would let a *failed* re-sync
@@ -187,6 +209,52 @@ export function undoSync(videoPath: string): boolean {
   fs.copyFileSync(backup, subtitlePath(videoPath));
   fs.rmSync(backup);
   return true;
+}
+
+// ── Manual subtitle shift ─────────────────────────────────────────────────────
+// Fallback for when alass can't find an audio-alignment match (or gets it wrong)
+// — a plain uniform offset applied to every cue, nudged interactively.
+
+function parseVttTimestamp(ts: string): number {
+  const parts = ts.split(':');
+  const [h, m, s] = parts.length === 3 ? parts : ['0', ...parts];
+  return parseInt(h, 10) * 3600000 + parseInt(m, 10) * 60000 + Math.round(parseFloat(s) * 1000);
+}
+
+function formatVttTimestamp(ms: number): string {
+  const clamped = Math.max(0, Math.round(ms));
+  const h = Math.floor(clamped / 3600000);
+  const m = Math.floor((clamped % 3600000) / 60000);
+  const s = Math.floor((clamped % 60000) / 1000);
+  const msRem = clamped % 1000;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(msRem).padStart(3, '0')}`;
+}
+
+const VTT_CUE_TIME_RE = /(\d{1,2}:)?\d{2}:\d{2}\.\d{3} --> (\d{1,2}:)?\d{2}:\d{2}\.\d{3}/g;
+
+export function shiftVtt(content: string, deltaMs: number): string {
+  return content.replace(VTT_CUE_TIME_RE, (line) => {
+    const [start, end] = line.split(' --> ');
+    return `${formatVttTimestamp(parseVttTimestamp(start) + deltaMs)} --> ${formatVttTimestamp(parseVttTimestamp(end) + deltaMs)}`;
+  });
+}
+
+export function shiftSubtitles(videoPath: string, deltaMs: number): { ok: true } | { ok: false; error: string } {
+  const vttPath = subtitlePath(videoPath);
+  if (!fs.existsSync(vttPath)) return { ok: false, error: 'No subtitles to shift' };
+  try {
+    // Only back up once per editing session — same rule as syncSubtitles — so
+    // "Undo" always returns to the state before any manual adjustment, not just
+    // the last single nudge.
+    if (!fs.existsSync(backupPath(videoPath))) {
+      fs.copyFileSync(vttPath, backupPath(videoPath));
+    }
+    const content = fs.readFileSync(vttPath, 'utf8');
+    fs.writeFileSync(vttPath, shiftVtt(content, deltaMs), 'utf8');
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Unexpected error shifting subtitles' };
+  }
 }
 
 // ── Public entry points ───────────────────────────────────────────────────────

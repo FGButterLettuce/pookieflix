@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Bug } from 'lucide-react';
+import Hls from 'hls.js';
 import { VideoPlayer } from '../components/VideoPlayer';
 import type { VideoPlayerHandle } from '../components/VideoPlayer';
 import { RoomStatus } from '../components/RoomStatus';
+import { DebugPanel } from '../components/DebugPanel';
 import { Logo } from '../components/Logo';
 import { useTheme } from '../theme/ThemeContext';
 import { WsClient } from '../lib/wsClient';
@@ -29,14 +31,25 @@ const HEARTBEAT_INTERVAL = 500;
 // suspended buffer before playback starts (as this app's sync-then-PLAY_AT
 // flow does) — DEMUXER_ERROR_COULD_NOT_PARSE fires the moment playback
 // actually begins. Safari's native HLS is the mature, battle-tested one, so
-// restrict this path to real Safari and let everything else use direct MP4.
+// restrict *native* HLS playback to real Safari.
 function isSafari(): boolean {
   return /^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent);
 }
 
-function supportsHLS(): boolean {
+function supportsNativeHLS(): boolean {
   const v = document.createElement('video');
   return isSafari() && v.canPlayType('application/vnd.apple.mpegurl') !== '';
+}
+
+// Every non-Safari browser skipped the transcoded HLS stream entirely and fell
+// back to the raw source file over one long-lived Range-requested connection —
+// fine for a stable connection, but a single dropped/canceled request there
+// stalls the whole stream with no way to recover short of a full reseek.
+// hls.js (a proper MSE-based remuxer, unlike Chrome's flaky native attempt
+// above) lets those browsers use the same transcode via many small
+// independent segment requests, so one bad request only costs one segment.
+function canUseHls(hlsUrl: string | undefined): boolean {
+  return !!hlsUrl && (supportsNativeHLS() || Hls.isSupported());
 }
 
 interface RoomInfo {
@@ -72,7 +85,10 @@ export function Room() {
   const [subSynced, setSubSynced] = useState(false);
   const [subSyncError, setSubSyncError] = useState('');
   const [subUndoing, setSubUndoing] = useState(false);
+  const [subShifting, setSubShifting] = useState(false);
+  const [subShiftTotalMs, setSubShiftTotalMs] = useState(0);
 
+  const [showDebug, setShowDebug] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const previewModeRef = useRef(false);
   useEffect(() => { previewModeRef.current = previewMode; }, [previewMode]);
@@ -279,6 +295,7 @@ export function Room() {
       setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
       setSubSynced(false);
       setSubSyncError('');
+      setSubShiftTotalMs(0);
       setShowSubPicker(false);
       setSubResults([]);
     } finally {
@@ -292,6 +309,7 @@ export function Room() {
     setSubResults([]);
     setSubSynced(false);
     setSubSyncError('');
+    setSubShiftTotalMs(0);
   }, []);
 
   const syncSubs = useCallback(async () => {
@@ -308,6 +326,7 @@ export function Room() {
         return;
       }
       setSubSynced(true);
+      setSubShiftTotalMs(0);
       setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
     } catch {
       setSubSyncError('Sync failed');
@@ -325,8 +344,34 @@ export function Room() {
       });
     } finally {
       setSubSynced(false);
+      setSubShiftTotalMs(0);
       setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
       setSubUndoing(false);
+    }
+  }, [roomInfo, token]);
+
+  const shiftSubs = useCallback(async (deltaMs: number) => {
+    if (!roomInfo) return;
+    setSubShifting(true);
+    setSubSyncError('');
+    try {
+      const res = await fetch(`/api/library/${encodeURIComponent(roomInfo.mediaFilename)}/subtitles/shift`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deltaMs }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setSubSyncError(data.error ?? 'Shift failed');
+        return;
+      }
+      setSubSynced(true);
+      setSubShiftTotalMs(v => v + deltaMs);
+      setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
+    } catch {
+      setSubSyncError('Shift failed');
+    } finally {
+      setSubShifting(false);
     }
   }, [roomInfo, token]);
 
@@ -390,6 +435,13 @@ export function Room() {
         <RoomStatus state={roomState} viewerCount={viewerCount || roomInfo.viewerCount} />
         <div className="room-actions">
           <button
+            className={`copy-btn sub-btn${showDebug ? ' sub-btn--active' : ''}`}
+            onClick={() => setShowDebug(v => !v)}
+            title="Debug: errors & warnings"
+          >
+            <Bug size={14} />
+          </button>
+          <button
             className={`copy-btn sub-btn${subtitleUrl ? ' sub-btn--active' : ''}`}
             onClick={() => setShowSubPicker(v => !v)}
             title={subtitleUrl ? 'Subtitles on · click to change' : 'Subtitles off · click to search'}
@@ -431,6 +483,18 @@ export function Room() {
               </button>
             )}
           </div>
+          {subtitleUrl && (
+            <div className="sub-shift-row">
+              <span className="sub-shift-label">Manual sync:</span>
+              <button className="copy-btn sub-shift-btn" onClick={() => void shiftSubs(-500)} disabled={subShifting || subUndoing} title="Subtitles 500ms earlier">−500ms</button>
+              <button className="copy-btn sub-shift-btn" onClick={() => void shiftSubs(-100)} disabled={subShifting || subUndoing} title="Subtitles 100ms earlier">−100ms</button>
+              <button className="copy-btn sub-shift-btn" onClick={() => void shiftSubs(100)} disabled={subShifting || subUndoing} title="Subtitles 100ms later">+100ms</button>
+              <button className="copy-btn sub-shift-btn" onClick={() => void shiftSubs(500)} disabled={subShifting || subUndoing} title="Subtitles 500ms later">+500ms</button>
+              {subShiftTotalMs !== 0 && (
+                <span className="sub-shift-total">{subShiftTotalMs > 0 ? '+' : ''}{subShiftTotalMs}ms</span>
+              )}
+            </div>
+          )}
           {subSynced && (
             <p className="sub-sync-status">
               Synced. <button className="sub-sync-undo" onClick={() => void undoSyncSubs()} disabled={subSyncing || subUndoing}>Undo</button>
@@ -462,7 +526,8 @@ export function Room() {
       <div className="room-player">
         <VideoPlayer
           ref={videoPlayerRef}
-          src={roomInfo.hlsUrl && supportsHLS() ? roomInfo.hlsUrl : roomInfo.mediaUrl}
+          src={canUseHls(roomInfo.hlsUrl) ? roomInfo.hlsUrl! : roomInfo.mediaUrl}
+          useHlsJs={canUseHls(roomInfo.hlsUrl) && !supportsNativeHLS()}
           subtitleUrl={subtitleUrl}
           onControllerReady={handleControllerReady}
           onUserPlay={handleUserPlay}
@@ -548,6 +613,7 @@ export function Room() {
         )}
       </div>
 
+      {showDebug && <DebugPanel onClose={() => setShowDebug(false)} />}
     </div>
   );
 }

@@ -1,8 +1,11 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import Hls from 'hls.js';
 import type { VideoController } from '../lib/videoController';
+import { rlog } from '../lib/remoteLogger';
 
 interface Props {
   src: string;
+  useHlsJs?: boolean; // true for .m3u8 sources on browsers without native HLS (non-Safari)
   subtitleUrl?: string;
   onControllerReady: (vc: VideoController) => void;
   onUserPlay: () => void;
@@ -15,21 +18,55 @@ export interface VideoPlayerHandle {
 }
 
 export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPlayer(
-  { src, subtitleUrl, onControllerReady, onUserPlay, onUserPause, onUserSeek },
+  { src, useHlsJs, subtitleUrl, onControllerReady, onUserPlay, onUserPause, onUserSeek },
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const controllerRef = useRef<VideoController | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const prevSrcRef = useRef<string>('');
 
   useImperativeHandle(ref, () => ({
     get videoElement() { return videoRef.current; },
   }));
 
+  // Attach the media source — native `src` for MP4/Safari-HLS, hls.js (MSE) for
+  // .m3u8 on every other browser, none of which have native HLS support.
   useEffect(() => {
     const video = videoRef.current;
     if (!video || prevSrcRef.current === src) return;
     prevSrcRef.current = src;
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    if (useHlsJs && Hls.isSupported()) {
+      const hls = new Hls();
+      hlsRef.current = hls;
+      hls.on(Hls.Events.ERROR, (_evt, data) => {
+        rlog.error(`HLS.js error type=${data.type} details=${data.details} fatal=${data.fatal}`);
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
+              hls.destroy();
+              hlsRef.current = null;
+              break;
+          }
+        }
+      });
+      hls.loadSource(src);
+      hls.attachMedia(video);
+    } else {
+      video.src = src;
+    }
 
     import('../lib/videoController').then(({ VideoController }) => {
       if (controllerRef.current) {
@@ -39,7 +76,14 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
       controllerRef.current = vc;
       onControllerReady(vc);
     });
-  }, [src, onControllerReady]);
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [src, useHlsJs, onControllerReady]);
 
   // Wire user-initiated events from native controls
   useEffect(() => {

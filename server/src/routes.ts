@@ -20,7 +20,7 @@ import {
   getTranscodeStatus, cancelTranscode, pauseTranscode, resumeTranscode, restartTranscode,
 } from './ffmpeg';
 import { getRuntimeByToken } from './roomManager';
-import { fetchSubtitles, subtitlePath, searchSubtitles, extractTitle, srtToVtt, syncSubtitles, undoSync } from './subtitles';
+import { fetchSubtitles, subtitlePath, searchSubtitles, extractTitle, srtToVtt, syncSubtitles, undoSync, shiftSubtitles } from './subtitles';
 import { startTunnel, stopTunnel, reconnectTunnel, getTunnelStatus } from './tunnel';
 
 // ── Remote log buffer ─────────────────────────────────────────────────────────
@@ -628,6 +628,27 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const restored = undoSync(filePath);
     if (!restored) return reply.status(404).send({ error: 'Nothing to undo' });
+    return reply.send({ ok: true });
+  });
+
+  // ── Subtitle sync (manual shift) ────────────────────────────────────────────
+  app.post('/api/library/:filename/subtitles/shift', {
+    config: { rateLimit: { max: 60, timeWindow: '1m' } },
+    preHandler: requireAdmin,
+  }, async (req, reply) => {
+    const { filename } = req.params as { filename: string };
+    if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send({ error: 'Invalid filename' });
+    let filePath: string;
+    try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
+    if (!fs.existsSync(filePath)) return reply.status(404).send({ error: 'Not found' });
+
+    const { deltaMs } = req.body as { deltaMs?: number };
+    if (typeof deltaMs !== 'number' || !Number.isFinite(deltaMs) || Math.abs(deltaMs) > 60_000) {
+      return reply.status(400).send({ error: 'Invalid deltaMs' });
+    }
+
+    const result = shiftSubtitles(filePath, deltaMs);
+    if (!result.ok) return reply.status(422).send({ error: result.error });
     return reply.send({ ok: true });
   });
 
