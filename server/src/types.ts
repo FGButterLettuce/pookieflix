@@ -179,6 +179,7 @@ export interface LibraryFileInfo {
   lastPlayedAt: number;
   thumbReady: boolean;
   thumbUrl: string;
+  posterPath: string | null;
   hasSubtitles: boolean;
   subtitleFetching: boolean;
   subtitleName: string | null;

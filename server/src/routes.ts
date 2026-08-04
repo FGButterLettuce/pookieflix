@@ -13,7 +13,7 @@ import {
   createMarathon, listMarathons, getMarathon, renameMarathon, deleteMarathon, listMarathonItems,
   addMarathonItem, getMarathonItem, updateMarathonItem, deleteMarathonItem, moveMarathonItem, upsertMarathonReview,
   moveMarathonItemToPosition, scanForOrphanedHlsEntries, recordWatchHistoryEntries, listWatchHistory, dismissWatchHistoryEntry,
-  listUntrackedItemTitles, updateMarathonItemPoster,
+  listUntrackedItemTitles, updateMarathonItemPoster, updateLibraryPoster,
 } from './db';
 import {
   generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
@@ -523,10 +523,22 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     preHandler: requireAdmin,
   }, async (req, reply) => {
     const { filename } = req.params as { filename: string };
-    const body = req.body as { newFilename?: string };
-    const newFilename = body?.newFilename?.trim();
+    const body = req.body as { newFilename?: string; posterPath?: string | null; tmdbId?: number | null };
 
     if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send({ error: 'Invalid filename' });
+
+    if (body.posterPath !== undefined || body.tmdbId !== undefined) {
+      if (body.posterPath !== undefined && body.posterPath !== null && typeof body.posterPath !== 'string') {
+        return reply.status(400).send({ error: 'Invalid posterPath' });
+      }
+      if (body.tmdbId !== undefined && body.tmdbId !== null && typeof body.tmdbId !== 'number') {
+        return reply.status(400).send({ error: 'Invalid tmdbId' });
+      }
+      updateLibraryPoster(filename, body.posterPath ?? null, body.tmdbId ?? null);
+      if (body.newFilename === undefined) return reply.send({ ok: true });
+    }
+
+    const newFilename = body?.newFilename?.trim();
     if (!newFilename || !SAFE_FILENAME_RE.test(newFilename)) {
       return reply.status(400).send({ error: 'Invalid new filename' });
     }

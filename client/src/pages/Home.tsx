@@ -6,7 +6,8 @@ import { Logo } from '../components/Logo';
 import { PasswordInput } from '../components/PasswordInput';
 import { useTheme } from '../theme/ThemeContext';
 import { getViewer, clearViewer } from '../lib/viewer';
-import type { LibraryFile } from '../types';
+import { cleanLibraryDisplayName } from '../lib/cleanFilename';
+import type { LibraryFile, TmdbCandidate } from '../types';
 import {
   Play, Pause, Square, RotateCw, History, Captions,
   Trash2, MoreHorizontal, Settings, Upload, Check, CheckCircle2, Film, LayoutGrid,
@@ -114,6 +115,38 @@ export function Home() {
       .then((d: { files: LibraryFile[] } | null) => { if (d) setLibrary(d.files); })
       .catch(() => {});
   }, []);
+
+  // Backfills a poster for every library file that doesn't have one yet —
+  // runs once per file as soon as the library loads. Silent/auto-applied:
+  // this is a movie already in your library, not an ambiguous filename
+  // match, so there's no misattribution risk worth gating behind a picker.
+  const enrichedFilesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const f of library) {
+      if (f.posterPath || enrichedFilesRef.current.has(f.filename)) continue;
+      enrichedFilesRef.current.add(f.filename);
+      void enrichLibraryFile(f.filename);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [library]);
+
+  const enrichLibraryFile = async (filename: string) => {
+    try {
+      const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(cleanLibraryDisplayName(filename))}`);
+      if (!res.ok) return;
+      const data = await res.json() as { results: TmdbCandidate[] };
+      const top = (data.results ?? []).find(r => r.posterPath);
+      if (!top) return;
+      await fetch(`/api/library/${encodeURIComponent(filename)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posterPath: top.posterPath, tmdbId: top.tmdbId }),
+      });
+      loadLibrary();
+    } catch {
+      // Silent — this is a cosmetic nicety, never block or error the page over it.
+    }
+  };
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -455,16 +488,16 @@ export function Home() {
 
   function renderCard(f: LibraryFile) {
     const pct = progressPct(f.lastTime, f.duration);
-    const hasThumb = f.thumbReady && !thumbErrors.has(f.filename);
+    const hasThumb = f.posterPath || (f.thumbReady && !thumbErrors.has(f.filename));
 
     return (
       <div key={f.filename} className="library-card">
-        {/* Thumbnail */}
+        {/* Thumbnail — TMDB poster once enriched, frame-grab until then */}
         <div className="lib-thumb-wrap" onClick={() => createRoomFrom(f.filename)}>
           {hasThumb ? (
             <img
               className="lib-thumb"
-              src={`${f.thumbUrl}?v=${f.lastPlayedAt}`}
+              src={f.posterPath ? `https://image.tmdb.org/t/p/w342${f.posterPath}` : `${f.thumbUrl}?v=${f.lastPlayedAt}`}
               alt=""
               onError={() => setThumbErrors(s => new Set([...s, f.filename]))}
             />
@@ -644,14 +677,14 @@ export function Home() {
   // container.
   function renderContinueCard(f: LibraryFile) {
     const pct = progressPct(f.lastTime, f.duration);
-    const hasThumb = f.thumbReady && !thumbErrors.has(f.filename);
+    const hasThumb = f.posterPath || (f.thumbReady && !thumbErrors.has(f.filename));
 
     return (
       <div key={f.filename} className="continue-card">
         <div className="continue-thumb" onClick={() => createRoomFrom(f.filename)}>
           {hasThumb ? (
             <img
-              src={`${f.thumbUrl}?v=${f.lastPlayedAt}`}
+              src={f.posterPath ? `https://image.tmdb.org/t/p/w342${f.posterPath}` : `${f.thumbUrl}?v=${f.lastPlayedAt}`}
               alt=""
               onError={() => setThumbErrors(s => new Set([...s, f.filename]))}
             />

@@ -5,7 +5,8 @@ import {
   Check, MoreVertical, Play, Archive, ImagePlus, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { getViewer, clearViewer, type Viewer } from '../lib/viewer';
-import type { LibraryFile } from '../types';
+import { cleanLibraryDisplayName } from '../lib/cleanFilename';
+import type { LibraryFile, TmdbCandidate } from '../types';
 import { EditableText } from '../components/EditableText';
 
 type Status = 'pending' | 'done' | 'skipped';
@@ -27,12 +28,6 @@ interface Item {
   tmdbId: number | null;
 }
 
-interface TmdbCandidate {
-  tmdbId: number;
-  title: string;
-  year: string | null;
-  posterPath: string | null;
-}
 
 // Same red -> green language everywhere a score shows up: chat bubbles, the
 // slider's fill + big readout number. Only ever computes the 0-100 position;
@@ -86,26 +81,6 @@ function useSpringValue(target: number): number {
   }, [target]);
 
   return displayed;
-}
-
-// Same idea as the server's autolink junk-token cleanup, but for display:
-// keeps real casing/spacing instead of normalizing to a lowercase match key.
-// Cuts the filename at the first release-quality/codec/year token instead of
-// stripping tokens throughout, since library filenames put junk after the
-// title, never inside it.
-const RELEASE_JUNK_RE =
-  /^(19|20)\d{2}$|^\d{3,4}p$|^(2160p|4k|bluray|blu-ray|webrip|web-?dl|hdrip|dvdrip|dvdscr|x264|x265|h264|h265|hevc|10bit|8bit|ddp?5?1?|dts|aac\d?|ac3|atmos|remux|proper|repack|extended|remastered|uncut|unrated|yify|yts|directors?cut)$/i;
-
-function cleanLibraryDisplayName(filename: string): string {
-  const withoutExt = filename.replace(/\.[a-z0-9]+$/i, '');
-  const segments = withoutExt.split('.').filter(Boolean);
-  const titleSegments: string[] = [];
-  for (const seg of segments) {
-    if (RELEASE_JUNK_RE.test(seg)) break;
-    titleSegments.push(seg);
-  }
-  const words = (titleSegments.length ? titleSegments : segments).join(' ').split(/[\s_-]+/).filter(Boolean);
-  return words.map(w => (/^[a-z]/.test(w) ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
 }
 
 // Clips to the parent's width and, only when the cleaned name still doesn't
@@ -769,8 +744,8 @@ export function MarathonDetail() {
                   disabled={alreadyAdded}
                 >
                   <div className="library-tile-thumb">
-                    {f.thumbReady ? (
-                      <img src={`${f.thumbUrl}?v=${f.lastPlayedAt}`} alt="" />
+                    {f.posterPath || f.thumbReady ? (
+                      <img src={f.posterPath ? `https://image.tmdb.org/t/p/w185${f.posterPath}` : `${f.thumbUrl}?v=${f.lastPlayedAt}`} alt="" />
                     ) : (
                       <Film />
                     )}

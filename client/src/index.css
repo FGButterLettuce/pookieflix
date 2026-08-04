@@ -917,25 +917,34 @@ body {
   .continue-list { max-width: 640px; }
 }
 
+/* Poster on the left, body on the right — was a full-width landscape
+   banner using the frame-grab thumbnail; now that a portrait TMDB poster
+   is the primary image everywhere, a wide banner would either crop most
+   of the poster away or force it down to a sliver, so the card is
+   horizontal instead. */
 .continue-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: var(--shadow-card);
+  display: flex;
 }
-.continue-thumb { position: relative; width: 100%; aspect-ratio: 2.4 / 1; overflow: hidden; cursor: pointer; background: #000; }
+.continue-thumb { position: relative; width: 120px; flex-shrink: 0; aspect-ratio: 2/3; overflow: hidden; cursor: pointer; background: #000; }
 .continue-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .continue-thumb .continue-time {
-  position: absolute; bottom: 0.7rem; right: 0.7rem; background: rgba(15,8,15,0.6); backdrop-filter: blur(3px);
-  color: white; font-weight: 700; font-size: 0.85rem; padding: 0.2rem 0.55rem; border-radius: var(--radius-sm);
+  position: absolute; bottom: 0.5rem; right: 0.5rem; background: rgba(15,8,15,0.6); backdrop-filter: blur(3px);
+  color: white; font-weight: 700; font-size: 0.75rem; padding: 0.15rem 0.4rem; border-radius: var(--radius-sm);
   font-variant-numeric: tabular-nums;
 }
 .continue-thumb .progress-rail { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,0.25); }
 .continue-thumb .progress-rail-fill { height: 100%; background: var(--accent); }
-.continue-body { padding: 1.05rem 1.15rem 1.15rem; }
+.continue-body { padding: 1.05rem 1.15rem 1.15rem; flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
 .continue-title { font-weight: 800; font-size: 1.15rem; margin-bottom: 0.5rem; word-break: break-word; cursor: text; }
 .continue-meta { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; flex-wrap: wrap; }
+@media (min-width: 900px) {
+  .continue-thumb { width: 150px; }
+}
 .meta-pill {
   display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; font-weight: 700;
   color: var(--text-muted); background: var(--surface2); border-radius: var(--radius-sm); padding: 0.2rem 0.55rem;
@@ -969,7 +978,7 @@ body {
 /* Library grid */
 .library-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: var(--space-md) var(--space-lg);
 }
 
@@ -996,7 +1005,7 @@ body {
 .lib-thumb-wrap {
   position: relative;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  aspect-ratio: 16/9;
+  aspect-ratio: 2/3;
   background: #000;
   cursor: pointer;
   overflow: hidden;
@@ -2571,8 +2580,11 @@ input.item-title {
    clip the hover outline (outline-offset pushes it outside the box) or the
    "In list" badge at the top/left edge — the clipping bug found in review. */
 .library-strip { display: flex; gap: 0.75rem; overflow-x: auto; overflow-y: visible; padding: 0.4rem 0.3rem 0.4rem; margin: -0.4rem -0.3rem 0; scrollbar-width: thin; }
-.library-tile { flex-shrink: 0; width: 128px; cursor: pointer; background: none; border: none; text-align: left; font: inherit; color: inherit; padding: 0; }
-.library-tile-thumb { width: 128px; height: 72px; border-radius: var(--radius-sm); position: relative; overflow: hidden; background: var(--surface3); }
+.library-tile { flex-shrink: 0; width: 100px; cursor: pointer; background: none; border: none; text-align: left; font: inherit; color: inherit; padding: 0; }
+.library-tile-thumb {
+  width: 100px; height: 150px; border-radius: var(--radius-sm); position: relative; overflow: hidden; background: var(--surface3);
+  display: flex; align-items: center; justify-content: center; color: var(--text-muted);
+}
 .library-tile-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .library-tile-thumb .add-badge {
   position: absolute; inset: 0; background: rgba(20,10,20,0.45); opacity: 0; display: flex; align-items: center; justify-content: center;

@@ -55,10 +55,18 @@ export interface LibraryFile {
   lastPlayedAt: number;
   thumbReady: boolean;
   thumbUrl: string;
+  posterPath: string | null;
   hasSubtitles: boolean;
   subtitleFetching: boolean;
   subtitleName: string | null;
   transcodeStatus: 'none' | 'queued' | 'running' | 'paused' | 'complete';
+}
+
+export interface TmdbCandidate {
+  tmdbId: number;
+  title: string;
+  year: string | null;
+  posterPath: string | null;
 }
 
 export interface PeerStatus {

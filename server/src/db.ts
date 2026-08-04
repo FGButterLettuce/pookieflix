@@ -78,6 +78,8 @@ export function getDb(): DatabaseSync {
   try { _db.exec('ALTER TABLE library_meta ADD COLUMN subtitle_name TEXT DEFAULT NULL'); } catch {}
   try { _db.exec('ALTER TABLE marathon_items ADD COLUMN poster_path TEXT DEFAULT NULL'); } catch {}
   try { _db.exec('ALTER TABLE marathon_items ADD COLUMN tmdb_id INTEGER DEFAULT NULL'); } catch {}
+  try { _db.exec('ALTER TABLE library_meta ADD COLUMN poster_path TEXT DEFAULT NULL'); } catch {}
+  try { _db.exec('ALTER TABLE library_meta ADD COLUMN tmdb_id INTEGER DEFAULT NULL'); } catch {}
 
   return _db;
 }
@@ -151,8 +153,8 @@ export function renameLibraryFile(oldFilename: string, newFilename: string, oldP
   db.exec('BEGIN');
   try {
     db.prepare(`
-      INSERT INTO library_meta (filename, duration, last_time, last_played_at, thumb_ready, subtitle_name)
-      SELECT ?, duration, last_time, last_played_at, thumb_ready, subtitle_name FROM library_meta WHERE filename = ?
+      INSERT INTO library_meta (filename, duration, last_time, last_played_at, thumb_ready, subtitle_name, poster_path, tmdb_id)
+      SELECT ?, duration, last_time, last_played_at, thumb_ready, subtitle_name, poster_path, tmdb_id FROM library_meta WHERE filename = ?
     `).run(newFilename, oldFilename);
     db.prepare('DELETE FROM library_meta WHERE filename = ?').run(oldFilename);
     db.prepare(`UPDATE rooms SET media_path = ?, media_filename = ? WHERE media_filename = ?`)
@@ -162,6 +164,15 @@ export function renameLibraryFile(oldFilename: string, newFilename: string, oldP
     db.exec('ROLLBACK');
     throw e;
   }
+}
+
+export function updateLibraryPoster(filename: string, posterPath: string | null, tmdbId: number | null): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO library_meta (filename, duration, last_time, last_played_at, thumb_ready, poster_path, tmdb_id)
+    VALUES (?, 0, 0, 0, 0, ?, ?)
+    ON CONFLICT(filename) DO UPDATE SET poster_path = excluded.poster_path, tmdb_id = excluded.tmdb_id
+  `).run(filename, posterPath, tmdbId);
 }
 
 // ── Library file listing ──────────────────────────────────────────────────────
@@ -175,13 +186,13 @@ export function listLibraryFiles(): LibraryFileInfo[] {
     .filter(f => f.toLowerCase().endsWith('.mp4'));
 
   const allMeta = new Map(
-    (db.prepare('SELECT * FROM library_meta').all() as unknown as Array<LibraryMetaRow & { subtitle_name?: string | null }>)
+    (db.prepare('SELECT * FROM library_meta').all() as unknown as Array<LibraryMetaRow & { subtitle_name?: string | null; poster_path?: string | null; tmdb_id?: number | null }>)
       .map(r => [r.filename, r])
   );
 
   return files.map(filename => {
     const stat = fs.statSync(path.join(libraryDir, filename));
-    const meta = allMeta.get(filename) as unknown as (LibraryMetaRow & { subtitle_name?: string | null }) | undefined;
+    const meta = allMeta.get(filename) as unknown as (LibraryMetaRow & { subtitle_name?: string | null; poster_path?: string | null; tmdb_id?: number | null }) | undefined;
 
     const fullPath = path.join(libraryDir, filename);
     const hasSub = hasSubtitles(fullPath);
@@ -198,6 +209,7 @@ export function listLibraryFiles(): LibraryFileInfo[] {
       lastPlayedAt: meta?.last_played_at ?? 0,
       thumbReady: (meta?.thumb_ready ?? 0) === 1,
       thumbUrl: `/api/library/${encodeURIComponent(filename)}/thumb`,
+      posterPath: meta?.poster_path ?? null,
       hasSubtitles: hasSub,
       subtitleFetching: isFetching(fullPath),
       subtitleName,
