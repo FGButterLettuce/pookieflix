@@ -503,7 +503,7 @@ export function MarathonDetail() {
         <button className="settings-link" title="Delete list" onClick={deleteMarathon}><Trash2 /></button>
       </header>
 
-      <div className="marathons-page-body">
+      <div className="marathons-page-body marathons-page-body-wide">
         {error && <div className="form-error">{error}</div>}
 
         {items.length > 0 && (
@@ -630,13 +630,7 @@ export function MarathonDetail() {
             }
 
             return (
-              <div
-                key={item.id}
-                className={'item-card' + (isDragging ? ' dragging' : '') + (isDragOver ? ' drag-over' : '')}
-                onDragOver={e => handleDragOver(e, item.id)}
-                onDragLeave={() => handleDragLeave(item.id)}
-                onDrop={e => handleDrop(e, item.id)}
-              >
+              <div key={item.id} className="item-card">
                 <div
                   className={'item-thumb' + (!playable && !posterSrc ? ' no-file' : '')}
                   onClick={playable ? () => playLinkedFile(item.libraryFilename!) : undefined}
@@ -663,16 +657,6 @@ export function MarathonDetail() {
 
                 <div className="item-body">
                   <div className="item-row">
-                    <button
-                      className="drag-handle"
-                      draggable
-                      title="Drag to reorder"
-                      aria-label="Drag to reorder"
-                      onDragStart={e => handleDragStart(e, item.id)}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <GripVertical />
-                    </button>
                     <div className="item-main">
                       <EditableText
                         value={item.title}

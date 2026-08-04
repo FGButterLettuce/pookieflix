@@ -2256,6 +2256,10 @@ body {
   margin: 0 auto;
   width: 100%;
 }
+/* The list-detail page's item cards are now poster+content side by side,
+   wider than a single narrow column comfortably fits — give this page
+   more room than the plain list/history pages get. */
+.marathons-page-body-wide { max-width: 860px; }
 
 .marathons-heading {
   flex: 1;
@@ -2446,8 +2450,11 @@ input.marathons-heading {
 }
 
 .item-thumb {
-  flex-shrink: 0; aspect-ratio: 2/3; position: relative; overflow: hidden;
+  flex-shrink: 0; aspect-ratio: 2/3; max-width: 140px; position: relative; overflow: hidden;
   background: var(--surface3);
+}
+@media (min-width: 640px) {
+  .item-thumb { max-width: 230px; }
 }
 .item-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .item-thumb .placeholder-texture {
@@ -2467,7 +2474,7 @@ input.marathons-heading {
 .item-thumb:hover .play-badge { transform: scale(1.08); }
 .item-thumb .play-badge svg { width: 18px; height: 18px; fill: white; }
 
-.item-body { flex: 1; min-width: 0; padding: 0.9rem 1.05rem 1rem; }
+.item-body { flex: 1; min-width: 200px; padding: 0.9rem 1.05rem 1rem; }
 .item-row { display: flex; align-items: flex-start; gap: 0.75rem; }
 .item-main { flex: 1; min-width: 0; }
 /* A neutral "this is editable text" hover cue (background tint, matching the
@@ -2631,6 +2638,9 @@ input.item-title {
    clip the hover outline (outline-offset pushes it outside the box) or the
    "In list" badge at the top/left edge — the clipping bug found in review. */
 .library-strip { display: flex; gap: 0.75rem; overflow-x: auto; overflow-y: visible; padding: 0.4rem 0.3rem 0.4rem; margin: -0.4rem -0.3rem 0; scrollbar-width: thin; }
+.library-strip::-webkit-scrollbar { height: 6px; }
+.library-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+.library-strip::-webkit-scrollbar-track { background: transparent; }
 .library-tile { flex-shrink: 0; width: 100px; cursor: pointer; background: none; border: none; text-align: left; font: inherit; color: inherit; padding: 0; }
 .library-tile-thumb {
   width: 100px; height: 150px; border-radius: var(--radius-sm); position: relative; overflow: hidden; background: var(--surface3);
