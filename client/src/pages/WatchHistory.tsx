@@ -9,6 +9,13 @@ interface HistoryEntry {
   detectedAt: string;
 }
 
+interface MarathonSummary {
+  id: number;
+  name: string;
+}
+
+const NEW_LIST_VALUE = '__new__';
+
 function formatDetectedDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -18,9 +25,11 @@ function formatDetectedDate(iso: string): string {
 export function WatchHistory() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [marathons, setMarathons] = useState<MarathonSummary[]>([]);
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [addingId, setAddingId] = useState<number | null>(null);
   const [addName, setAddName] = useState('Watched');
+  const [creatingNew, setCreatingNew] = useState(false);
   const [adding, setAdding] = useState(false);
   const [dismissingId, setDismissingId] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -43,6 +52,13 @@ export function WatchHistory() {
     fetch('/api/history/scan', { method: 'POST' }).catch(() => {}).finally(load);
   }, [load]);
 
+  useEffect(() => {
+    fetch('/api/marathons')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { marathons: MarathonSummary[] } | null) => { if (d) setMarathons(d.marathons); })
+      .catch(() => {});
+  }, []);
+
   const switchProfile = () => {
     clearViewer();
     navigate('/whos-watching');
@@ -51,7 +67,13 @@ export function WatchHistory() {
   const openAdd = (entry: HistoryEntry) => {
     setError('');
     setAddingId(entry.id);
-    setAddName('Watched');
+    if (marathons.length > 0) {
+      setCreatingNew(false);
+      setAddName(marathons[0].name);
+    } else {
+      setCreatingNew(true);
+      setAddName('Watched');
+    }
   };
 
   const cancelAdd = () => setAddingId(null);
@@ -136,13 +158,28 @@ export function WatchHistory() {
               <div className="history-card-actions">
                 {addingId === entry.id ? (
                   <form className="history-add-form" onSubmit={e => submitAdd(e, entry.id)}>
-                    <input
-                      className="setup-input"
-                      value={addName}
-                      autoFocus
-                      onChange={e => setAddName(e.target.value)}
-                      placeholder="List name"
-                    />
+                    {creatingNew || marathons.length === 0 ? (
+                      <input
+                        className="setup-input"
+                        value={addName}
+                        autoFocus
+                        onChange={e => setAddName(e.target.value)}
+                        placeholder="New list name"
+                      />
+                    ) : (
+                      <select
+                        className="setup-input"
+                        value={addName}
+                        autoFocus
+                        onChange={e => {
+                          if (e.target.value === NEW_LIST_VALUE) { setCreatingNew(true); setAddName('Watched'); }
+                          else setAddName(e.target.value);
+                        }}
+                      >
+                        {marathons.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                        <option value={NEW_LIST_VALUE}>+ New list…</option>
+                      </select>
+                    )}
                     <button type="submit" className="primary-btn" disabled={adding || !addName.trim()}>
                       {adding ? 'Adding…' : 'Add'}
                     </button>
