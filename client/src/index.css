@@ -2433,21 +2433,21 @@ input.marathons-heading {
 /* Poster on the left, everything else on the right — was a full-width
    landscape banner on top, but now that a portrait TMDB poster is the
    primary image everywhere else in the app too, a wide banner either
-   cropped most of it away or squeezed it into a sliver. flex-start (not
-   stretch) so the poster keeps its own clean aspect ratio regardless of
-   how tall the body gets once reviews are expanded. */
+   cropped most of it away or squeezed it into a sliver. align-items
+   stretch (the default) so .item-thumb's height matches the row/body;
+   .item-thumb has no fixed width, only aspect-ratio, so with a definite
+   (stretched) height the WIDTH is what's derived — the poster fills the
+   full height with its real proportions, no crop and no letterboxing,
+   the column just gets exactly as wide as a 2:3 poster needs to be. */
 .item-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   overflow: hidden;
-  display: flex; align-items: flex-start;
+  display: flex;
 }
 
 .item-thumb {
-  width: 130px; flex-shrink: 0; aspect-ratio: 2/3; position: relative; overflow: hidden;
+  flex-shrink: 0; aspect-ratio: 2/3; position: relative; overflow: hidden;
   background: var(--surface3);
-}
-@media (min-width: 900px) {
-  .item-thumb { width: 160px; }
 }
 .item-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .item-thumb .placeholder-texture {

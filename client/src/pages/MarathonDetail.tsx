@@ -531,10 +531,14 @@ export function MarathonDetail() {
           {items.map((item, index) => {
             const libraryFile = libraryFileFor(item.libraryFilename);
             const playable = !!item.libraryFilename && isLinkedFileAvailable(item.libraryFilename);
-            const thumbSrc = libraryFile?.thumbReady && !thumbErrorIds.has(item.id)
+            // Prefer the TMDB poster — it's the app's primary image
+            // everywhere else now (library grid, Continue Watching, the
+            // library-tile picker); the frame-grab is only a stand-in
+            // until a poster's been found.
+            const posterSrc = item.posterPath ? `https://image.tmdb.org/t/p/w342${item.posterPath}` : null;
+            const thumbSrc = !posterSrc && libraryFile?.thumbReady && !thumbErrorIds.has(item.id)
               ? `${libraryFile.thumbUrl}?v=${libraryFile.lastPlayedAt}`
               : null;
-            const posterSrc = item.posterPath ? `https://image.tmdb.org/t/p/w342${item.posterPath}` : null;
             const expanded = expandedItemIds.has(item.id);
             const mine = item.reviews.find(r => r.viewer === viewer);
             const isDragging = draggedItemId === item.id;
