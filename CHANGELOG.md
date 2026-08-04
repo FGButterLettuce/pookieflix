@@ -1,3 +1,7 @@
+## v1.5.16 - 2026-08-04
+
+- Merge branch 'lists-v2'
+
 ## v1.5.15 - 2026-08-03
 
 - Merge branch 'movie-marathon-tracker'
