@@ -748,9 +748,6 @@ body {
 
 .upload-zone:hover { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 6%, transparent); }
 .upload-zone.uploading { cursor: default; border-style: solid; border-color: var(--accent); }
-.upload-zone-lan { text-decoration: none; border-color: #fbbf24; color: var(--text-muted); }
-.upload-zone-lan:hover { border-color: #fbbf24; background: rgba(251,191,36,0.06); }
-.upload-zone-lan .upload-label { color: #fbbf24; }
 .lan-upload-btn {
   display: block; text-align: center; text-decoration: none;
   margin: 8px auto 0; padding: 8px 18px;
@@ -2234,6 +2231,7 @@ input.marathons-heading {
   margin: -0.15rem -0.4rem;
   outline: none;
   width: auto;
+  color: var(--text);
 }
 
 /* ── List detail — item cards ──────────────────────────────────────────
@@ -2292,7 +2290,7 @@ input.marathons-heading {
 .item-hint { font-size: 0.88rem; color: var(--text-subtle); margin-top: 0.3rem; }
 input.item-title {
   border: 1px solid var(--accent); background: var(--surface2); border-radius: var(--radius-sm);
-  padding: 0.1rem 0.4rem; margin: -0.1rem -0.4rem; outline: none; width: 100%;
+  padding: 0.1rem 0.4rem; margin: -0.1rem -0.4rem; outline: none; width: 100%; color: var(--text);
 }
 
 .status-group { display: flex; align-items: center; gap: 0.35rem; flex-shrink: 0; margin-top: 0.1rem; }

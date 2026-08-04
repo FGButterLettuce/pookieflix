@@ -292,6 +292,7 @@ export function Home() {
   };
 
   const deleteFile = async (filename: string) => {
+    if (!window.confirm(`Delete "${filename}"? This permanently removes the file and can't be undone.`)) return;
     setDeletingFile(filename);
     try {
       await fetch(`/api/library/${encodeURIComponent(filename)}`, { method: 'DELETE' });
@@ -842,17 +843,11 @@ export function Home() {
         <Link to="/settings" className="settings-link" title="Settings"><Settings /></Link>
       </header>
 
-      {/* Upload zone */}
-      {offUploadOrigin && !uploading && !uploadedRoomUrl ? (
-        <div
-          className="upload-zone upload-zone-lan"
-          onClick={() => window.open(uploadUrl, '_blank', 'noopener,noreferrer')}
-        >
-          <div className="upload-icon"><Upload /></div>
-          <div className="upload-label">Uploads need your home network</div>
-          <div className="upload-hint">Large files are unreliable over this connection — tap to open the upload page on your LAN</div>
-        </div>
-      ) : (
+      {/* Upload zone — omitted entirely when off the upload origin, since the
+          topbar shortcut button already covers "open uploads on your LAN"
+          and a second full-width banner saying the same thing is just
+          dead space. */}
+      {!(offUploadOrigin && !uploading && !uploadedRoomUrl) && (
         <div
           className={`upload-zone ${uploading || uploadedRoomUrl ? 'uploading' : ''}`}
           onClick={() => !uploading && !uploadedRoomUrl && fileInputRef.current?.click()}
