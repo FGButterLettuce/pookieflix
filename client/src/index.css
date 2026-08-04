@@ -2625,6 +2625,13 @@ input.item-title {
 .history-card-info { min-width: 0; }
 .history-card-title { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history-card-date { font-size: 0.85rem; color: var(--text-subtle); margin-top: 0.15rem; }
+.history-card-removed { opacity: 0.75; }
+.history-added-badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
+.history-added-badge {
+  font-size: 0.75rem; font-weight: 700; color: var(--success);
+  background: color-mix(in oklch, var(--success) 14%, var(--surface2)); border-radius: var(--radius-sm);
+  padding: 0.15rem 0.5rem;
+}
 .history-card-actions { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
 .history-add-form { display: flex; align-items: center; gap: 0.5rem; }
 .history-add-form .setup-input { width: 160px; height: 38px; margin-bottom: 0; }

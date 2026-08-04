@@ -69,10 +69,21 @@ export function getDb(): DatabaseSync {
       dismissed     INTEGER NOT NULL DEFAULT 0
     );
 
+    -- Durable log of "a watch session started for this file" — unlike the
+    -- rooms table (purged once a room expires, since its only job is
+    -- generating a short-lived shareable link), rows here are permanent,
+    -- so watch counts/dates survive long after the room itself is gone.
+    CREATE TABLE IF NOT EXISTS watch_sessions (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      media_filename TEXT NOT NULL,
+      started_at     INTEGER NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_rooms_token   ON rooms(token);
     CREATE INDEX IF NOT EXISTS idx_rooms_expires ON rooms(expires_at);
     CREATE INDEX IF NOT EXISTS idx_marathon_items_marathon ON marathon_items(marathon_id);
     CREATE INDEX IF NOT EXISTS idx_marathon_reviews_item ON marathon_reviews(item_id);
+    CREATE INDEX IF NOT EXISTS idx_watch_sessions_filename ON watch_sessions(media_filename);
   `);
 
   try { _db.exec('ALTER TABLE library_meta ADD COLUMN subtitle_name TEXT DEFAULT NULL'); } catch {}
@@ -80,6 +91,7 @@ export function getDb(): DatabaseSync {
   try { _db.exec('ALTER TABLE marathon_items ADD COLUMN tmdb_id INTEGER DEFAULT NULL'); } catch {}
   try { _db.exec('ALTER TABLE library_meta ADD COLUMN poster_path TEXT DEFAULT NULL'); } catch {}
   try { _db.exec('ALTER TABLE library_meta ADD COLUMN tmdb_id INTEGER DEFAULT NULL'); } catch {}
+  try { _db.exec('ALTER TABLE marathon_items ADD COLUMN watch_history_id INTEGER DEFAULT NULL'); } catch {}
 
   // One-time backfill: watch_history titles were originally stored as the
   // raw .hls directory name (junk tokens, dots instead of spaces) — clean
@@ -304,16 +316,36 @@ export function listMarathonItems(marathonId: number): MarathonItemDetail[] {
   }));
 }
 
-export function addMarathonItem(marathonId: number, title: string, libraryFilename: string | null): MarathonItemRow {
+export function addMarathonItem(marathonId: number, title: string, libraryFilename: string | null, watchHistoryId: number | null = null): MarathonItemRow {
   const db = getDb();
   const position = (db.prepare(
     'SELECT COALESCE(MAX(position), -1) + 1 AS next FROM marathon_items WHERE marathon_id = ?'
   ).get(marathonId) as { next: number }).next;
   const created_at = new Date().toISOString();
   const result = db.prepare(
-    'INSERT INTO marathon_items (marathon_id, position, title, library_filename, status, created_at, poster_path, tmdb_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(marathonId, position, title, libraryFilename, 'pending', created_at, null, null);
-  return { id: Number(result.lastInsertRowid), marathon_id: marathonId, position, title, library_filename: libraryFilename, status: 'pending', created_at, poster_path: null, tmdb_id: null };
+    'INSERT INTO marathon_items (marathon_id, position, title, library_filename, status, created_at, poster_path, tmdb_id, watch_history_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(marathonId, position, title, libraryFilename, 'pending', created_at, null, null, watchHistoryId);
+  return {
+    id: Number(result.lastInsertRowid), marathon_id: marathonId, position, title, library_filename: libraryFilename,
+    status: 'pending', created_at, poster_path: null, tmdb_id: null, watch_history_id: watchHistoryId,
+  };
+}
+
+export function getMarathonItemByWatchHistory(marathonId: number, watchHistoryId: number): MarathonItemRow | undefined {
+  const db = getDb();
+  return db.prepare('SELECT * FROM marathon_items WHERE marathon_id = ? AND watch_history_id = ?')
+    .get(marathonId, watchHistoryId) as unknown as MarathonItemRow | undefined;
+}
+
+export function listMarathonsForWatchHistoryEntry(watchHistoryId: number): { marathonId: number; marathonName: string }[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT DISTINCT m.id AS marathonId, m.name AS marathonName
+    FROM marathon_items mi
+    JOIN marathons m ON m.id = mi.marathon_id
+    WHERE mi.watch_history_id = ?
+    ORDER BY m.name ASC
+  `).all(watchHistoryId) as unknown as { marathonId: number; marathonName: string }[];
 }
 
 export function getMarathonItem(id: number): MarathonItemRow | undefined {
@@ -480,4 +512,22 @@ export function listWatchHistory(): WatchHistoryRow[] {
 export function dismissWatchHistoryEntry(id: number): void {
   const db = getDb();
   db.prepare('UPDATE watch_history SET dismissed = 1 WHERE id = ?').run(id);
+}
+
+// ── Watch sessions (durable log, unlike the ephemeral rooms table) ─────
+export function recordWatchSession(mediaFilename: string): void {
+  const db = getDb();
+  db.prepare('INSERT INTO watch_sessions (media_filename, started_at) VALUES (?, ?)').run(mediaFilename, Date.now());
+}
+
+export function getWatchSessionStats(mediaFilename: string): { count: number; firstAt: string | null; lastAt: string | null } {
+  const db = getDb();
+  const row = db.prepare(
+    'SELECT COUNT(*) AS count, MIN(started_at) AS firstAt, MAX(started_at) AS lastAt FROM watch_sessions WHERE media_filename = ?'
+  ).get(mediaFilename) as { count: number; firstAt: number | null; lastAt: number | null };
+  return {
+    count: row.count,
+    firstAt: row.firstAt != null ? new Date(row.firstAt).toISOString() : null,
+    lastAt: row.lastAt != null ? new Date(row.lastAt).toISOString() : null,
+  };
 }

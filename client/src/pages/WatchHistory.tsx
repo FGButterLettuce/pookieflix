@@ -3,10 +3,18 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, X } from 'lucide-react';
 import { clearViewer } from '../lib/viewer';
 
+interface SessionStats {
+  count: number;
+  firstAt: string | null;
+  lastAt: string | null;
+}
+
 interface HistoryEntry {
   id: number;
   title: string;
   detectedAt: string;
+  addedTo: MarathonSummary[];
+  sessions: SessionStats;
 }
 
 interface MarathonSummary {
@@ -16,10 +24,20 @@ interface MarathonSummary {
 
 const NEW_LIST_VALUE = '__new__';
 
-function formatDetectedDate(iso: string): string {
+function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// "Watched" here means a synced room was actually started for the file —
+// sessions are logged going forward only (the log is durable, unlike the
+// short-lived rooms table, but it didn't exist before this shipped), so
+// count 0 just means "before we started counting," not "never watched."
+function formatSessions(s: SessionStats): string {
+  if (s.count === 0) return 'No playback recorded yet';
+  if (s.count === 1) return `Watched once, ${formatDate(s.firstAt!)}`;
+  return `Watched ${s.count}×, ${formatDate(s.firstAt!)} – ${formatDate(s.lastAt!)}`;
 }
 
 export function WatchHistory() {
@@ -92,10 +110,9 @@ export function WatchHistory() {
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) throw new Error(data.error ?? 'Failed to add to list');
-      // The server dismisses the history entry as part of promoting it, so
-      // reload from the server rather than tracking "added" in local state —
-      // local-only state would be lost on refresh, letting a second promote
-      // after reload create a duplicate list item.
+      // History is a permanent record — promoting is additive (playlist-
+      // style), the entry stays put. Reload from the server so the "added
+      // to" badge reflects the real state rather than guessing locally.
       setAddingId(null);
       load();
     } catch (err) {
@@ -153,7 +170,15 @@ export function WatchHistory() {
             <div className="history-card" key={entry.id}>
               <div className="history-card-info">
                 <div className="history-card-title">{entry.title}</div>
-                <div className="history-card-date">{formatDetectedDate(entry.detectedAt)}</div>
+                <div className="history-card-date">{formatSessions(entry.sessions)}</div>
+                <div className="history-card-date history-card-removed">Removed from library {formatDate(entry.detectedAt)}</div>
+                {entry.addedTo.length > 0 && (
+                  <div className="history-added-badges">
+                    {entry.addedTo.map(m => (
+                      <span className="history-added-badge" key={m.id}>In {m.name}</span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="history-card-actions">
                 {addingId === entry.id ? (

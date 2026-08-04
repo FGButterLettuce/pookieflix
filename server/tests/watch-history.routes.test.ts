@@ -64,7 +64,7 @@ describe('watch history routes', () => {
     assert.ok(afterEntries.some(e => e.title === 'Another Movie'), 'non-dismissed entry must still appear after rescan');
   });
 
-  it('promotes a history entry into a new list', async () => {
+  it('promotes a history entry into a list — entry stays in history (a permanent record), and shows up in addedTo', async () => {
     const listRes = await app.inject({ method: 'GET', url: '/api/history' });
     const entries = (listRes.json() as { entries: { id: number; title: string }[] }).entries;
     const movieEntry = entries.find(e => e.title === 'Another Movie')!;
@@ -73,28 +73,58 @@ describe('watch history routes', () => {
       method: 'POST', url: `/api/history/${movieEntry.id}/promote`, payload: { marathonName: 'Watched Archive' },
     });
     assert.equal(promoteRes.statusCode, 201);
-    const body = promoteRes.json() as { item: { title: string }; marathonId: number };
+    const body = promoteRes.json() as { item: { id: number; title: string }; marathonId: number; addedTo: { marathonId: number; marathonName: string }[] };
     assert.equal(body.item.title, 'Another Movie');
+    assert.deepEqual(body.addedTo, [{ marathonId: body.marathonId, marathonName: 'Watched Archive' }]);
 
     const marathonsRes = await app.inject({ method: 'GET', url: '/api/marathons' });
     const marathons = (marathonsRes.json() as { marathons: { id: number; name: string }[] }).marathons;
     assert.ok(marathons.some(m => m.id === body.marathonId && m.name === 'Watched Archive'));
 
-    // Promotion must dismiss the history entry server-side, so it's gone on
-    // reload — not just hidden behind local-only React state that a page
-    // refresh would forget, which is what let a repeat promote after reload
-    // create a duplicate list item.
+    // Watch history is a permanent record (like a library, per Niranjan's
+    // "think of it like playlists" framing) — promoting is additive, never
+    // removes the entry, so it must still be here and show what it's been
+    // added to.
     const afterPromoteRes = await app.inject({ method: 'GET', url: '/api/history' });
-    const afterPromoteEntries = (afterPromoteRes.json() as { entries: { id: number }[] }).entries;
-    assert.ok(!afterPromoteEntries.some(e => e.id === movieEntry.id), 'promoted entry must be dismissed, not just left for the client to remember');
+    const afterPromoteEntries = (afterPromoteRes.json() as { entries: { id: number; addedTo: { marathonId: number; marathonName: string }[] }[] }).entries;
+    const stillThere = afterPromoteEntries.find(e => e.id === movieEntry.id);
+    assert.ok(stillThere, 'promoted entry must remain in history, not disappear');
+    assert.deepEqual(stillThere.addedTo, [{ marathonId: body.marathonId, marathonName: 'Watched Archive' }]);
 
-    // A repeat promote attempt on the now-dismissed entry must not create a
-    // second item — since listWatchHistory only returns non-dismissed rows,
-    // it 404s instead of duplicating.
+    // Re-promoting into the SAME list is idempotent — reuses the existing
+    // item instead of creating a duplicate.
     const repeatRes = await app.inject({
       method: 'POST', url: `/api/history/${movieEntry.id}/promote`, payload: { marathonName: 'Watched Archive' },
     });
-    assert.equal(repeatRes.statusCode, 404);
+    assert.equal(repeatRes.statusCode, 201);
+    const repeatBody = repeatRes.json() as { item: { id: number } };
+    assert.equal(repeatBody.item.id, body.item.id, 'repeat promote into the same list must reuse the existing item, not create a new one');
+  });
+
+  it('promoting the same entry into a second, different list adds it there too (playlist-style), without duplicating in the first', async () => {
+    const listRes = await app.inject({ method: 'GET', url: '/api/history' });
+    const entries = (listRes.json() as { entries: { id: number; title: string }[] }).entries;
+    const movieEntry = entries.find(e => e.title === 'Another Movie')!;
+
+    const promoteRes = await app.inject({
+      method: 'POST', url: `/api/history/${movieEntry.id}/promote`, payload: { marathonName: 'Second List' },
+    });
+    assert.equal(promoteRes.statusCode, 201);
+
+    const afterRes = await app.inject({ method: 'GET', url: '/api/history' });
+    const afterEntries = (afterRes.json() as { entries: { id: number; addedTo: { marathonName: string }[] }[] }).entries;
+    const entry = afterEntries.find(e => e.id === movieEntry.id)!;
+    const names = entry.addedTo.map(a => a.marathonName).sort();
+    assert.deepEqual(names, ['Second List', 'Watched Archive'], 'entry must show up in both lists it was promoted into');
+
+    // And the "Watched Archive" list itself must still only have one item
+    // for this entry (the earlier idempotent-reuse test didn't duplicate it).
+    const marathonsRes = await app.inject({ method: 'GET', url: '/api/marathons' });
+    const watchedArchive = (marathonsRes.json() as { marathons: { id: number; name: string }[] }).marathons
+      .find(m => m.name === 'Watched Archive')!;
+    const itemsRes = await app.inject({ method: 'GET', url: `/api/marathons/${watchedArchive.id}` });
+    const items = (itemsRes.json() as { items: { title: string }[] }).items;
+    assert.equal(items.filter(i => i.title === 'Another Movie').length, 1, 'no duplicate item in the first list');
   });
 
   it('promoting into the same-named list again reuses it instead of duplicating', async () => {

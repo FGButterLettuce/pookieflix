@@ -14,6 +14,7 @@ import {
   addMarathonItem, getMarathonItem, updateMarathonItem, deleteMarathonItem, moveMarathonItem, upsertMarathonReview,
   moveMarathonItemToPosition, scanForOrphanedHlsEntries, recordWatchHistoryEntries, listWatchHistory, dismissWatchHistoryEntry,
   listUntrackedItemTitles, updateMarathonItemPoster, updateLibraryPoster,
+  recordWatchSession, getWatchSessionStats, getMarathonItemByWatchHistory, listMarathonsForWatchHistoryEntry,
 } from './db';
 import {
   generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
@@ -892,11 +893,21 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/history', { preHandler: requireAdmin }, async (_req, reply) => {
-    const entries = listWatchHistory().map(e => ({
-      id: e.id,
-      title: e.title,
-      detectedAt: e.detected_at,
-    }));
+    const entries = listWatchHistory().map(e => {
+      // Watch history only ever stores the .hls dir name — the original
+      // .mp4 filename (what watch_sessions is keyed by) is derivable since
+      // library renames always carry both in lockstep (see the library
+      // rename route). Sessions logged under a filename from before a
+      // rename won't match — a known, accepted gap, not silently wrong.
+      const mediaFilename = e.hls_dir_name.replace(/\.hls$/i, '.mp4');
+      return {
+        id: e.id,
+        title: e.title,
+        detectedAt: e.detected_at,
+        addedTo: listMarathonsForWatchHistoryEntry(e.id),
+        sessions: getWatchSessionStats(mediaFilename),
+      };
+    });
     return reply.send({ entries });
   });
 
@@ -918,27 +929,30 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const existing = listMarathons().find(m => m.name === name);
     const marathon = existing ? getMarathon(existing.id)! : createMarathon(name);
-    const item = addMarathonItem(marathon.id, entry.title, null);
-    updateMarathonItem(item.id, { status: 'done' });
 
-    // Best-effort poster enrichment, same reasoning as library-file
-    // auto-enrichment: this traces back to a real file the user actually
-    // owned (now gone), not a freely-typed guess, so it's safe to apply
-    // the top match without a confirmation step. Never blocks or fails
-    // the promote itself — searchTmdbMovies already swallows its own
-    // errors and returns null when unconfigured/failed.
-    const results = await searchTmdbMovies(entry.title);
-    const top = results?.find(r => r.posterPath);
-    if (top) updateMarathonItemPoster(item.id, top.posterPath, top.tmdbId);
+    // Watch history is a permanent record, like a library — promoting into
+    // a list is additive (playlist-style), never removes the entry from
+    // history, and an entry can be promoted into several different lists.
+    // Re-promoting into the SAME list is idempotent: reuse the item
+    // already linked to this entry+marathon rather than duplicating it.
+    const alreadyInMarathon = getMarathonItemByWatchHistory(marathon.id, entry.id);
+    let item = alreadyInMarathon;
+    if (!item) {
+      item = addMarathonItem(marathon.id, entry.title, null, entry.id);
+      updateMarathonItem(item.id, { status: 'done' });
 
-    // Promotion resolves the history entry — dismiss it server-side (same
-    // dismiss the DELETE /api/history/:id route uses) so a page reload
-    // doesn't lose the "already added" fact and let a repeat promote create
-    // a duplicate list item. The client no longer needs to track this in
-    // local-only state.
-    dismissWatchHistoryEntry(entry.id);
+      // Best-effort poster enrichment, same reasoning as library-file
+      // auto-enrichment: this traces back to a real file the user actually
+      // owned (now gone), not a freely-typed guess, so it's safe to apply
+      // the top match without a confirmation step. Never blocks or fails
+      // the promote itself — searchTmdbMovies already swallows its own
+      // errors and returns null when unconfigured/failed.
+      const results = await searchTmdbMovies(entry.title);
+      const top = results?.find(r => r.posterPath);
+      if (top) updateMarathonItemPoster(item.id, top.posterPath, top.tmdbId);
+    }
 
-    return reply.status(201).send({ marathonId: marathon.id, item });
+    return reply.status(201).send({ marathonId: marathon.id, item, addedTo: listMarathonsForWatchHistoryEntry(entry.id) });
   });
 
   // ── Autolink match ────────────────────────────────────────────────────────
@@ -1044,6 +1058,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       created_at: now,
       expires_at: now + config.roomTtlHours * 3600 * 1000,
     });
+    recordWatchSession(savedFilename);
 
     purgeExpiredRooms();
 
@@ -1086,6 +1101,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       created_at: now,
       expires_at: now + config.roomTtlHours * 3600 * 1000,
     });
+    recordWatchSession(filename);
 
     purgeExpiredRooms();
 

@@ -203,6 +203,7 @@ export interface MarathonItemRow {
   created_at: string;
   poster_path: string | null;
   tmdb_id: number | null;
+  watch_history_id: number | null;
 }
 
 export interface MarathonReviewRow {
