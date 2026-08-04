@@ -22,13 +22,13 @@ describe('watch history', () => {
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it('detects an orphaned .hls dir with no matching .mp4 as watched history', () => {
+  it('detects an orphaned .hls dir with no matching .mp4 as watched history, with a cleaned display title', () => {
     fs.mkdirSync(path.join(mediaDir, 'The.Avengers.2012.hls'));
     fs.writeFileSync(path.join(mediaDir, 'Iron.Man.2008.mp4'), 'x');
     fs.mkdirSync(path.join(mediaDir, 'Iron.Man.2008.hls'));
 
     const found = db.scanForOrphanedHlsEntries();
-    assert.deepEqual(found.map(f => f.title), ['The.Avengers.2012']);
+    assert.deepEqual(found.map(f => f.title), ['The Avengers']);
   });
 
   it('records and lists watch history entries without duplicating on re-scan', () => {
@@ -36,12 +36,12 @@ describe('watch history', () => {
     db.recordWatchHistoryEntries(found);
     db.recordWatchHistoryEntries(found); // re-scan should not duplicate
     const history = db.listWatchHistory();
-    assert.equal(history.filter(h => h.title === 'The.Avengers.2012').length, 1);
+    assert.equal(history.filter(h => h.title === 'The Avengers').length, 1);
   });
 
   it('dismissing an entry removes it from the active list', () => {
     const history = db.listWatchHistory();
-    const entry = history.find(h => h.title === 'The.Avengers.2012')!;
+    const entry = history.find(h => h.title === 'The Avengers')!;
     db.dismissWatchHistoryEntry(entry.id);
     const after = db.listWatchHistory();
     assert.ok(!after.some(h => h.id === entry.id));

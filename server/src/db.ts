@@ -81,6 +81,19 @@ export function getDb(): DatabaseSync {
   try { _db.exec('ALTER TABLE library_meta ADD COLUMN poster_path TEXT DEFAULT NULL'); } catch {}
   try { _db.exec('ALTER TABLE library_meta ADD COLUMN tmdb_id INTEGER DEFAULT NULL'); } catch {}
 
+  // One-time backfill: watch_history titles were originally stored as the
+  // raw .hls directory name (junk tokens, dots instead of spaces) — clean
+  // any still in that form. Idempotent (re-cleaning an already-clean title
+  // is a no-op), cheap (small table), safe to run on every startup.
+  try {
+    const rows = _db.prepare('SELECT id, title FROM watch_history').all() as unknown as { id: number; title: string }[];
+    const update = _db.prepare('UPDATE watch_history SET title = ? WHERE id = ?');
+    for (const row of rows) {
+      const cleaned = cleanTitleForDisplay(row.title);
+      if (cleaned && cleaned !== row.title) update.run(cleaned, row.id);
+    }
+  } catch { /* best-effort backfill, never block startup over it */ }
+
   return _db;
 }
 
@@ -407,6 +420,24 @@ export function listUntrackedItemTitles(): { marathonId: number; marathonName: s
   `).all() as unknown as { marathonId: number; marathonName: string; itemId: number; itemTitle: string }[];
 }
 
+// Same idea as the client's cleanLibraryDisplayName: strips release-quality/
+// codec/year junk and title-cases what's left, keeping real casing/spacing
+// instead of normalizing to a lowercase match key like cleanTitleToken does.
+const DISPLAY_JUNK_RE =
+  /^(19|20)\d{2}$|^\d{3,4}p$|^(2160p|4k|bluray|blu-ray|webrip|web-?dl|hdrip|dvdrip|dvdscr|x264|x265|h264|h265|hevc|10bit|8bit|ddp?5?1?|dts|aac\d?|ac3|atmos|remux|proper|repack|extended|remastered|uncut|unrated|yify|yts|directors?cut)$/i;
+
+export function cleanTitleForDisplay(raw: string): string {
+  const withoutExt = raw.replace(/\.[a-z0-9]+$/i, '');
+  const segments = withoutExt.split('.').filter(Boolean);
+  const titleSegments: string[] = [];
+  for (const seg of segments) {
+    if (DISPLAY_JUNK_RE.test(seg)) break;
+    titleSegments.push(seg);
+  }
+  const words = (titleSegments.length ? titleSegments : segments).join(' ').split(/[\s_-]+/).filter(Boolean);
+  return words.map(w => (/^[a-z]/.test(w) ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
+}
+
 // ── Watch history (derived from orphaned HLS caches) ───────────────────
 export function scanForOrphanedHlsEntries(): { hlsDirName: string; title: string; detectedAtMs: number }[] {
   const libraryDir = path.join(config.mediaDir, 'library');
@@ -418,11 +449,11 @@ export function scanForOrphanedHlsEntries(): { hlsDirName: string; title: string
   );
   return entries
     .filter(e => e.isDirectory() && e.name.toLowerCase().endsWith('.hls'))
-    .map(e => ({ hlsDirName: e.name, title: e.name.replace(/\.hls$/i, '') }))
-    .filter(({ title }) => !mp4Basenames.has(title))
-    .map(({ hlsDirName, title }) => ({
+    .map(e => ({ hlsDirName: e.name, rawTitle: e.name.replace(/\.hls$/i, '') }))
+    .filter(({ rawTitle }) => !mp4Basenames.has(rawTitle))
+    .map(({ hlsDirName, rawTitle }) => ({
       hlsDirName,
-      title,
+      title: cleanTitleForDisplay(rawTitle),
       detectedAtMs: fs.statSync(path.join(libraryDir, hlsDirName)).mtimeMs,
     }));
 }

@@ -205,6 +205,33 @@ export function matchFilenameToUntrackedItem(filename: string, candidateTitles: 
   return null;
 }
 
+interface TmdbSearchResult { tmdbId: number; title: string; year: string | null; posterPath: string | null }
+
+// Shared by the /api/tmdb/search route and server-side auto-enrichment
+// (watch-history promote). Returns null when the key isn't configured or
+// the request fails — callers that only want a best-effort match (auto-
+// enrichment) can treat null the same as "no results", while the route
+// itself distinguishes them for its response status.
+async function searchTmdbMovies(query: string): Promise<TmdbSearchResult[] | null> {
+  const persisted = readPersistedConfig();
+  const apiKey = process.env.TMDB_API_KEY ?? persisted.TMDB_API_KEY ?? '';
+  if (!apiKey) return null;
+  try {
+    const url = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query)}&api_key=${encodeURIComponent(apiKey)}`;
+    const tmdbRes = await fetch(url);
+    if (!tmdbRes.ok) return null;
+    const data = await tmdbRes.json() as { results: { id: number; title: string; release_date?: string; poster_path: string | null }[] };
+    return data.results.slice(0, 8).map(r => ({
+      tmdbId: r.id,
+      title: r.title,
+      year: r.release_date ? r.release_date.slice(0, 4) : null,
+      posterPath: r.poster_path,
+    }));
+  } catch {
+    return null;
+  }
+}
+
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Security headers on every response ────────────────────────────────────
@@ -407,21 +434,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const apiKey = process.env.TMDB_API_KEY ?? persisted.TMDB_API_KEY ?? '';
     if (!apiKey) return reply.status(503).send({ error: 'TMDB_API_KEY not configured' });
 
-    try {
-      const url = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query)}&api_key=${encodeURIComponent(apiKey)}`;
-      const tmdbRes = await fetch(url);
-      if (!tmdbRes.ok) return reply.status(502).send({ error: 'TMDB request failed' });
-      const data = await tmdbRes.json() as { results: { id: number; title: string; release_date?: string; poster_path: string | null }[] };
-      const results = data.results.slice(0, 8).map(r => ({
-        tmdbId: r.id,
-        title: r.title,
-        year: r.release_date ? r.release_date.slice(0, 4) : null,
-        posterPath: r.poster_path,
-      }));
-      return reply.send({ results });
-    } catch {
-      return reply.status(502).send({ error: 'TMDB request failed' });
-    }
+    const results = await searchTmdbMovies(query);
+    if (results === null) return reply.status(502).send({ error: 'TMDB request failed' });
+    return reply.send({ results });
   });
 
   // ── Library: list files with metadata ─────────────────────────────────────
@@ -905,6 +920,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const marathon = existing ? getMarathon(existing.id)! : createMarathon(name);
     const item = addMarathonItem(marathon.id, entry.title, null);
     updateMarathonItem(item.id, { status: 'done' });
+
+    // Best-effort poster enrichment, same reasoning as library-file
+    // auto-enrichment: this traces back to a real file the user actually
+    // owned (now gone), not a freely-typed guess, so it's safe to apply
+    // the top match without a confirmation step. Never blocks or fails
+    // the promote itself — searchTmdbMovies already swallows its own
+    // errors and returns null when unconfigured/failed.
+    const results = await searchTmdbMovies(entry.title);
+    const top = results?.find(r => r.posterPath);
+    if (top) updateMarathonItemPoster(item.id, top.posterPath, top.tmdbId);
 
     // Promotion resolves the history entry — dismiss it server-side (same
     // dismiss the DELETE /api/history/:id route uses) so a page reload
