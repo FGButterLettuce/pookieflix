@@ -58,6 +58,17 @@ interface OsEntry { attributes: OsAttrs; }
 interface OsSearchResp { data?: OsEntry[]; }
 interface OsDownloadResp { link?: string; }
 
+// Every OpenSubtitles call below degrades gracefully on failure (subtitles
+// are a nicety, never worth blocking or erroring the rest of the app over),
+// but that previously meant a 403/429/network failure looked *identical* to
+// "no subtitles found" — impossible to diagnose. Log the real reason instead
+// of silently discarding it; the caller's behavior (return null/[]) is
+// unchanged.
+async function logOsFailure(context: string, res: Response): Promise<void> {
+  const body = await res.text().catch(() => '');
+  console.error(`[subtitles] ${context} failed: HTTP ${res.status} ${res.statusText} — ${body.slice(0, 300)}`);
+}
+
 async function searchOsWithLabel(params: Record<string, string>): Promise<{ id: number; label: string } | null> {
   const qs = new URLSearchParams({ ...params, languages: config.subtitleLang }).toString();
   try {
@@ -65,7 +76,7 @@ async function searchOsWithLabel(params: Record<string, string>): Promise<{ id: 
       headers: { 'Api-Key': config.openSubtitlesApiKey, 'User-Agent': UA },
       signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) { await logOsFailure('search', res); return null; }
     const json = await res.json() as OsSearchResp;
     const entries = json.data ?? [];
     const best = entries.find(e => !e.attributes.ai_translated && !e.attributes.machine_translated) ?? entries[0];
@@ -74,7 +85,8 @@ async function searchOsWithLabel(params: Record<string, string>): Promise<{ id: 
     if (!id) return null;
     const parts = [best.attributes.movie_name, best.attributes.release].filter(Boolean);
     return { id, label: parts.join(' · ') || 'Unknown' };
-  } catch {
+  } catch (err) {
+    console.error('[subtitles] search threw:', err);
     return null;
   }
 }
@@ -87,13 +99,14 @@ async function downloadOs(fileId: number): Promise<string | null> {
       body: JSON.stringify({ file_id: fileId }),
       signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) { await logOsFailure('download request', res); return null; }
     const json = await res.json() as OsDownloadResp;
-    if (!json.link) return null;
+    if (!json.link) { console.error('[subtitles] download request succeeded but returned no link'); return null; }
     const dl = await fetch(json.link, { signal: AbortSignal.timeout(15000) });
-    if (!dl.ok) return null;
+    if (!dl.ok) { await logOsFailure('download file', dl); return null; }
     return dl.text();
-  } catch {
+  } catch (err) {
+    console.error('[subtitles] download threw:', err);
     return null;
   }
 }
@@ -267,7 +280,7 @@ export async function searchSubtitles(query: string): Promise<{ fileId: number; 
       headers: { 'Api-Key': config.openSubtitlesApiKey, 'User-Agent': UA },
       signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) { await logOsFailure('manual search', res); return []; }
     const json = await res.json() as OsSearchResp;
     return (json.data ?? []).slice(0, 10).flatMap(e => {
       const a = e.attributes;
@@ -277,7 +290,8 @@ export async function searchSubtitles(query: string): Promise<{ fileId: number; 
       const label = parts.join(' · ') || 'Unknown';
       return [{ fileId: fid, label }];
     });
-  } catch {
+  } catch (err) {
+    console.error('[subtitles] manual search threw:', err);
     return [];
   }
 }
@@ -315,7 +329,8 @@ export async function fetchSubtitles(videoPath: string, filename: string, fileId
     if (!content) return null;
     await fs.promises.writeFile(subtitlePath(videoPath), srtToVtt(content), 'utf8');
     return chosenLabel;
-  } catch {
+  } catch (err) {
+    console.error(`[subtitles] fetchSubtitles(${filename}) threw:`, err);
     return null;
   } finally {
     inFlight.delete(videoPath);
