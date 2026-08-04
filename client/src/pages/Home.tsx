@@ -138,7 +138,7 @@ export function Home() {
       await fetch(`/api/library/${encodeURIComponent(filename)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ posterPath: top.posterPath, tmdbId: top.tmdbId }),
+        body: JSON.stringify({ posterPath: top.posterPath, tmdbId: top.tmdbId, displayTitle: top.title }),
       });
       loadLibrary();
     } catch {
@@ -535,7 +535,7 @@ export function Home() {
               title={`Click to rename ${f.filename}`}
               onClick={() => startRename(f.filename)}
             >
-              {f.filename}
+              {f.displayTitle ?? cleanLibraryDisplayName(f.filename)}
             </div>
           )}
           <div className="lib-meta-row">
@@ -710,7 +710,7 @@ export function Home() {
             />
           ) : (
             <div className="continue-title" title={`Click to rename ${f.filename}`} onClick={() => startRename(f.filename)}>
-              {f.filename}
+              {f.displayTitle ?? cleanLibraryDisplayName(f.filename)}
             </div>
           )}
 

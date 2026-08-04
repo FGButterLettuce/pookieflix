@@ -180,6 +180,7 @@ export interface LibraryFileInfo {
   thumbReady: boolean;
   thumbUrl: string;
   posterPath: string | null;
+  displayTitle: string | null;
   hasSubtitles: boolean;
   subtitleFetching: boolean;
   subtitleName: string | null;

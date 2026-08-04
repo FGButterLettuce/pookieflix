@@ -539,7 +539,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     preHandler: requireAdmin,
   }, async (req, reply) => {
     const { filename } = req.params as { filename: string };
-    const body = req.body as { newFilename?: string; posterPath?: string | null; tmdbId?: number | null };
+    const body = req.body as { newFilename?: string; posterPath?: string | null; tmdbId?: number | null; displayTitle?: string | null };
 
     if (!SAFE_FILENAME_RE.test(filename)) return reply.status(400).send({ error: 'Invalid filename' });
 
@@ -550,7 +550,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       if (body.tmdbId !== undefined && body.tmdbId !== null && typeof body.tmdbId !== 'number') {
         return reply.status(400).send({ error: 'Invalid tmdbId' });
       }
-      updateLibraryPoster(filename, body.posterPath ?? null, body.tmdbId ?? null);
+      if (body.displayTitle !== undefined && body.displayTitle !== null && typeof body.displayTitle !== 'string') {
+        return reply.status(400).send({ error: 'Invalid displayTitle' });
+      }
+      updateLibraryPoster(filename, body.posterPath ?? null, body.tmdbId ?? null, body.displayTitle);
       if (body.newFilename === undefined) return reply.send({ ok: true });
     }
 

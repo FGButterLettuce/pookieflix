@@ -205,14 +205,14 @@ export function MarathonDetail() {
     load();
   };
 
-  const addFromLibrary = async (filename: string) => {
+  const addFromLibrary = async (file: LibraryFile) => {
     setError('');
     try {
-      const title = cleanLibraryDisplayName(filename);
+      const title = file.displayTitle ?? cleanLibraryDisplayName(file.filename);
       const res = await fetch(`/api/marathons/${id}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, libraryFilename: filename }),
+        body: JSON.stringify({ title, libraryFilename: file.filename }),
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) throw new Error(data.error ?? 'Failed');
@@ -835,13 +835,13 @@ export function MarathonDetail() {
           <div className="library-strip">
             {filteredLibrary.map(f => {
               const alreadyAdded = items.some(i => i.libraryFilename === f.filename);
-              const displayName = cleanLibraryDisplayName(f.filename);
+              const displayName = f.displayTitle ?? cleanLibraryDisplayName(f.filename);
               return (
                 <button
                   key={f.filename}
                   type="button"
                   className={'library-tile' + (alreadyAdded ? ' already-added' : '')}
-                  onClick={alreadyAdded ? undefined : () => addFromLibrary(f.filename)}
+                  onClick={alreadyAdded ? undefined : () => addFromLibrary(f)}
                   disabled={alreadyAdded}
                 >
                   <div className="library-tile-thumb">
