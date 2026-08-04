@@ -2430,14 +2430,24 @@ input.marathons-heading {
 .item-row-compact .status-badge { border: none; font: inherit; cursor: pointer; }
 .item-row-compact .item-menu-wrap { margin-left: 0.1rem; }
 
+/* Poster on the left, everything else on the right — was a full-width
+   landscape banner on top, but now that a portrait TMDB poster is the
+   primary image everywhere else in the app too, a wide banner either
+   cropped most of it away or squeezed it into a sliver. flex-start (not
+   stretch) so the poster keeps its own clean aspect ratio regardless of
+   how tall the body gets once reviews are expanded. */
 .item-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   overflow: hidden;
+  display: flex; align-items: flex-start;
 }
 
 .item-thumb {
-  width: 100%; aspect-ratio: 3.6 / 1; position: relative; overflow: hidden;
+  width: 130px; flex-shrink: 0; aspect-ratio: 2/3; position: relative; overflow: hidden;
   background: var(--surface3);
+}
+@media (min-width: 900px) {
+  .item-thumb { width: 160px; }
 }
 .item-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .item-thumb .placeholder-texture {
@@ -2457,7 +2467,7 @@ input.marathons-heading {
 .item-thumb:hover .play-badge { transform: scale(1.08); }
 .item-thumb .play-badge svg { width: 18px; height: 18px; fill: white; }
 
-.item-body { padding: 1.05rem 1.15rem 1.1rem; }
+.item-body { flex: 1; min-width: 0; padding: 0.9rem 1.05rem 1rem; }
 .item-row { display: flex; align-items: flex-start; gap: 0.75rem; }
 .item-main { flex: 1; min-width: 0; }
 /* A neutral "this is editable text" hover cue (background tint, matching the
@@ -2466,7 +2476,7 @@ input.marathons-heading {
    that action lives on the thumbnail now; title click is rename-only for
    every item regardless of library link status. */
 .item-title {
-  font-weight: 800; font-size: 1.28rem; line-height: 1.25; display: flex; align-items: center; gap: 0.5rem; cursor: text;
+  font-weight: 800; font-size: 1.05rem; line-height: 1.25; display: flex; align-items: center; gap: 0.5rem; cursor: text;
   border-radius: var(--radius-sm); padding: 0.1rem 0.4rem; margin: -0.1rem -0.4rem;
   transition: background-color var(--dur-short) var(--ease-out);
 }
@@ -2520,16 +2530,16 @@ input.item-title {
 .reviews-panel.open { display: block; }
 
 .btn-done {
-  height: 40px; padding: 0 1.1rem; border-radius: var(--radius-sm); border: 1.5px solid var(--accent);
-  background: transparent; color: var(--accent); font: inherit; font-weight: 700; font-size: 0.92rem;
-  display: flex; align-items: center; gap: 0.45rem; cursor: pointer; white-space: nowrap;
+  height: 34px; padding: 0 0.9rem; border-radius: var(--radius-sm); border: 1.5px solid var(--accent);
+  background: transparent; color: var(--accent); font: inherit; font-weight: 700; font-size: 0.85rem;
+  display: flex; align-items: center; gap: 0.4rem; cursor: pointer; white-space: nowrap;
   transition: background-color var(--dur-short), color var(--dur-short);
 }
 .btn-done:hover { background: var(--accent); color: var(--accent-ink); }
 
 .status-badge {
-  height: 40px; padding: 0 1rem; border-radius: var(--radius-sm);
-  display: flex; align-items: center; gap: 0.45rem; font-weight: 700; font-size: 0.92rem;
+  height: 34px; padding: 0 0.85rem; border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 0.4rem; font-weight: 700; font-size: 0.85rem;
   white-space: nowrap; cursor: default;
 }
 .status-badge.done { background: color-mix(in oklch, var(--success) 18%, var(--surface)); color: var(--success); }
