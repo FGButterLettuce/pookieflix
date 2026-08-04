@@ -226,7 +226,7 @@ export function MarathonDetail() {
   const addFromLibrary = async (filename: string) => {
     setError('');
     try {
-      const title = filename.replace(/\.[^./]+$/, '');
+      const title = cleanLibraryDisplayName(filename);
       const res = await fetch(`/api/marathons/${id}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -305,6 +305,48 @@ export function MarathonDetail() {
   const skipPoster = () => {
     setPosterPickerItemId(null);
     setPosterCandidates([]);
+  };
+
+  // Backfills a poster (and, only if the title was never actually renamed
+  // away from its raw-filename default, a real title) for every
+  // library-linked item that doesn't have one yet — runs once per item as
+  // soon as items load, no button required. Silent/auto-applied rather
+  // than picker-confirmed like manual adds: these are movies already in
+  // the library, not an ambiguous filename match, so there's no
+  // misattribution risk the way there is with autolink's review data.
+  const enrichedItemIdsRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    for (const item of items) {
+      if (!item.libraryFilename || item.posterPath || enrichedItemIdsRef.current.has(item.id)) continue;
+      enrichedItemIdsRef.current.add(item.id);
+      void enrichLibraryItem(item);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+
+  const enrichLibraryItem = async (item: Item) => {
+    const cleanedTitle = cleanLibraryDisplayName(item.libraryFilename!);
+    try {
+      const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(cleanedTitle)}`);
+      if (!res.ok) return;
+      const data = await res.json() as { results: TmdbCandidate[] };
+      const top = (data.results ?? []).find(r => r.posterPath);
+      if (!top) return;
+      const rawDefaultTitle = item.libraryFilename!.replace(/\.[^./]+$/, '');
+      const titleNeverRenamed = item.title === rawDefaultTitle || item.title === cleanedTitle;
+      await fetch(`/api/marathons/${id}/items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          posterPath: top.posterPath,
+          tmdbId: top.tmdbId,
+          ...(titleNeverRenamed ? { title: top.title } : {}),
+        }),
+      });
+      load();
+    } catch {
+      // Silent — this is a cosmetic nicety, never block or error the page over it.
+    }
   };
 
   const setStatus = async (itemId: number, status: Status) => {
@@ -547,7 +589,7 @@ export function MarathonDetail() {
                       />
                       {!item.libraryFilename && <div className="item-hint">{STATUS_HINT_UNLINKED}</div>}
                       {item.libraryFilename && !playable && <div className="item-hint">{STATUS_HINT_MISSING}</div>}
-                      {!item.libraryFilename && !item.posterPath && posterPickerItemId === item.id && (
+                      {!item.posterPath && posterPickerItemId === item.id && (
                         <div className="poster-picker">
                           <div className="poster-picker-title">Choose a poster</div>
                           <div className="poster-picker-strip">
@@ -567,12 +609,12 @@ export function MarathonDetail() {
                           <button type="button" className="link-btn poster-picker-skip" onClick={skipPoster}>Skip</button>
                         </div>
                       )}
-                      {!item.libraryFilename && !item.posterPath && posterPickerItemId !== item.id && (
+                      {!item.posterPath && posterPickerItemId !== item.id && (
                         <button
                           className="add-poster-btn"
                           title="Search TMDB for a poster"
                           disabled={posterSearchingId === item.id}
-                          onClick={() => searchAndOfferPoster(item.id, item.title)}
+                          onClick={() => searchAndOfferPoster(item.id, item.libraryFilename ? cleanLibraryDisplayName(item.libraryFilename) : item.title)}
                         >
                           <ImagePlus /> {posterSearchingId === item.id ? 'Searching…' : 'Add poster'}
                         </button>

@@ -913,10 +913,11 @@ body {
 .continue-list { display: flex; flex-direction: column; gap: var(--space-md); }
 /* On a full-width mobile viewport this list is naturally bounded by the
    screen; on a wide desktop it stretched edge-to-edge and, at the thumb's
-   2.4:1 aspect ratio, turned into a huge banner. Cap it like the Lists
-   page body so it stays a prominent card, not a full-bleed one. */
+   2.4:1 aspect ratio, turned into a huge banner. Cap it so it stays a
+   prominent card, not a full-bleed one — left-aligned, matching the rail
+   and library grid below rather than centering as an island. */
 @media (min-width: 900px) {
-  .continue-list { max-width: 640px; margin: 0 auto; width: 100%; }
+  .continue-list { max-width: 640px; }
 }
 
 .continue-card {
@@ -2284,6 +2285,10 @@ input.marathons-heading {
   transition: background-color var(--dur-short) var(--ease-out);
 }
 .item-title:hover { background: var(--surface2); }
+/* Raw library filenames have no spaces to wrap at (one giant unbreakable
+   "word"), so without this the title overflows straight over the Done
+   button and menu instead of stopping at the available width. */
+.item-title .editable-text-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .item-hint { font-size: 0.88rem; color: var(--text-subtle); margin-top: 0.3rem; }
 input.item-title {
   border: 1px solid var(--accent); background: var(--surface2); border-radius: var(--radius-sm);

@@ -77,7 +77,7 @@ export function EditableText({ value, onSave, className, icon }: EditableTextPro
       onClick={() => setEditing(true)}
       onKeyDown={e => { if (e.key === 'Enter') setEditing(true); }}
     >
-      {value}
+      <span className="editable-text-label">{value}</span>
       {icon}
     </span>
   );

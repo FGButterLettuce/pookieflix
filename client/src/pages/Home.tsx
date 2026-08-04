@@ -102,7 +102,6 @@ export function Home() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   const [marathons, setMarathons] = useState<MarathonSummary[]>([]);
-  const [lanUrl, setLanUrl] = useState('');
   const [autolinkSuggestion, setAutolinkSuggestion] = useState<AutolinkSuggestion | null>(null);
   const [autolinking, setAutolinking] = useState(false);
 
@@ -145,14 +144,6 @@ export function Home() {
     fetch('/api/marathons')
       .then(r => r.ok ? r.json() : null)
       .then((d: { marathons: MarathonSummary[] } | null) => { if (d) setMarathons(d.marathons); })
-      .catch(() => {});
-  }, [authed]);
-
-  useEffect(() => {
-    if (!authed) return;
-    fetch('/api/settings')
-      .then(r => r.ok ? r.json() : null)
-      .then((d: { LAN_URL?: string } | null) => { if (d?.LAN_URL) setLanUrl(d.LAN_URL); })
       .catch(() => {});
   }, [authed]);
 
@@ -831,17 +822,16 @@ export function Home() {
   // weight (it just fails after a click) — show the LAN handoff up front
   // instead of making people discover that by trying.
   const offUploadOrigin = !!uploadUrl && new URL(uploadUrl).origin !== window.location.origin;
-  const uploadRedirectUrl = lanUrl || uploadUrl;
 
   return (
     <div className="home-root">
       <header className="home-topbar">
         <span className="home-logo"><Logo size="sm" variant={theme} /></span>
-        {lanUrl && (
+        {offUploadOrigin && (
           <button
             className="settings-link"
-            title="Upload (opens your LAN address — large video uploads are unreliable over the public tunnel)"
-            onClick={() => window.open(lanUrl, '_blank', 'noopener,noreferrer')}
+            title="Upload (opens your local network URL — large video uploads are unreliable over the public tunnel)"
+            onClick={() => window.open(uploadUrl, '_blank', 'noopener,noreferrer')}
           >
             <Upload />
           </button>
@@ -856,7 +846,7 @@ export function Home() {
       {offUploadOrigin && !uploading && !uploadedRoomUrl ? (
         <div
           className="upload-zone upload-zone-lan"
-          onClick={() => window.open(uploadRedirectUrl, '_blank', 'noopener,noreferrer')}
+          onClick={() => window.open(uploadUrl, '_blank', 'noopener,noreferrer')}
         >
           <div className="upload-icon"><Upload /></div>
           <div className="upload-label">Uploads need your home network</div>

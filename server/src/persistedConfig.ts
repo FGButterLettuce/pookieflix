@@ -9,7 +9,6 @@ export interface PersistedConfig {
   UPLOAD_URL?: string;
   OPENSUBTITLES_API_KEY?: string;
   TMDB_API_KEY?: string;
-  LAN_URL?: string;
   TUNNEL_TOKEN?: string;
   PASSWORD_HASH?: string;
   SESSION_SECRET?: string;

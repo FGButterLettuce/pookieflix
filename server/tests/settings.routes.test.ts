@@ -58,7 +58,6 @@ describe('settings masked-key round-trip', () => {
       url: '/api/settings',
       payload: {
         APP_BASE_URL: 'https://watch.example.com',
-        LAN_URL: 'http://192.168.0.91:3000',
         TMDB_API_KEY: '••••••••',
         OPENSUBTITLES_API_KEY: '••••••••',
       },

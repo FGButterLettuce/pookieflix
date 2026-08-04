@@ -324,7 +324,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       UPLOAD_URL: process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? '',
       OPENSUBTITLES_API_KEY: osKey ? SETTINGS_MASKED_VALUE : '',  // mask — never expose key over HTTP
       TMDB_API_KEY: tmdbKey ? SETTINGS_MASKED_VALUE : '',  // mask — never expose key over HTTP
-      LAN_URL: process.env.LAN_URL ?? persisted.LAN_URL ?? '',  // plain URL, not a secret — safe to expose as-is
       USER_NAME: persisted.USER_NAME ?? '',
       PARTNER_NAME: persisted.PARTNER_NAME ?? '',
       TUNNEL_CONFIGURED: !!tunnelToken,  // write-only field — never expose the token itself
@@ -339,9 +338,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     // the masked placeholder when a key is already configured. Treat blank
     // OR the mask itself as "no change" and omit the key entirely — same
     // omit-if-blank shape as TUNNEL_TOKEN below — so a save that only
-    // touches an unrelated field (e.g. LAN_URL) can never clobber an
-    // already-configured OPENSUBTITLES_API_KEY/TMDB_API_KEY with the literal
-    // bullet string.
+    // touches an unrelated field can never clobber an already-configured
+    // OPENSUBTITLES_API_KEY/TMDB_API_KEY with the literal bullet string.
     const osKeyInput = body.OPENSUBTITLES_API_KEY?.trim();
     const newOsKey = osKeyInput && osKeyInput !== SETTINGS_MASKED_VALUE ? osKeyInput : undefined;
     const tmdbKeyInput = body.TMDB_API_KEY?.trim();
@@ -351,7 +349,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
       ...(newOsKey ? { OPENSUBTITLES_API_KEY: newOsKey } : {}),
       ...(newTmdbKey ? { TMDB_API_KEY: newTmdbKey } : {}),
-      LAN_URL: body.LAN_URL?.trim() || undefined,
       USER_NAME: body.USER_NAME?.trim() || undefined,
       PARTNER_NAME: body.PARTNER_NAME?.trim() || undefined,
       // Omit entirely (rather than sending undefined) when blank, so an
@@ -774,7 +771,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({ error: 'Invalid tmdbId' });
       }
       updateMarathonItemPoster(item.id, body.posterPath ?? null, body.tmdbId ?? null);
-      return reply.send({ ok: true });
+      // Fall through instead of returning — a poster update can arrive
+      // alongside a title update (auto-enrichment backfills both together).
     }
 
     if (typeof body.position === 'number') {
