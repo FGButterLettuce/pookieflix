@@ -7,7 +7,6 @@ import type { VideoPlayerHandle } from '../components/VideoPlayer';
 import { RoomStatus } from '../components/RoomStatus';
 import { DebugPanel } from '../components/DebugPanel';
 import { Logo } from '../components/Logo';
-import { useTheme } from '../theme/ThemeContext';
 import { WsClient } from '../lib/wsClient';
 import { rlog } from '../lib/remoteLogger';
 import type { VideoController } from '../lib/videoController';
@@ -67,7 +66,6 @@ export function Room() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
 
-  const { theme } = useTheme();
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [roomState, setRoomState] = useState<RoomState>('WAITING_FOR_VIEWERS');
   const [viewerCount, setViewerCount] = useState(0);
@@ -427,10 +425,7 @@ export function Room() {
         <button className="settings-link" onClick={() => navigate('/')} title="Back to library">
           <ArrowLeft />
         </button>
-        <span className="room-logo">
-          <img src="/favicon.svg" alt="" className="room-logo-icon" />
-          <span className="room-logo-full"><Logo size="sm" mark={false} variant={theme} /></span>
-        </span>
+        <span className="room-logo"><Logo size="sm" /></span>
         <span className="room-title" title={roomInfo.mediaFilename}>{guessTitle(roomInfo.mediaFilename)}</span>
         <RoomStatus state={roomState} viewerCount={viewerCount || roomInfo.viewerCount} />
         <div className="room-actions">

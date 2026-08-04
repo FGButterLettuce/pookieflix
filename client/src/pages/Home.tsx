@@ -4,7 +4,6 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useNavigate, Link } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { PasswordInput } from '../components/PasswordInput';
-import { useTheme } from '../theme/ThemeContext';
 import { getViewer, clearViewer } from '../lib/viewer';
 import { cleanLibraryDisplayName } from '../lib/cleanFilename';
 import type { LibraryFile, TmdbCandidate } from '../types';
@@ -71,7 +70,6 @@ export function Home() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { theme } = useTheme();
   const [library, setLibrary] = useState<LibraryFile[]>([]);
   const [uploadUrl, setUploadUrl] = useState('');
   const [subtitleLang, setSubtitleLang] = useState('en');
@@ -860,7 +858,7 @@ export function Home() {
   return (
     <div className="home-root">
       <header className="home-topbar">
-        <span className="home-logo"><Logo size="sm" variant={theme} /></span>
+        <span className="home-logo"><Logo size="sm" /></span>
         {offUploadOrigin && (
           <button
             className="settings-link"

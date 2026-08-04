@@ -6,7 +6,6 @@ import {
 import { Logo } from '../components/Logo';
 import { PasswordInput } from '../components/PasswordInput';
 import { PasteableInput } from '../components/PasteableInput';
-import { useTheme } from '../theme/ThemeContext';
 import { generateDomainSuggestions } from '../lib/domainSuggestions';
 
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -40,7 +39,6 @@ async function copyToClipboard(text: string): Promise<boolean> {
 type Mode = 'local' | 'tunnel' | 'ddns' | null;
 
 export function Setup({ onComplete }: { onComplete: () => void }) {
-  const { theme } = useTheme();
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<Mode>(null);
   const [tunnelSubStep, setTunnelSubStep] = useState(0);
@@ -151,7 +149,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {step === 0 && (
           <div className="setup-step">
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
-              <Logo size="lg" variant={theme} />
+              <Logo size="lg" />
             </div>
             <p className="setup-desc">
               watch movies in perfect sync with someone. your files, your server, completely

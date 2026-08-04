@@ -1,61 +1,22 @@
-// PookieFlix logo — play-to-heart scrubber mark + wordmark
-// `variant="dark"` (default) is cream-on-dark for the dark theme;
-// `variant="light"` is plum/grey-on-light for the light theme.
+// PookieFlix logo — the heart mark, matching public/favicon.svg exactly.
+// Previously an elaborate play-bar-to-heart scrubber illustration plus a
+// wordmark; simplified to just the heart everywhere, smaller and easier on
+// the eyes than the full mark+wordmark treatment.
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg';
-  mark?: boolean;
-  variant?: 'dark' | 'light';
 }
 
-const SIZES = {
-  sm: { mark: [80, 19] as [number, number], wordmark: 22 },
-  md: { mark: [110, 26] as [number, number], wordmark: 30 },
-  lg: { mark: [160, 38] as [number, number], wordmark: 44 },
-};
+const SIZES = { sm: 24, md: 32, lg: 48 };
 
-export function Logo({ size = 'md', mark: showMark = true, variant = 'dark' }: LogoProps) {
-  const { mark, wordmark } = SIZES[size];
-
-  const triangle = variant === 'dark' ? '#fff5ef' : '#34203f';
-  const playedBar = variant === 'dark' ? '#fff5ef' : '#34203f';
-  const buffered = variant === 'dark' ? 'rgba(255,245,239,0.38)' : '#aeaeae';
-  const remaining = variant === 'dark' ? 'rgba(255,245,239,0.16)' : '#d9d9d9';
-  const pookieColor = variant === 'dark' ? '#ff7fab' : '#e0457f';
-  const flixColor = variant === 'dark' ? '#fff5ef' : '#34203f';
-
-  const wordmarkEl = (
-    <span style={{ fontFamily: "'Figtree', sans-serif", fontWeight: 900, fontSize: wordmark, letterSpacing: '-0.035em', lineHeight: 1 }}>
-      <span style={{ color: pookieColor }}>Pookie</span>
-      <span style={{ color: flixColor }}>Flix</span>
-    </span>
-  );
-
-  if (!showMark) return wordmarkEl;
-
+export function Logo({ size = 'md' }: LogoProps) {
+  const px = SIZES[size];
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: size === 'lg' ? 18 : 12 }}>
-      <svg width={mark[0]} height={mark[1]} viewBox="0 0 340 80" aria-hidden="true">
-        <defs>
-          <linearGradient id="pf-heart-g" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#ff5d97" />
-            <stop offset="1" stopColor="#8a5cff" />
-          </linearGradient>
-        </defs>
-        {/* play triangle */}
-        <path d="M14 18 L52 40 L14 62 Z" fill={triangle} />
-        {/* played bar */}
-        <rect x="70" y="31" width="100" height="18" rx="9" fill={playedBar} />
-        {/* heart playhead */}
-        <g transform="translate(157,5.9) scale(0.62) rotate(-90 50 55)">
-          <path d="M50 86 C 12 58, 17 24, 38 24 C 47 24, 50 31, 50 31 C 50 31, 53 24, 62 24 C 83 24, 88 58, 50 86 Z" fill="url(#pf-heart-g)" />
-        </g>
-        {/* buffered */}
-        <rect x="200" y="36" width="52" height="8" rx="4" fill={buffered} />
-        {/* remaining */}
-        <rect x="252" y="36" width="76" height="8" rx="4" fill={remaining} />
-      </svg>
-      {wordmarkEl}
-    </div>
+    <svg width={px} height={px} viewBox="25 20 72 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="PookieFlix">
+      <path
+        d="M58.7236 27.9914C70.0663 33.904 85.4923 49.7216 93.7095 58.6664C94.1275 59.1307 94.3589 59.7339 94.3589 60.3593C94.3589 60.9848 94.1275 61.588 93.7095 62.0523C85.4923 71.0476 70.0663 86.8652 58.7236 92.7778C33.7696 105.765 17.1336 73.0185 42.0876 60.3846C17.1336 47.7507 33.7696 15.0038 58.7236 27.9914Z"
+        fill="#E04580"
+      />
+    </svg>
   );
 }

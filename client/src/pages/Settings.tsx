@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { ArrowLeft, Info, UserRound, Globe, SlidersHorizontal, Lock, Cloud } from 'lucide-react';
 import { Logo } from '../components/Logo';
-import { useTheme } from '../theme/ThemeContext';
 import { PasswordInput } from '../components/PasswordInput';
 import { PasteableInput } from '../components/PasteableInput';
 
@@ -33,7 +32,6 @@ const TUNNEL_STATUS_LABEL: Record<TunnelStatus['state'], string> = {
 };
 
 export function Settings() {
-  const { theme } = useTheme();
   const [values, setValues] = useState<SettingsData>({
     APP_BASE_URL: '',
     UPLOAD_URL: '',
@@ -162,7 +160,7 @@ export function Settings() {
   return (
     <div className="home-root">
       <header className="home-topbar">
-        <span className="home-logo"><Logo size="sm" variant={theme} /></span>
+        <span className="home-logo"><Logo size="sm" /></span>
         <Link to="/" className="settings-link" title="Back to library"><ArrowLeft /></Link>
       </header>
 
