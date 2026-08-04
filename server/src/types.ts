@@ -200,6 +200,8 @@ export interface MarathonItemRow {
   library_filename: string | null;
   status: 'pending' | 'done' | 'skipped';
   created_at: string;
+  poster_path: string | null;
+  tmdb_id: number | null;
 }
 
 export interface MarathonReviewRow {
@@ -225,4 +227,14 @@ export interface MarathonItemDetail {
   libraryFilename: string | null;
   status: 'pending' | 'done' | 'skipped';
   reviews: { viewer: 'user' | 'partner'; score: number | null; note: string | null }[];
+  posterPath: string | null;
+  tmdbId: number | null;
+}
+
+export interface WatchHistoryRow {
+  id: number;
+  hls_dir_name: string;
+  title: string;
+  detected_at: string;
+  dismissed: number; // 0 | 1
 }

@@ -65,4 +65,36 @@ describe('marathon data access', () => {
     assert.equal(db.getMarathon(m.id), undefined);
     assert.equal(db.getMarathonItem(item.id), undefined);
   });
+
+  it('moves an item directly to an arbitrary position, renumbering the rest', () => {
+    const m = db.createMarathon('Position Test');
+    const a = db.addMarathonItem(m.id, 'A', null);
+    const b = db.addMarathonItem(m.id, 'B', null);
+    const c = db.addMarathonItem(m.id, 'C', null);
+    db.moveMarathonItemToPosition(m.id, c.id, 0);
+    const items = db.listMarathonItems(m.id);
+    assert.deepEqual(items.map(i => i.title), ['C', 'A', 'B']);
+  });
+
+  it('moving to the same position is a no-op', () => {
+    const m = db.createMarathon('Position NoOp Test');
+    const a = db.addMarathonItem(m.id, 'A', null);
+    db.addMarathonItem(m.id, 'B', null);
+    db.moveMarathonItemToPosition(m.id, a.id, 0);
+    const items = db.listMarathonItems(m.id);
+    assert.deepEqual(items.map(i => i.title), ['A', 'B']);
+  });
+
+  it('sets and clears poster fields on an item', () => {
+    const m = db.createMarathon('Poster Test');
+    const item = db.addMarathonItem(m.id, 'A', null);
+    db.updateMarathonItemPoster(item.id, '/abc123.jpg', 42);
+    let items = db.listMarathonItems(m.id);
+    assert.equal(items[0].posterPath, '/abc123.jpg');
+    assert.equal(items[0].tmdbId, 42);
+    db.updateMarathonItemPoster(item.id, null, null);
+    items = db.listMarathonItems(m.id);
+    assert.equal(items[0].posterPath, null);
+    assert.equal(items[0].tmdbId, null);
+  });
 });

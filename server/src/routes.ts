@@ -12,6 +12,8 @@ import {
   updateLibraryLastTime,
   createMarathon, listMarathons, getMarathon, renameMarathon, deleteMarathon, listMarathonItems,
   addMarathonItem, getMarathonItem, updateMarathonItem, deleteMarathonItem, moveMarathonItem, upsertMarathonReview,
+  moveMarathonItemToPosition, scanForOrphanedHlsEntries, recordWatchHistoryEntries, listWatchHistory, dismissWatchHistoryEntry,
+  listUntrackedItemTitles, updateMarathonItemPoster,
 } from './db';
 import {
   generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
@@ -155,6 +157,54 @@ function assertLibraryPath(filename: string): string {
   return full;
 }
 
+// ── Autolink filename matching ────────────────────────────────────────────────
+// Strips common release-group/quality/codec junk tokens and normalizes
+// punctuation/case, then checks whether the cleaned filename and candidate
+// title contain the exact same set of tokens (order-independent, but every
+// token must match exactly). This is strictly conservative: avoids false
+// positives on numbered sequels (e.g., "Iron Man 2" won't match "Iron Man"),
+// while still matching exact title matches after junk-token cleanup.
+const JUNK_TOKENS = /\b(1080p|720p|2160p|4k|bluray|blu-ray|webrip|web-dl|hdrip|dvdrip|x264|x265|h264|h265|hevc|yify|yts|transcode|extended|remastered|directors?[._-]?cut)\b/gi;
+
+function cleanTitleToken(raw: string): string {
+  return raw
+    .replace(/\.[a-z0-9]+$/i, '') // drop file extension
+    .replace(/[._]/g, ' ')
+    .replace(JUNK_TOKENS, ' ')
+    .replace(/\b(19|20)\d{2}\b/g, ' ') // drop a bare 4-digit year
+    .replace(/[^a-z0-9 ]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function tokenize(s: string): string[] {
+  return s.split(' ').filter(Boolean).sort();
+}
+
+function tokensEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+export function matchFilenameToUntrackedItem(filename: string, candidateTitles: string[]): string | null {
+  const cleanedFilename = cleanTitleToken(filename);
+  if (!cleanedFilename) return null;
+  const filenameTokens = tokenize(cleanedFilename);
+  for (const title of candidateTitles) {
+    const cleanedTitle = cleanTitleToken(title);
+    if (!cleanedTitle) continue;
+    const titleTokens = tokenize(cleanedTitle);
+    if (tokensEqual(filenameTokens, titleTokens)) {
+      return title;
+    }
+  }
+  return null;
+}
+
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Security headers on every response ────────────────────────────────────
@@ -259,14 +309,22 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Setup / Settings ──────────────────────────────────────────────────────
+  // GET masks configured secrets with this placeholder rather than exposing
+  // them over HTTP. POST must never persist this literal string back as the
+  // "real" key — see the omit-if-blank-or-masked handling below.
+  const SETTINGS_MASKED_VALUE = '••••••••';
+
   app.get('/api/settings', { preHandler: requireAdmin }, async (_req, reply) => {
     const persisted = readPersistedConfig();
     const osKey = process.env.OPENSUBTITLES_API_KEY ?? persisted.OPENSUBTITLES_API_KEY ?? '';
+    const tmdbKey = process.env.TMDB_API_KEY ?? persisted.TMDB_API_KEY ?? '';
     const tunnelToken = process.env.TUNNEL_TOKEN ?? persisted.TUNNEL_TOKEN ?? '';
     return reply.send({
       APP_BASE_URL: process.env.APP_BASE_URL ?? persisted.APP_BASE_URL ?? '',
       UPLOAD_URL: process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? '',
-      OPENSUBTITLES_API_KEY: osKey ? '••••••••' : '',  // mask — never expose key over HTTP
+      OPENSUBTITLES_API_KEY: osKey ? SETTINGS_MASKED_VALUE : '',  // mask — never expose key over HTTP
+      TMDB_API_KEY: tmdbKey ? SETTINGS_MASKED_VALUE : '',  // mask — never expose key over HTTP
+      LAN_URL: process.env.LAN_URL ?? persisted.LAN_URL ?? '',  // plain URL, not a secret — safe to expose as-is
       USER_NAME: persisted.USER_NAME ?? '',
       PARTNER_NAME: persisted.PARTNER_NAME ?? '',
       TUNNEL_CONFIGURED: !!tunnelToken,  // write-only field — never expose the token itself
@@ -277,10 +335,23 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/settings', { preHandler: requireAdmin }, async (req, reply) => {
     const body = req.body as Record<string, string>;
     const newTunnelToken = body.TUNNEL_TOKEN?.trim();
+    // The client round-trips whatever GET /api/settings sent it, including
+    // the masked placeholder when a key is already configured. Treat blank
+    // OR the mask itself as "no change" and omit the key entirely — same
+    // omit-if-blank shape as TUNNEL_TOKEN below — so a save that only
+    // touches an unrelated field (e.g. LAN_URL) can never clobber an
+    // already-configured OPENSUBTITLES_API_KEY/TMDB_API_KEY with the literal
+    // bullet string.
+    const osKeyInput = body.OPENSUBTITLES_API_KEY?.trim();
+    const newOsKey = osKeyInput && osKeyInput !== SETTINGS_MASKED_VALUE ? osKeyInput : undefined;
+    const tmdbKeyInput = body.TMDB_API_KEY?.trim();
+    const newTmdbKey = tmdbKeyInput && tmdbKeyInput !== SETTINGS_MASKED_VALUE ? tmdbKeyInput : undefined;
     writePersistedConfig({
       APP_BASE_URL: body.APP_BASE_URL?.trim() || undefined,
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
-      OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
+      ...(newOsKey ? { OPENSUBTITLES_API_KEY: newOsKey } : {}),
+      ...(newTmdbKey ? { TMDB_API_KEY: newTmdbKey } : {}),
+      LAN_URL: body.LAN_URL?.trim() || undefined,
       USER_NAME: body.USER_NAME?.trim() || undefined,
       PARTNER_NAME: body.PARTNER_NAME?.trim() || undefined,
       // Omit entirely (rather than sending undefined) when blank, so an
@@ -318,6 +389,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       APP_BASE_URL: body.APP_BASE_URL.trim(),
       UPLOAD_URL: body.UPLOAD_URL?.trim() || undefined,
       OPENSUBTITLES_API_KEY: body.OPENSUBTITLES_API_KEY?.trim() || undefined,
+      TMDB_API_KEY: body.TMDB_API_KEY?.trim() || undefined,
       USER_NAME: body.USER_NAME?.trim() || undefined,
       PARTNER_NAME: body.PARTNER_NAME?.trim() || undefined,
       TUNNEL_TOKEN: tunnelToken,
@@ -325,6 +397,34 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     });
     if (tunnelToken) startTunnel(tunnelToken);
     return reply.send({ ok: true });
+  });
+
+  // ── TMDB search (optional — gated on TMDB_API_KEY) ─────────────────────────
+  app.get('/api/tmdb/search', { preHandler: requireAdmin }, async (req, reply) => {
+    const { query } = req.query as { query?: string };
+    if (!query?.trim()) return reply.status(400).send({ error: 'query is required' });
+
+    // Read fresh from persisted config each time so a newly-saved key takes
+    // effect without a server restart — same pattern as GET /api/settings.
+    const persisted = readPersistedConfig();
+    const apiKey = process.env.TMDB_API_KEY ?? persisted.TMDB_API_KEY ?? '';
+    if (!apiKey) return reply.status(503).send({ error: 'TMDB_API_KEY not configured' });
+
+    try {
+      const url = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query)}&api_key=${encodeURIComponent(apiKey)}`;
+      const tmdbRes = await fetch(url);
+      if (!tmdbRes.ok) return reply.status(502).send({ error: 'TMDB request failed' });
+      const data = await tmdbRes.json() as { results: { id: number; title: string; release_date?: string; poster_path: string | null }[] };
+      const results = data.results.slice(0, 8).map(r => ({
+        tmdbId: r.id,
+        title: r.title,
+        year: r.release_date ? r.release_date.slice(0, 4) : null,
+        posterPath: r.poster_path,
+      }));
+      return reply.send({ results });
+    } catch {
+      return reply.status(502).send({ error: 'TMDB request failed' });
+    }
   });
 
   // ── Library: list files with metadata ─────────────────────────────────────
@@ -459,6 +559,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const newSub = subtitlePath(newPath);
     if (fs.existsSync(oldSub)) {
       try { fs.renameSync(oldSub, newSub); } catch { /* ignore */ }
+    }
+
+    // Rename the HLS cache dir too — otherwise the old dir is left behind
+    // under the old name, and the watch-history orphan scan (which treats
+    // any *.hls dir without a matching *.mp4 as "watched and removed") would
+    // wrongly report the still-present, just-renamed file as watch history.
+    const oldHls = hlsDir(oldPath);
+    const newHls = hlsDir(newPath);
+    if (fs.existsSync(oldHls)) {
+      try { fs.renameSync(oldHls, newHls); } catch { /* ignore */ }
     }
 
     renameLibraryFile(filename, newFilename, oldPath, newPath);
@@ -651,7 +761,26 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const marathonId = Number(id);
     const item = getMarathonItem(Number(itemId));
     if (!item || item.marathon_id !== marathonId) return reply.status(404).send({ error: 'Not found' });
-    const body = req.body as { title?: string; libraryFilename?: string | null; status?: string; move?: 'up' | 'down' };
+    const body = req.body as {
+      title?: string; libraryFilename?: string | null; status?: string; move?: 'up' | 'down'; position?: number;
+      posterPath?: string | null; tmdbId?: number | null;
+    };
+
+    if (body.posterPath !== undefined || body.tmdbId !== undefined) {
+      if (body.posterPath !== undefined && body.posterPath !== null && typeof body.posterPath !== 'string') {
+        return reply.status(400).send({ error: 'Invalid posterPath' });
+      }
+      if (body.tmdbId !== undefined && body.tmdbId !== null && typeof body.tmdbId !== 'number') {
+        return reply.status(400).send({ error: 'Invalid tmdbId' });
+      }
+      updateMarathonItemPoster(item.id, body.posterPath ?? null, body.tmdbId ?? null);
+      return reply.send({ ok: true });
+    }
+
+    if (typeof body.position === 'number') {
+      moveMarathonItemToPosition(item.marathon_id, item.id, body.position);
+      return reply.send({ ok: true });
+    }
 
     if (body.move) {
       moveMarathonItem(item.marathon_id, item.id, body.move);
@@ -700,12 +829,73 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Invalid viewer' });
     }
     if (body.score !== null && body.score !== undefined) {
-      if (!Number.isInteger(body.score) || body.score < 1 || body.score > 10) {
-        return reply.status(400).send({ error: 'Score must be an integer from 1 to 10' });
+      const isOnHalfGrid = typeof body.score === 'number' && Number.isInteger(body.score * 2);
+      if (!isOnHalfGrid || body.score < 1 || body.score > 10) {
+        return reply.status(400).send({ error: 'Score must be in 0.5 increments from 1 to 10' });
       }
     }
     upsertMarathonReview(item.id, body.viewer, body.score ?? null, body.note?.trim() || null);
     return reply.send({ ok: true });
+  });
+
+  // ── Watch history ──────────────────────────────────────────────────────
+  app.post('/api/history/scan', { preHandler: requireAdmin }, async (_req, reply) => {
+    const found = scanForOrphanedHlsEntries();
+    recordWatchHistoryEntries(found);
+    return reply.send({ ok: true, found: found.length });
+  });
+
+  app.get('/api/history', { preHandler: requireAdmin }, async (_req, reply) => {
+    const entries = listWatchHistory().map(e => ({
+      id: e.id,
+      title: e.title,
+      detectedAt: e.detected_at,
+    }));
+    return reply.send({ entries });
+  });
+
+  app.delete('/api/history/:id', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    dismissWatchHistoryEntry(Number(id));
+    return reply.send({ ok: true });
+  });
+
+  app.post('/api/history/:id/promote', { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { marathonName?: string };
+    const name = body?.marathonName?.trim();
+    if (!name) return reply.status(400).send({ error: 'marathonName is required' });
+
+    const history = listWatchHistory();
+    const entry = history.find(h => h.id === Number(id));
+    if (!entry) return reply.status(404).send({ error: 'Not found' });
+
+    const existing = listMarathons().find(m => m.name === name);
+    const marathon = existing ? getMarathon(existing.id)! : createMarathon(name);
+    const item = addMarathonItem(marathon.id, entry.title, null);
+    updateMarathonItem(item.id, { status: 'done' });
+
+    // Promotion resolves the history entry — dismiss it server-side (same
+    // dismiss the DELETE /api/history/:id route uses) so a page reload
+    // doesn't lose the "already added" fact and let a repeat promote create
+    // a duplicate list item. The client no longer needs to track this in
+    // local-only state.
+    dismissWatchHistoryEntry(entry.id);
+
+    return reply.status(201).send({ marathonId: marathon.id, item });
+  });
+
+  // ── Autolink match ────────────────────────────────────────────────────────
+  app.get('/api/marathons/match', { preHandler: requireAdmin }, async (req, reply) => {
+    const { filename } = req.query as { filename?: string };
+    if (!filename?.trim()) return reply.status(400).send({ error: 'filename is required' });
+
+    const candidates = listUntrackedItemTitles();
+    const matchedTitle = matchFilenameToUntrackedItem(filename, candidates.map(c => c.itemTitle));
+    if (!matchedTitle) return reply.send({ match: null });
+
+    const match = candidates.find(c => c.itemTitle === matchedTitle)!;
+    return reply.send({ match });
   });
 
   // ── Upload: save to library, generate thumb, create room ──────────────────

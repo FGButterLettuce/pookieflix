@@ -272,6 +272,25 @@ describe('marathon items', () => {
       ['First', 'Second'],
     );
   });
+
+  it('reorders via a direct position instead of move up/down', async () => {
+    const marathonRes = await app.inject({ method: 'POST', url: '/api/marathons', payload: { name: 'Item Test Marathon 10' } });
+    const marathonId = (marathonRes.json() as { marathon: { id: number } }).marathon.id;
+
+    const addA = await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Pos A' } });
+    const addB = await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Pos B' } });
+    const addC = await app.inject({ method: 'POST', url: `/api/marathons/${marathonId}/items`, payload: { title: 'Pos C' } });
+    const itemC = (addC.json() as { item: { id: number } }).item;
+
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/marathons/${marathonId}/items/${itemC.id}`, payload: { position: 0 },
+    });
+    assert.equal(res.statusCode, 200);
+
+    const detail = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+    const titles = (detail.json() as { items: { title: string }[] }).items.map(i => i.title);
+    assert.deepEqual(titles.slice(0, 3), ['Pos C', 'Pos A', 'Pos B']);
+  });
 });
 
 describe('marathon item reviews', () => {
@@ -342,5 +361,40 @@ describe('marathon item reviews', () => {
     const checkRes = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId1}` });
     const checkItem = (checkRes.json() as { items: { reviews: { viewer: string }[] }[] }).items[0];
     assert.equal(checkItem.reviews.length, 0);
+  });
+
+  it('accepts and persists a half-point score', async () => {
+    const res = await app.inject({
+      method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`,
+      payload: { viewer: 'user', score: 8.5, note: null },
+    });
+    assert.equal(res.statusCode, 200);
+
+    const detail = await app.inject({ method: 'GET', url: `/api/marathons/${marathonId}` });
+    const item = (detail.json() as { items: { reviews: { viewer: string; score: number | null }[] }[] }).items.find(i => i.id === itemId)!;
+    assert.equal(item.reviews.find(r => r.viewer === 'user')!.score, 8.5);
+  });
+
+  it('still rejects a score off the half-point grid, e.g. 8.3', async () => {
+    const res = await app.inject({
+      method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`,
+      payload: { viewer: 'user', score: 8.3, note: null },
+    });
+    assert.equal(res.statusCode, 400);
+  });
+
+  it('still rejects out-of-range scores like 0.5 or 10.5', async () => {
+    const low = await app.inject({ method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`, payload: { viewer: 'user', score: 0.5 } });
+    assert.equal(low.statusCode, 400);
+    const high = await app.inject({ method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`, payload: { viewer: 'user', score: 10.5 } });
+    assert.equal(high.statusCode, 400);
+  });
+
+  it('rejects score when coerced from non-numeric types (e.g. string "8.5")', async () => {
+    const stringScore = await app.inject({
+      method: 'PUT', url: `/api/marathons/${marathonId}/items/${itemId}/review`,
+      payload: { viewer: 'user', score: '8.5' as unknown as number },
+    });
+    assert.equal(stringScore.statusCode, 400);
   });
 });

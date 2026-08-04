@@ -4,7 +4,7 @@ import fs from 'fs';
 import { config } from './config';
 import { hasSubtitles, isFetching } from './subtitles';
 import { getTranscodeStatus } from './ffmpeg';
-import type { RoomRow, LibraryMetaRow, LibraryFileInfo, MarathonRow, MarathonItemRow, MarathonSummary, MarathonItemDetail } from './types';
+import type { RoomRow, LibraryMetaRow, LibraryFileInfo, MarathonRow, MarathonItemRow, MarathonSummary, MarathonItemDetail, WatchHistoryRow } from './types';
 
 let _db: DatabaseSync | null = null;
 
@@ -55,10 +55,18 @@ export function getDb(): DatabaseSync {
     CREATE TABLE IF NOT EXISTS marathon_reviews (
       item_id    INTEGER NOT NULL,
       viewer     TEXT NOT NULL,
-      score      INTEGER,
+      score      REAL,
       note       TEXT,
       updated_at TEXT NOT NULL,
       PRIMARY KEY (item_id, viewer)
+    );
+
+    CREATE TABLE IF NOT EXISTS watch_history (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      hls_dir_name  TEXT UNIQUE NOT NULL,
+      title         TEXT NOT NULL,
+      detected_at   TEXT NOT NULL,
+      dismissed     INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE INDEX IF NOT EXISTS idx_rooms_token   ON rooms(token);
@@ -68,6 +76,8 @@ export function getDb(): DatabaseSync {
   `);
 
   try { _db.exec('ALTER TABLE library_meta ADD COLUMN subtitle_name TEXT DEFAULT NULL'); } catch {}
+  try { _db.exec('ALTER TABLE marathon_items ADD COLUMN poster_path TEXT DEFAULT NULL'); } catch {}
+  try { _db.exec('ALTER TABLE marathon_items ADD COLUMN tmdb_id INTEGER DEFAULT NULL'); } catch {}
 
   return _db;
 }
@@ -261,6 +271,8 @@ export function listMarathonItems(marathonId: number): MarathonItemDetail[] {
     title: item.title,
     libraryFilename: item.library_filename,
     status: item.status,
+    posterPath: item.poster_path,
+    tmdbId: item.tmdb_id,
     reviews: reviews
       .filter(r => r.item_id === item.id)
       .map(r => ({ viewer: r.viewer as 'user' | 'partner', score: r.score, note: r.note })),
@@ -274,9 +286,9 @@ export function addMarathonItem(marathonId: number, title: string, libraryFilena
   ).get(marathonId) as { next: number }).next;
   const created_at = new Date().toISOString();
   const result = db.prepare(
-    'INSERT INTO marathon_items (marathon_id, position, title, library_filename, status, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(marathonId, position, title, libraryFilename, 'pending', created_at);
-  return { id: Number(result.lastInsertRowid), marathon_id: marathonId, position, title, library_filename: libraryFilename, status: 'pending', created_at };
+    'INSERT INTO marathon_items (marathon_id, position, title, library_filename, status, created_at, poster_path, tmdb_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(marathonId, position, title, libraryFilename, 'pending', created_at, null, null);
+  return { id: Number(result.lastInsertRowid), marathon_id: marathonId, position, title, library_filename: libraryFilename, status: 'pending', created_at, poster_path: null, tmdb_id: null };
 }
 
 export function getMarathonItem(id: number): MarathonItemRow | undefined {
@@ -341,4 +353,88 @@ export function upsertMarathonReview(itemId: number, viewer: 'user' | 'partner',
       note = excluded.note,
       updated_at = excluded.updated_at
   `).run(itemId, viewer, score, note, updated_at);
+}
+
+export function moveMarathonItemToPosition(marathonId: number, itemId: number, newPosition: number): void {
+  const db = getDb();
+  const items = db.prepare(
+    'SELECT id FROM marathon_items WHERE marathon_id = ? ORDER BY position ASC'
+  ).all(marathonId) as unknown as { id: number }[];
+  const fromIndex = items.findIndex(i => i.id === itemId);
+  if (fromIndex === -1) return;
+  const clamped = Math.max(0, Math.min(newPosition, items.length - 1));
+  if (clamped === fromIndex) return;
+
+  const [moved] = items.splice(fromIndex, 1);
+  items.splice(clamped, 0, moved);
+
+  db.exec('BEGIN');
+  try {
+    items.forEach((item, index) => {
+      db.prepare('UPDATE marathon_items SET position = ? WHERE id = ?').run(index, item.id);
+    });
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+export function updateMarathonItemPoster(itemId: number, posterPath: string | null, tmdbId: number | null): void {
+  const db = getDb();
+  db.prepare('UPDATE marathon_items SET poster_path = ?, tmdb_id = ? WHERE id = ?').run(posterPath, tmdbId, itemId);
+}
+
+export function listUntrackedItemTitles(): { marathonId: number; marathonName: string; itemId: number; itemTitle: string }[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT m.id AS marathonId, m.name AS marathonName, mi.id AS itemId, mi.title AS itemTitle
+    FROM marathon_items mi
+    JOIN marathons m ON m.id = mi.marathon_id
+    WHERE mi.library_filename IS NULL
+  `).all() as unknown as { marathonId: number; marathonName: string; itemId: number; itemTitle: string }[];
+}
+
+// ── Watch history (derived from orphaned HLS caches) ───────────────────
+export function scanForOrphanedHlsEntries(): { hlsDirName: string; title: string; detectedAtMs: number }[] {
+  const libraryDir = path.join(config.mediaDir, 'library');
+  if (!fs.existsSync(libraryDir)) return [];
+  const entries = fs.readdirSync(libraryDir, { withFileTypes: true });
+  const mp4Basenames = new Set(
+    entries.filter(e => e.isFile() && e.name.toLowerCase().endsWith('.mp4'))
+      .map(e => e.name.replace(/\.mp4$/i, ''))
+  );
+  return entries
+    .filter(e => e.isDirectory() && e.name.toLowerCase().endsWith('.hls'))
+    .map(e => ({ hlsDirName: e.name, title: e.name.replace(/\.hls$/i, '') }))
+    .filter(({ title }) => !mp4Basenames.has(title))
+    .map(({ hlsDirName, title }) => ({
+      hlsDirName,
+      title,
+      detectedAtMs: fs.statSync(path.join(libraryDir, hlsDirName)).mtimeMs,
+    }));
+}
+
+export function recordWatchHistoryEntries(entries: { hlsDirName: string; title: string; detectedAtMs: number }[]): void {
+  const db = getDb();
+  const stmt = db.prepare(`
+    INSERT INTO watch_history (hls_dir_name, title, detected_at, dismissed)
+    VALUES (?, ?, ?, 0)
+    ON CONFLICT(hls_dir_name) DO NOTHING
+  `);
+  for (const entry of entries) {
+    stmt.run(entry.hlsDirName, entry.title, new Date(entry.detectedAtMs).toISOString());
+  }
+}
+
+export function listWatchHistory(): WatchHistoryRow[] {
+  const db = getDb();
+  return db.prepare(
+    'SELECT * FROM watch_history WHERE dismissed = 0 ORDER BY detected_at DESC'
+  ).all() as unknown as WatchHistoryRow[];
+}
+
+export function dismissWatchHistoryEntry(id: number): void {
+  const db = getDb();
+  db.prepare('UPDATE watch_history SET dismissed = 1 WHERE id = ?').run(id);
 }
