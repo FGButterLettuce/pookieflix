@@ -911,6 +911,13 @@ body {
    (bigger than the library grid cards below), since it's the single thing
    you're most likely to click next. */
 .continue-list { display: flex; flex-direction: column; gap: var(--space-md); }
+/* On a full-width mobile viewport this list is naturally bounded by the
+   screen; on a wide desktop it stretched edge-to-edge and, at the thumb's
+   2.4:1 aspect ratio, turned into a huge banner. Cap it like the Lists
+   page body so it stays a prominent card, not a full-bleed one. */
+@media (min-width: 900px) {
+  .continue-list { max-width: 640px; margin: 0 auto; width: 100%; }
+}
 
 .continue-card {
   background: var(--surface);
@@ -2434,6 +2441,18 @@ input.item-title {
 .library-tile:hover .library-tile-thumb .add-badge { opacity: 1; }
 .library-tile:hover .library-tile-thumb { outline: 2px solid var(--accent); outline-offset: 1px; }
 .library-tile-name { font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-top: 0.4rem; line-height: 1.3; }
+.marquee-text { overflow: hidden; white-space: nowrap; width: 100%; }
+.marquee-text span { display: inline-block; }
+.library-tile:hover .marquee-text span.is-overflowing {
+  animation: marquee-scroll 2.6s ease-in-out infinite alternate;
+}
+@keyframes marquee-scroll {
+  0%, 15% { transform: translateX(0); }
+  85%, 100% { transform: translateX(calc(-1 * var(--marquee-distance))); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .library-tile:hover .marquee-text span.is-overflowing { animation: none; }
+}
 .already-added { position: relative; cursor: default; }
 .already-added .library-tile-thumb { opacity: 0.4; }
 .already-added-badge {

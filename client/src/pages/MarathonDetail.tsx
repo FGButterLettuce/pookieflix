@@ -88,6 +88,54 @@ function useSpringValue(target: number): number {
   return displayed;
 }
 
+// Same idea as the server's autolink junk-token cleanup, but for display:
+// keeps real casing/spacing instead of normalizing to a lowercase match key.
+// Cuts the filename at the first release-quality/codec/year token instead of
+// stripping tokens throughout, since library filenames put junk after the
+// title, never inside it.
+const RELEASE_JUNK_RE =
+  /^(19|20)\d{2}$|^\d{3,4}p$|^(2160p|4k|bluray|blu-ray|webrip|web-?dl|hdrip|dvdrip|dvdscr|x264|x265|h264|h265|hevc|10bit|8bit|ddp?5?1?|dts|aac\d?|ac3|atmos|remux|proper|repack|extended|remastered|uncut|unrated|yify|yts|directors?cut)$/i;
+
+function cleanLibraryDisplayName(filename: string): string {
+  const withoutExt = filename.replace(/\.[a-z0-9]+$/i, '');
+  const segments = withoutExt.split('.').filter(Boolean);
+  const titleSegments: string[] = [];
+  for (const seg of segments) {
+    if (RELEASE_JUNK_RE.test(seg)) break;
+    titleSegments.push(seg);
+  }
+  const words = (titleSegments.length ? titleSegments : segments).join(' ').split(/[\s_-]+/).filter(Boolean);
+  return words.map(w => (/^[a-z]/.test(w) ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
+}
+
+// Clips to the parent's width and, only when the cleaned name still doesn't
+// fit, scrolls it into view on hover — never wraps/overflows past the tile.
+function MarqueeText({ text }: { text: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [overflowPx, setOverflowPx] = useState(0);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const el = textRef.current;
+    if (!container || !el) return;
+    const overflow = el.scrollWidth - container.clientWidth;
+    setOverflowPx(overflow > 0 ? overflow : 0);
+  }, [text]);
+
+  return (
+    <div className="marquee-text" ref={containerRef}>
+      <span
+        ref={textRef}
+        className={overflowPx > 0 ? 'is-overflowing' : undefined}
+        style={overflowPx > 0 ? ({ '--marquee-distance': `${overflowPx}px` } as CSSProperties) : undefined}
+      >
+        {text}
+      </span>
+    </div>
+  );
+}
+
 const STATUS_HINT_UNLINKED = 'Not in your library — tracked title only';
 const STATUS_HINT_MISSING = 'Linked file no longer available';
 
@@ -669,7 +717,7 @@ export function MarathonDetail() {
           <div className="library-strip">
             {filteredLibrary.map(f => {
               const alreadyAdded = items.some(i => i.libraryFilename === f.filename);
-              const displayName = f.filename.replace(/\.[^./]+$/, '');
+              const displayName = cleanLibraryDisplayName(f.filename);
               return (
                 <button
                   key={f.filename}
@@ -687,7 +735,7 @@ export function MarathonDetail() {
                     {!alreadyAdded && <div className="add-badge"><Plus /></div>}
                   </div>
                   {alreadyAdded && <span className="already-added-badge">In list</span>}
-                  <div className="library-tile-name">{displayName}</div>
+                  <div className="library-tile-name"><MarqueeText text={displayName} /></div>
                 </button>
               );
             })}
