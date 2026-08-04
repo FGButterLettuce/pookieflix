@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Drag
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Users, Trash2, Plus, Pencil, GripVertical, ChevronDown, Search, Film, RotateCcw,
-  Check, MoreVertical, Play, Archive, ImagePlus, ArrowUp, ArrowDown,
+  Check, MoreVertical, Play, Archive, ImagePlus, ArrowUp, ArrowDown, LayoutGrid, Rows3,
 } from 'lucide-react';
 import { getViewer, clearViewer, type Viewer } from '../lib/viewer';
 import { cleanLibraryDisplayName } from '../lib/cleanFilename';
@@ -130,6 +130,13 @@ export function MarathonDetail() {
   const [expandedItemIds, setExpandedItemIds] = useState<Set<number>>(new Set());
   const [openMenuItemId, setOpenMenuItemId] = useState<number | null>(null);
   const [thumbErrorIds, setThumbErrorIds] = useState<Set<number>>(new Set());
+  // Big banner cards make sense for browsing/reviewing, but they're
+  // unwieldy to drag-reorder — a compact row mode is much easier to
+  // reorder many items in. Remembered across visits, not per-list.
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>(
+    () => (localStorage.getItem('pookieflix-list-view-mode') === 'list' ? 'list' : 'cards')
+  );
+  useEffect(() => { localStorage.setItem('pookieflix-list-view-mode', viewMode); }, [viewMode]);
   const [librarySearch, setLibrarySearch] = useState('');
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [draggedItemId, setDraggedItemId] = useState<number | null>(null);
@@ -499,7 +506,28 @@ export function MarathonDetail() {
       <div className="marathons-page-body">
         {error && <div className="form-error">{error}</div>}
 
-        <div className="items">
+        {items.length > 0 && (
+          <div className="view-mode-toggle" role="group" aria-label="Item view">
+            <button
+              type="button"
+              className={viewMode === 'cards' ? 'active' : ''}
+              title="Card view"
+              onClick={() => setViewMode('cards')}
+            >
+              <LayoutGrid size={15} /> Cards
+            </button>
+            <button
+              type="button"
+              className={viewMode === 'list' ? 'active' : ''}
+              title="List view — easier to drag and reorder"
+              onClick={() => setViewMode('list')}
+            >
+              <Rows3 size={15} /> List
+            </button>
+          </div>
+        )}
+
+        <div className={viewMode === 'list' ? 'items items-compact' : 'items'}>
           {items.map((item, index) => {
             const libraryFile = libraryFileFor(item.libraryFilename);
             const playable = !!item.libraryFilename && isLinkedFileAvailable(item.libraryFilename);
@@ -511,6 +539,91 @@ export function MarathonDetail() {
             const mine = item.reviews.find(r => r.viewer === viewer);
             const isDragging = draggedItemId === item.id;
             const isDragOver = dragOverItemId === item.id && draggedItemId !== item.id;
+
+            if (viewMode === 'list') {
+              return (
+                <div
+                  key={item.id}
+                  className={'item-row-compact' + (isDragging ? ' dragging' : '') + (isDragOver ? ' drag-over' : '')}
+                  onDragOver={e => handleDragOver(e, item.id)}
+                  onDragLeave={() => handleDragLeave(item.id)}
+                  onDrop={e => handleDrop(e, item.id)}
+                >
+                  <button
+                    className="drag-handle"
+                    draggable
+                    title="Drag to reorder"
+                    aria-label="Drag to reorder"
+                    onDragStart={e => handleDragStart(e, item.id)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <GripVertical />
+                  </button>
+                  <div className="item-row-compact-thumb">
+                    {thumbSrc ? (
+                      <img src={thumbSrc} alt="" onError={() => setThumbErrorIds(s => new Set([...s, item.id]))} />
+                    ) : posterSrc ? (
+                      <img src={posterSrc} alt="" />
+                    ) : (
+                      <Film size={16} />
+                    )}
+                  </div>
+                  <EditableText
+                    value={item.title}
+                    onSave={next => renameItem(item.id, next)}
+                    className="item-title item-row-compact-title"
+                  />
+                  {item.status === 'pending' ? (
+                    <button className="btn-done compact" onClick={() => setStatus(item.id, 'done')}>
+                      <Check size={14} /> Watch
+                    </button>
+                  ) : (
+                    <button
+                      className={'status-badge compact' + (item.status === 'done' ? ' done' : ' skipped')}
+                      onClick={() => setStatus(item.id, 'pending')}
+                      title="Mark as not done"
+                    >
+                      {item.status === 'done' ? <><Check size={14} /> Done</> : 'Skipped'}
+                    </button>
+                  )}
+                  <div className="item-menu-wrap">
+                    <button
+                      className="settings-link"
+                      title="More"
+                      onClick={() => setOpenMenuItemId(id => (id === item.id ? null : item.id))}
+                    >
+                      <MoreVertical />
+                    </button>
+                    {openMenuItemId === item.id && (
+                      <div className="dropdown-menu open">
+                        <button
+                          className="dropdown-item"
+                          disabled={index === 0}
+                          onClick={() => { setOpenMenuItemId(null); void moveItem(item.id, 'up'); }}
+                        >
+                          <ArrowUp /> Move up
+                        </button>
+                        <button
+                          className="dropdown-item"
+                          disabled={index === items.length - 1}
+                          onClick={() => { setOpenMenuItemId(null); void moveItem(item.id, 'down'); }}
+                        >
+                          <ArrowDown /> Move down
+                        </button>
+                        {item.status !== 'skipped' && (
+                          <button className="dropdown-item" onClick={() => { setOpenMenuItemId(null); setStatus(item.id, 'skipped'); }}>
+                            <Archive /> Skip
+                          </button>
+                        )}
+                        <button className="dropdown-item danger" onClick={() => { setOpenMenuItemId(null); deleteItem(item.id); }}>
+                          <Trash2 /> Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
 
             return (
               <div

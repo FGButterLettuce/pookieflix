@@ -2389,6 +2389,47 @@ input.marathons-heading {
    idea, this app's already-established convention. */
 .items { display: flex; flex-direction: column; gap: 0.85rem; padding: var(--space-md); }
 
+/* ── Cards / List view toggle ─────────────────────────────────────────
+   The big banner cards are great for browsing and reviews, but they're
+   unwieldy to drag-reorder — a compact row mode makes reordering many
+   items practical. */
+.view-mode-toggle {
+  display: flex; gap: 0.25rem; padding: var(--space-md) var(--space-md) 0;
+}
+.view-mode-toggle button {
+  display: flex; align-items: center; gap: 0.4rem; height: 34px; padding: 0 0.8rem;
+  border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-muted); font: inherit; font-weight: 700; font-size: 0.85rem; cursor: pointer;
+  transition: background-color var(--dur-short), color var(--dur-short), border-color var(--dur-short);
+}
+.view-mode-toggle button.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.view-mode-toggle button:not(.active):hover { border-color: var(--accent); color: var(--text); }
+
+.items-compact { gap: 0.4rem; }
+.item-row-compact {
+  display: flex; align-items: center; gap: 0.6rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 0.5rem 0.7rem;
+}
+.item-row-compact.dragging { opacity: 0.45; }
+.item-row-compact.drag-over { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.item-row-compact .drag-handle { margin: 0; }
+.item-row-compact-thumb {
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--radius-sm); overflow: hidden;
+  background: var(--surface3); display: flex; align-items: center; justify-content: center; color: var(--text-subtle);
+}
+.item-row-compact-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.item-row-compact-title {
+  flex: 1; min-width: 0; font-weight: 700; font-size: 0.95rem;
+  padding: 0.1rem 0.35rem; margin: -0.1rem -0.35rem;
+}
+.item-row-compact .status-badge,
+.item-row-compact .btn-done {
+  height: 32px; padding: 0 0.7rem; font-size: 0.82rem; flex-shrink: 0;
+}
+.item-row-compact .status-badge { border: none; font: inherit; cursor: pointer; }
+.item-row-compact .item-menu-wrap { margin-left: 0.1rem; }
+
 .item-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   overflow: hidden;
