@@ -149,6 +149,9 @@ body {
   background: color-mix(in oklch, var(--bg) 88%, transparent);
   backdrop-filter: blur(10px);
 }
+@media (max-width: 639px) {
+  .home-topbar { padding-left: var(--space-md); padding-right: var(--space-md); }
+}
 
 .home-logo {
   flex: 1;
@@ -871,6 +874,11 @@ body {
    treatment instead of each inventing its own — ported from the Lists mockup
    so Home reads as one consistent surface with the Lists page. */
 .home-section { padding: var(--space-lg) var(--space-xl) 0; }
+@media (max-width: 639px) {
+  /* --space-xl (40px) on both sides ate 80px of a ~375px phone screen —
+     way too much for how little room mobile has to spare. */
+  .home-section { padding-left: var(--space-md); padding-right: var(--space-md); }
+}
 
 .home-section-header {
   display: flex;
@@ -1127,6 +1135,8 @@ body {
   background: color-mix(in oklch, var(--success) 16%, var(--surface));
   color: var(--success);
   border: 1px solid color-mix(in oklch, var(--success) 40%, var(--border));
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .lib-sub-fetching {
   background: var(--surface2);
@@ -1139,12 +1149,13 @@ body {
 .lib-meta-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   margin-top: 4px;
 }
 
-.lib-size   { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.lib-resume { font-size: 11px; color: var(--accent-hover); }
+.lib-size   { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
+.lib-resume { font-size: 11px; color: var(--accent-hover); white-space: nowrap; flex-shrink: 0; }
 
 /* Actions — one row: the single primary action (Watch/Resume) plus a
    "⋯" overflow button. Everything else (subtitles, transcode controls,
@@ -2434,15 +2445,25 @@ input.marathons-heading {
 .item-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   overflow: hidden;
-  display: flex;
+  display: flex; align-items: flex-start;
 }
 
+/* Fixed width, height follows via aspect-ratio — NOT the other way around.
+   A height-driven width (stretch to the row, derive width from that) was
+   tried twice and broke both times (desktop and mobile Safari): a tall
+   body — long titles, expanded reviews — stretches the poster wider,
+   which squeezes the body's text into single-word-wrapped lines, which
+   makes the body even taller, spiraling. max-width didn't reliably clip
+   the aspect-ratio-derived width across browsers. Fixed width is fully
+   predictable at any content height; the tradeoff is a small gap under
+   the poster on unusually tall cards, which is far better than a broken
+   layout. */
 .item-thumb {
-  flex-shrink: 0; aspect-ratio: 2/3; max-width: 140px; position: relative; overflow: hidden;
+  width: 110px; flex-shrink: 0; aspect-ratio: 2/3; position: relative; overflow: hidden;
   background: var(--surface3);
 }
 @media (min-width: 640px) {
-  .item-thumb { max-width: 230px; }
+  .item-thumb { width: 170px; }
 }
 .item-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .item-thumb .placeholder-texture {
