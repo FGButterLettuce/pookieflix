@@ -2442,11 +2442,19 @@ input.marathons-heading {
 /* Poster on the left, everything else on the right — was a full-width
    landscape banner on top, but now that a portrait TMDB poster is the
    primary image everywhere else in the app too, a wide banner either
-   cropped most of it away or squeezed it into a sliver. */
+   cropped most of it away or squeezed it into a sliver. Desktop-only —
+   a real mobile-width screen doesn't have room for a side-by-side
+   portrait poster + text column at all (confirmed live: the body column
+   shrank to single-word-wrapped lines, "Done" clipped to "Do…"), so
+   mobile stacks instead of trying to fit the desktop layout into less
+   space. */
 .item-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   overflow: hidden;
   display: flex; align-items: flex-start;
+}
+@media (max-width: 639px) {
+  .item-card { flex-direction: column; align-items: stretch; }
 }
 
 /* No width or height set here on purpose — a companion useLayoutEffect
@@ -2457,10 +2465,15 @@ input.marathons-heading {
    dimension. Two earlier pure-CSS attempts (stretch-to-row-height,
    derive-width-from-that) broke on different browsers because max-width
    didn't reliably clip an aspect-ratio-derived width — JS measurement
-   sidesteps that class of bug entirely. */
+   sidesteps that class of bug entirely. Desktop only — the effect skips
+   setting this inline style below 640px so the stacked mobile layout
+   below is free to size the poster with plain CSS instead. */
 .item-thumb {
   flex-shrink: 0; aspect-ratio: 2/3; position: relative; overflow: hidden;
   background: var(--surface3);
+}
+@media (max-width: 639px) {
+  .item-thumb { width: 100%; max-height: 360px; }
 }
 .item-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .item-thumb .placeholder-texture {

@@ -162,25 +162,33 @@ export function MarathonDetail() {
   // aspect-ratio-derived width. Measuring the body's real rendered height
   // in JS and setting the poster's height explicitly (capped) sidesteps
   // that entirely — no CSS cross-dependency to go wrong, always bounded.
+  // Desktop only (>=640px) — confirmed live that a real mobile-width
+  // screen can't fit poster+text side by side at all no matter how it's
+  // sized, so mobile stacks instead (plain CSS, see .item-card/.item-thumb
+  // in index.css) and this effect must clear any inline height it set
+  // before the viewport got narrow, or the stale value would override
+  // the mobile CSS.
   useLayoutEffect(() => {
     if (viewMode !== 'cards') return;
     const container = itemsContainerRef.current;
     if (!container) return;
     const MAX_THUMB_HEIGHT = 420;
+    const mql = window.matchMedia('(min-width: 640px)');
 
     const syncHeights = () => {
       container.querySelectorAll<HTMLElement>('.item-card').forEach(card => {
         const thumb = card.querySelector<HTMLElement>('.item-thumb');
         const body = card.querySelector<HTMLElement>('.item-body');
         if (!thumb || !body) return;
-        thumb.style.height = `${Math.min(body.offsetHeight, MAX_THUMB_HEIGHT)}px`;
+        thumb.style.height = mql.matches ? `${Math.min(body.offsetHeight, MAX_THUMB_HEIGHT)}px` : '';
       });
     };
 
     syncHeights();
     const ro = new ResizeObserver(syncHeights);
     container.querySelectorAll('.item-body').forEach(body => ro.observe(body));
-    return () => ro.disconnect();
+    mql.addEventListener('change', syncHeights);
+    return () => { ro.disconnect(); mql.removeEventListener('change', syncHeights); };
   }, [viewMode, items, expandedItemIds, editingItemId, posterPickerItemId]);
 
   const load = useCallback(() => {
