@@ -1,3 +1,7 @@
+## v1.5.32 - 2026-08-05
+
+- Merge remote-tracking branch 'origin/main'
+
 ## v1.5.31 - 2026-08-04
 
 - Merge remote-tracking branch 'origin/main'
