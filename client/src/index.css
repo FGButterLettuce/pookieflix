@@ -2442,34 +2442,25 @@ input.marathons-heading {
 /* Poster on the left, everything else on the right — was a full-width
    landscape banner on top, but now that a portrait TMDB poster is the
    primary image everywhere else in the app too, a wide banner either
-   cropped most of it away or squeezed it into a sliver. align-items
-   stretch (the default) so .item-thumb's height matches the row/body;
-   .item-thumb has no fixed width, only aspect-ratio, so with a definite
-   (stretched) height the WIDTH is what's derived — the poster fills the
-   full height with its real proportions, no crop and no letterboxing,
-   the column just gets exactly as wide as a 2:3 poster needs to be. */
+   cropped most of it away or squeezed it into a sliver. */
 .item-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   overflow: hidden;
   display: flex; align-items: flex-start;
 }
 
-/* Fixed width, height follows via aspect-ratio — NOT the other way around.
-   A height-driven width (stretch to the row, derive width from that) was
-   tried twice and broke both times (desktop and mobile Safari): a tall
-   body — long titles, expanded reviews — stretches the poster wider,
-   which squeezes the body's text into single-word-wrapped lines, which
-   makes the body even taller, spiraling. max-width didn't reliably clip
-   the aspect-ratio-derived width across browsers. Fixed width is fully
-   predictable at any content height; the tradeoff is a small gap under
-   the poster on unusually tall cards, which is far better than a broken
-   layout. */
+/* No width or height set here on purpose — a companion useLayoutEffect
+   (MarathonDetail.tsx) measures the real rendered height of the sibling
+   .item-body and sets .item-thumb's height inline (capped), so the
+   poster always matches the body's actual height with zero gap below it
+   and aspect-ratio derives the width cleanly from that one explicit
+   dimension. Two earlier pure-CSS attempts (stretch-to-row-height,
+   derive-width-from-that) broke on different browsers because max-width
+   didn't reliably clip an aspect-ratio-derived width — JS measurement
+   sidesteps that class of bug entirely. */
 .item-thumb {
-  width: 110px; flex-shrink: 0; aspect-ratio: 2/3; position: relative; overflow: hidden;
+  flex-shrink: 0; aspect-ratio: 2/3; position: relative; overflow: hidden;
   background: var(--surface3);
-}
-@media (min-width: 640px) {
-  .item-thumb { width: 170px; }
 }
 .item-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .item-thumb .placeholder-texture {

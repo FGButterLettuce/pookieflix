@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Users, Trash2, Plus, Pencil, GripVertical, ChevronDown, Search, Film, RotateCcw,
@@ -137,6 +137,7 @@ export function MarathonDetail() {
     () => (localStorage.getItem('pookieflix-list-view-mode') === 'list' ? 'list' : 'cards')
   );
   useEffect(() => { localStorage.setItem('pookieflix-list-view-mode', viewMode); }, [viewMode]);
+  const itemsContainerRef = useRef<HTMLDivElement>(null);
   const [librarySearch, setLibrarySearch] = useState('');
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [draggedItemId, setDraggedItemId] = useState<number | null>(null);
@@ -150,6 +151,37 @@ export function MarathonDetail() {
   const [posterPickerItemId, setPosterPickerItemId] = useState<number | null>(null);
   const [posterCandidates, setPosterCandidates] = useState<TmdbCandidate[]>([]);
   const [settingPoster, setSettingPoster] = useState(false);
+
+  // Fixed-width posters left a gap under the poster whenever the body
+  // (title + hint + score slider, or expanded reviews) is taller than the
+  // poster's own aspect-ratio height — which turned out to be the common
+  // case, not a rare one, for anything without a library thumbnail. Two
+  // earlier attempts tried to solve this in pure CSS (stretch the poster
+  // to the row's height, derive its width from that) and both broke on
+  // different browsers because max-width didn't reliably clip the
+  // aspect-ratio-derived width. Measuring the body's real rendered height
+  // in JS and setting the poster's height explicitly (capped) sidesteps
+  // that entirely — no CSS cross-dependency to go wrong, always bounded.
+  useLayoutEffect(() => {
+    if (viewMode !== 'cards') return;
+    const container = itemsContainerRef.current;
+    if (!container) return;
+    const MAX_THUMB_HEIGHT = 420;
+
+    const syncHeights = () => {
+      container.querySelectorAll<HTMLElement>('.item-card').forEach(card => {
+        const thumb = card.querySelector<HTMLElement>('.item-thumb');
+        const body = card.querySelector<HTMLElement>('.item-body');
+        if (!thumb || !body) return;
+        thumb.style.height = `${Math.min(body.offsetHeight, MAX_THUMB_HEIGHT)}px`;
+      });
+    };
+
+    syncHeights();
+    const ro = new ResizeObserver(syncHeights);
+    container.querySelectorAll('.item-body').forEach(body => ro.observe(body));
+    return () => ro.disconnect();
+  }, [viewMode, items, expandedItemIds, editingItemId, posterPickerItemId]);
 
   const load = useCallback(() => {
     fetch(`/api/marathons/${id}`)
@@ -527,7 +559,7 @@ export function MarathonDetail() {
           </div>
         )}
 
-        <div className={viewMode === 'list' ? 'items items-compact' : 'items'}>
+        <div ref={itemsContainerRef} className={viewMode === 'list' ? 'items items-compact' : 'items'}>
           {items.map((item, index) => {
             const libraryFile = libraryFileFor(item.libraryFilename);
             const playable = !!item.libraryFilename && isLinkedFileAvailable(item.libraryFilename);
