@@ -992,6 +992,12 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: var(--space-md) var(--space-lg);
 }
+@media (max-width: 639px) {
+  /* Two columns at minmax(160px,1fr) pack the grid about as tight as it
+     goes on a phone screen — the column gap reads as barely-there next to
+     how close that leaves the actual poster edges. */
+  .library-grid { column-gap: var(--space-xl); }
+}
 
 .library-card {
   background: var(--surface);
