@@ -143,6 +143,7 @@ export interface RoomRuntime {
   wasPlayingBeforeInterruption: boolean; // used during SEEKING/BUFFERING to decide whether to resume
   wasUserPaused: boolean;               // preserved across reconnects so USER_PAUSED survives WS drops
   bufferingStartAt?: number;            // epoch ms when BUFFERING was entered (for timeout logic)
+  forcedResumeAttempted?: boolean;      // whether this BUFFERING incident already used its one 15s force-resume
   pendingRateTarget: Map<string, number>; // viewerId → pending playback rate
   lastTickAt: number;
   lastPersistedAt?: number;

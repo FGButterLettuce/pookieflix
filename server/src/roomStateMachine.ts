@@ -328,13 +328,23 @@ export function tick(room: RoomRuntime): TickResult {
 
       const t = room.adaptiveResumeThreshold;
       const allReady = active.every(v => v.heartbeat && isReadyToPlay(v.heartbeat, t));
-      // Timeout: if stuck >15s and at least one viewer is ready, force PLAY_AT.
-      // iOS Safari only buffers aggressively while "playing", so this unsticks it.
-      const bufferingTimedOut = Date.now() - (room.bufferingStartAt ?? Date.now()) > 15_000
+      // Timeout: if stuck >15s and at least one viewer is ready, force PLAY_AT once per
+      // BUFFERING incident. iOS Safari only buffers aggressively while "playing", so a
+      // single nudge unsticks it — but forcing this repeatedly for a viewer that's stuck
+      // for a real reason (not just Safari laziness) is a livelock: force-resume, the
+      // stuck viewer immediately re-fails its buffer check, back to BUFFERING, 15s later
+      // force again, forever — which also keeps yanking the OTHER viewer's playback every
+      // cycle (confirmed live: an Avengers session stuck like this for 8+ minutes straight,
+      // never recovering, both viewers cycling BUFFERING/PLAYING the whole time). One
+      // forced attempt per incident keeps the Safari fix while letting a genuinely-stuck
+      // viewer just keep buffering undisturbed until it's actually ready.
+      const bufferingTimedOut = !room.forcedResumeAttempted
+        && Date.now() - (room.bufferingStartAt ?? Date.now()) > 15_000
         && active.some(v => v.heartbeat && isReadyToPlay(v.heartbeat, t));
 
       if (allReady || bufferingTimedOut) {
         room.bufferingStartAt = undefined;
+        room.forcedResumeAttempted = !allReady;
         room.lastPlayStartAt = Date.now();
         setRoomState(room, 'PLAYING');
         dispatches.push(...buildPlayAt(room));

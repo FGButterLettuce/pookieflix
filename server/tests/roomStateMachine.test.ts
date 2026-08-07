@@ -2,6 +2,7 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { tick, handleUserAction, handleViewerDisconnect } from '../src/roomStateMachine';
 import type { RoomRuntime, ViewerRuntime, ClientHeartbeat } from '../src/types';
+import { config } from '../src/config';
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ function makeRoom(overrides: Partial<RoomRuntime> = {}): RoomRuntime {
     wasPlayingBeforeInterruption: false,
     pendingRateTarget: new Map(),
     lastTickAt: Date.now(),
+    adaptiveResumeThreshold: config.bufferResumeThreshold,
     ...overrides,
   };
 }
@@ -220,6 +222,49 @@ describe('Room State Machine', () => {
       addViewer(room, makeViewer('v2', false, { bufferedAhead: 9.9 })); // just below 10
       tick(room);
       assert.equal(room.state, 'BUFFERING');
+    });
+
+    it('force-resumes once after 15s if at least one viewer is ready (unsticks lazy-buffering Safari)', () => {
+      const room = makeRoom({ state: 'BUFFERING', bufferingStartAt: Date.now() - 16_000 });
+      addViewer(room, makeViewer('v1', true, { bufferedAhead: 12 }));
+      addViewer(room, makeViewer('v2', false, { bufferedAhead: 0 })); // never actually ready
+      const result = tick(room);
+      assert.equal(room.state, 'PLAYING');
+      assert.ok(getDispatchTypes(result).includes('PLAY_AT'));
+    });
+
+    it('does not force-resume a second time in the same incident once the first forced resume immediately re-fails (livelock)', () => {
+      // Reproduces the real Guardians/Ultron incident: a genuinely-stuck viewer's buffer
+      // never recovers, so every 15s the room forced PLAY_AT, the stuck viewer instantly
+      // failed its buffer check again, and the room bounced right back to BUFFERING —
+      // forever, also yanking the healthy viewer's playback every cycle.
+      // v1's buffer is deliberately large (matches the real incident's 60s+ mobile buffer)
+      // so the unrelated adaptive-resume-threshold escalation (which raises the bar after
+      // a quick re-stall) can't accidentally flip v1 to "not ready" and mask this bug.
+      const room = makeRoom({ state: 'BUFFERING', bufferingStartAt: Date.now() - 16_000 });
+      addViewer(room, makeViewer('v1', true, { bufferedAhead: 60 }));
+      addViewer(room, makeViewer('v2', false, { bufferedAhead: 0 }));
+
+      // First forced resume fires as usual.
+      let result = tick(room);
+      assert.equal(room.state, 'PLAYING');
+      assert.ok(getDispatchTypes(result).includes('PLAY_AT'));
+
+      // v2 is still stuck, so PLAYING immediately re-detects buffering and bounces back.
+      result = tick(room);
+      assert.equal(room.state, 'BUFFERING');
+
+      // Another 16s pass with v2 STILL stuck — same incident, already used our one shot.
+      room.bufferingStartAt = Date.now() - 16_000;
+      result = tick(room);
+      assert.equal(room.state, 'BUFFERING');
+      assert.ok(!getDispatchTypes(result).includes('PLAY_AT'));
+
+      // A genuine recovery (v2 actually becomes ready) still resumes normally.
+      room.viewers.get('v2')!.heartbeat = makeHeartbeat({ bufferedAhead: 12 });
+      result = tick(room);
+      assert.equal(room.state, 'PLAYING');
+      assert.ok(getDispatchTypes(result).includes('PLAY_AT'));
     });
   });
 
