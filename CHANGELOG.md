@@ -1,3 +1,7 @@
+## v1.5.35 - 2026-10-30
+
+- Harden sync, uploads and auth; add single-player, diagnostics and tunnel recovery
+
 ## v1.5.34 - 2026-08-05
 
 - Merge remote-tracking branch 'origin/main'
