@@ -142,10 +142,12 @@ export async function applyFastStart(videoPath: string): Promise<void> {
   const ok = await new Promise<boolean>(resolve => {
     // stdio: 'ignore' — same unread-stderr pipe-fill deadlock as generateHLS
     // below; a full remux writes enough progress output to trigger it too.
+    // -f mp4 is required: ffmpeg can't infer a muxer from the .tmp extension.
     const ff = spawn('ffmpeg', [
       '-i', videoPath,
       '-c', 'copy',
       '-movflags', '+faststart',
+      '-f', 'mp4',
       '-y', tmp,
     ], { stdio: 'ignore' });
     ff.on('close', code => resolve(code === 0));
@@ -154,6 +156,7 @@ export async function applyFastStart(videoPath: string): Promise<void> {
   if (ok) {
     fs.renameSync(tmp, videoPath);
   } else {
+    console.error(`[ffmpeg] faststart failed for ${path.basename(videoPath)}`);
     try { fs.rmSync(tmp); } catch { /* ignore */ }
   }
 }

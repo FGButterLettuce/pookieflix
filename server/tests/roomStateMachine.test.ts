@@ -27,7 +27,7 @@ function makeViewer(id: string, isHost: boolean, hb?: Partial<ClientHeartbeat>):
     viewerId: id,
     ws: {} as any,
     isHost,
-    joinedAt: Date.now(),
+    joinedAt: Date.now() - 10_000,
     heartbeat,
     heartbeatAt: hb !== undefined ? Date.now() : 0,
   };
@@ -103,6 +103,55 @@ describe('Room State Machine', () => {
       tick(room);
       // Still WAITING because no fresh heartbeats
       assert.equal(room.state, 'WAITING_FOR_VIEWERS');
+    });
+  });
+
+  describe('Single player mode', () => {
+    it('does not transition past WAITING_FOR_VIEWERS with 1 viewer when singlePlayer is off', () => {
+      const room = makeRoom({ singlePlayer: false });
+      addViewer(room, makeViewer('v1', true, {}));
+      const result = tick(room);
+      assert.equal(room.state, 'WAITING_FOR_VIEWERS');
+      assert.equal(result.stateChanged, false);
+    });
+
+    it('transitions to READY_CHECK with just 1 viewer when singlePlayer is on', () => {
+      const room = makeRoom({ singlePlayer: true });
+      addViewer(room, makeViewer('v1', true, {}));
+      const result = tick(room);
+      assert.equal(room.state, 'READY_CHECK');
+      assert.equal(result.stateChanged, true);
+    });
+
+    it('starts PLAYING with 1 ready viewer when singlePlayer is on', () => {
+      const room = makeRoom({ state: 'READY_CHECK', singlePlayer: true });
+      addViewer(room, makeViewer('v1', true, { bufferedAhead: 15 }));
+      const result = tick(room);
+      assert.equal(room.state, 'PLAYING');
+      assert.ok(getDispatchTypes(result).includes('PLAY_AT'));
+    });
+
+    it('stays PLAYING with just 1 viewer when singlePlayer is on', () => {
+      const room = makeRoom({ state: 'PLAYING', singlePlayer: true });
+      addViewer(room, makeViewer('v1', true, { bufferedAhead: 15, paused: false, mediaTime: 10 }));
+      const result = tick(room);
+      assert.equal(room.state, 'PLAYING');
+    });
+
+    it('reverts to WAITING_FOR_VIEWERS when the only viewer drops out, even with singlePlayer on', () => {
+      const room = makeRoom({ state: 'PLAYING', singlePlayer: true });
+      // No viewers left connected at all
+      const result = tick(room);
+      assert.equal(room.state, 'WAITING_FOR_VIEWERS');
+      assert.equal(result.stateChanged, true);
+    });
+
+    it('PLAY user action starts playback solo when singlePlayer is on', () => {
+      const room = makeRoom({ state: 'USER_PAUSED', singlePlayer: true });
+      addViewer(room, makeViewer('v1', true, { bufferedAhead: 15 }));
+      const result = handleUserAction(room, 'v1', 'PLAY');
+      assert.equal(room.state, 'PLAYING');
+      assert.ok(result.dispatches.some(d => d.message.type === 'PLAY_AT'));
     });
   });
 
@@ -370,7 +419,253 @@ describe('Room State Machine', () => {
     });
   });
 
+  describe('Viewers with stale heartbeats', () => {
+    const makeStale = (viewer: ViewerRuntime): ViewerRuntime => {
+      viewer.heartbeatAt = Date.now() - config.heartbeatStaleMs - 1000;
+      return viewer;
+    };
+
+    it('keeps a room PLAYING when both connected viewers briefly go quiet', () => {
+      const room = makeRoom({ state: 'PLAYING' });
+      addViewer(room, makeStale(makeViewer('v1', true, { paused: false })));
+      addViewer(room, makeStale(makeViewer('v2', false, { paused: false })));
+      tick(room);
+      assert.equal(room.state, 'PLAYING');
+    });
+
+    it('keeps a single-player room PLAYING while its one device is backgrounded', () => {
+      const room = makeRoom({ state: 'PLAYING', singlePlayer: true });
+      addViewer(room, makeStale(makeViewer('v1', true, { paused: false })));
+      tick(room);
+      assert.equal(room.state, 'PLAYING');
+    });
+
+    for (const state of ['BUFFERING', 'SEEKING', 'RESYNCING'] as const) {
+      it(`does not resume from ${state} with nobody active`, () => {
+        const room = makeRoom({ state, bufferingStartAt: Date.now() });
+        addViewer(room, makeStale(makeViewer('v1', true, { bufferedAhead: 60 })));
+        addViewer(room, makeStale(makeViewer('v2', false, { bufferedAhead: 60 })));
+        const result = tick(room);
+        assert.equal(room.state, state);
+        assert.equal(result.dispatches.some(d => d.message.type === 'PLAY_AT'), false);
+      });
+    }
+  });
+
+  describe('End of film', () => {
+    it('ends the room when both videos have ended, even with nothing buffered', () => {
+      const room = makeRoom({ state: 'PLAYING' });
+      addViewer(room, makeViewer('v1', true, { ended: true, paused: true, bufferedAhead: 0, mediaTime: 7200 }));
+      addViewer(room, makeViewer('v2', false, { ended: true, paused: true, bufferedAhead: 0, mediaTime: 7200 }));
+      tick(room);
+      assert.equal(room.state, 'ENDED');
+    });
+
+    it('does not treat the viewer who finished first as buffering', () => {
+      const room = makeRoom({ state: 'PLAYING' });
+      addViewer(room, makeViewer('v1', true, { ended: true, paused: true, bufferedAhead: 0, mediaTime: 7200 }));
+      addViewer(room, makeViewer('v2', false, { paused: false, bufferedAhead: 3600, mediaTime: 7199.8 }));
+      tick(room);
+      assert.equal(room.state, 'PLAYING');
+    });
+
+    it('waits for the second viewer to finish before ending', () => {
+      const room = makeRoom({ state: 'PLAYING' });
+      addViewer(room, makeViewer('v1', true, { ended: true, paused: true, bufferedAhead: 3600, mediaTime: 7200 }));
+      const quiet = makeViewer('v2', false, { paused: false, bufferedAhead: 3600, mediaTime: 7199.9 });
+      quiet.heartbeatAt = Date.now() - config.heartbeatStaleMs - 1000;
+      addViewer(room, quiet);
+      tick(room);
+      assert.equal(room.state, 'PLAYING');
+    });
+  });
+
+  describe('One-shot force resume', () => {
+    const stalled = () => {
+      const room = makeRoom({ state: 'PLAYING', forcedResumeAttempted: true });
+      addViewer(room, makeViewer('v1', true, { bufferedAhead: 0.5, paused: false, mediaTime: 100 }));
+      addViewer(room, makeViewer('v2', false, { bufferedAhead: 60, paused: false, mediaTime: 100 }));
+      return room;
+    };
+
+    it('stays spent across a quick re-stall', () => {
+      const room = stalled();
+      room.lastPlayStartAt = Date.now() - 2000;
+      tick(room);
+      assert.equal(room.state, 'BUFFERING');
+      assert.equal(room.forcedResumeAttempted, true);
+    });
+
+    it('is available again for a stall after stable playback', () => {
+      const room = stalled();
+      room.lastPlayStartAt = Date.now() - config.bufferStableMs - 60_000;
+      tick(room);
+      assert.equal(room.state, 'BUFFERING');
+      room.bufferingStartAt = Date.now() - 16_000;
+      const result = tick(room);
+      assert.equal(room.state, 'PLAYING');
+      assert.ok(result.dispatches.some(d => d.message.type === 'PLAY_AT'));
+    });
+
+    it('is available again after a user seek', () => {
+      const room = makeRoom({ state: 'BUFFERING', forcedResumeAttempted: true });
+      handleUserAction(room, 'v1', 'SEEK', 500);
+      assert.equal(room.forcedResumeAttempted, false);
+    });
+  });
+
+  describe('Viewer disconnect bookkeeping', () => {
+    it('keeps a remembered user pause when the second viewer also drops', () => {
+      const room = makeRoom({ state: 'USER_PAUSED' });
+      addViewer(room, makeViewer('v1', true, {}));
+      addViewer(room, makeViewer('v2', false, {}));
+      handleViewerDisconnect(room, 'v1');
+      handleViewerDisconnect(room, 'v2');
+      assert.equal(room.wasUserPaused, true);
+    });
+
+    it('does not invent a user pause for a playing room', () => {
+      const room = makeRoom({ state: 'PLAYING', wasUserPaused: false });
+      addViewer(room, makeViewer('v1', true, {}));
+      handleViewerDisconnect(room, 'v1');
+      assert.equal(room.wasUserPaused, false);
+    });
+
+    it('treats a repeat disconnect for the same viewer as a no-op', () => {
+      const room = makeRoom({ state: 'PLAYING' });
+      addViewer(room, makeViewer('v2', false, {}));
+      const result = handleViewerDisconnect(room, 'already-gone');
+      assert.equal(room.state, 'PLAYING');
+      assert.deepEqual(result.dispatches, []);
+    });
+  });
+
+  describe('Waiting states cannot wait forever', () => {
+    const longAgo = () => Date.now() - 16_000;
+    const twoViewers = (room: RoomRuntime) => {
+      addViewer(room, makeViewer('v1', true, { bufferedAhead: 60 }));
+      addViewer(room, makeViewer('v2', false, { bufferedAhead: 1 }));
+      return room;
+    };
+
+    it('nudges READY_CHECK once after the timeout when one viewer is ready', () => {
+      const room = twoViewers(makeRoom({ state: 'READY_CHECK', bufferingStartAt: longAgo() }));
+      const result = tick(room);
+      assert.equal(room.state, 'PLAYING');
+      assert.ok(result.dispatches.some(d => d.message.type === 'PLAY_AT'));
+      assert.equal(room.forcedResumeAttempted, true);
+    });
+
+    it('nudges SEEKING when playback was running before the seek', () => {
+      const room = twoViewers(makeRoom({ state: 'SEEKING', wasPlayingBeforeInterruption: true, bufferingStartAt: longAgo() }));
+      tick(room);
+      assert.equal(room.state, 'PLAYING');
+    });
+
+    it('nudges RESYNCING', () => {
+      const room = twoViewers(makeRoom({ state: 'RESYNCING', bufferingStartAt: longAgo() }));
+      tick(room);
+      assert.equal(room.state, 'PLAYING');
+    });
+
+    it('does not start playback for a seek made while paused', () => {
+      const room = twoViewers(makeRoom({ state: 'SEEKING', wasPlayingBeforeInterruption: false, bufferingStartAt: longAgo() }));
+      tick(room);
+      assert.equal(room.state, 'SEEKING');
+    });
+
+    it('does not override a remembered user pause in READY_CHECK', () => {
+      const room = twoViewers(makeRoom({ state: 'READY_CHECK', wasUserPaused: true, bufferingStartAt: longAgo() }));
+      tick(room);
+      assert.equal(room.state, 'READY_CHECK');
+    });
+
+    it('does not nudge before the timeout', () => {
+      const room = twoViewers(makeRoom({ state: 'READY_CHECK', bufferingStartAt: Date.now() - 5000 }));
+      tick(room);
+      assert.equal(room.state, 'READY_CHECK');
+    });
+
+    it('nudges only once per incident', () => {
+      const room = twoViewers(makeRoom({ state: 'SEEKING', wasPlayingBeforeInterruption: true, bufferingStartAt: longAgo(), forcedResumeAttempted: true }));
+      tick(room);
+      assert.equal(room.state, 'SEEKING');
+    });
+
+    it('nudges a lone single-player device that never reaches the threshold', () => {
+      const room = makeRoom({ state: 'READY_CHECK', singlePlayer: true, bufferingStartAt: longAgo() });
+      addViewer(room, makeViewer('v1', true, { bufferedAhead: 1 }));
+      tick(room);
+      assert.equal(room.state, 'PLAYING');
+    });
+
+    it('starts the clock when a room enters a waiting state', () => {
+      const room = makeRoom({ state: 'PLAYING', bufferingStartAt: undefined });
+      handleUserAction(room, 'v1', 'SEEK', 500);
+      assert.equal(room.state, 'SEEKING');
+      assert.ok(room.bufferingStartAt !== undefined);
+    });
+
+    it('restarts the clock for a second seek during SEEKING', () => {
+      const room = makeRoom({ state: 'SEEKING', bufferingStartAt: longAgo() });
+      handleUserAction(room, 'v1', 'SEEK', 500);
+      assert.ok(Date.now() - room.bufferingStartAt! < 1000);
+    });
+  });
+
+  describe('Watching again after the end', () => {
+    it('resumes playback once a seek from ENDED settles', () => {
+      const room = makeRoom({ state: 'ENDED' });
+      addViewer(room, makeViewer('v1', true, { bufferedAhead: 15 }));
+      addViewer(room, makeViewer('v2', false, { bufferedAhead: 15 }));
+      handleUserAction(room, 'v1', 'SEEK', 0);
+      assert.equal(room.state, 'SEEKING');
+      const result = tick(room);
+      assert.equal(room.state, 'PLAYING');
+      assert.ok(result.dispatches.some(d => d.message.type === 'PLAY_AT'));
+    });
+  });
+
+  describe('Browser blocked playback', () => {
+    it('holds the room in BUFFERING until the viewer taps to start', () => {
+      const room = makeRoom({ state: 'PLAYING' });
+      addViewer(room, makeViewer('v1', true, { paused: false, mediaTime: 50, bufferedAhead: 60 }));
+      addViewer(room, makeViewer('v2', false, { paused: true, mediaTime: 50, bufferedAhead: 60, playbackBlocked: true }));
+      tick(room);
+      assert.equal(room.state, 'BUFFERING');
+    });
+
+    it('does not resume while a viewer is still blocked', () => {
+      const room = makeRoom({ state: 'BUFFERING', bufferingStartAt: Date.now() });
+      addViewer(room, makeViewer('v1', true, { bufferedAhead: 60 }));
+      addViewer(room, makeViewer('v2', false, { bufferedAhead: 60, playbackBlocked: true }));
+      tick(room);
+      assert.equal(room.state, 'BUFFERING');
+    });
+
+    it('resumes once the viewer has tapped', () => {
+      const room = makeRoom({ state: 'BUFFERING', bufferingStartAt: Date.now() });
+      addViewer(room, makeViewer('v1', true, { bufferedAhead: 60 }));
+      addViewer(room, makeViewer('v2', false, { bufferedAhead: 60, playbackBlocked: false }));
+      tick(room);
+      assert.equal(room.state, 'PLAYING');
+    });
+  });
+
   describe('Drift correction', () => {
+    it('does not rewind the room when a freshly reconnected viewer still reports 0:00', () => {
+      const room = makeRoom({ state: 'PLAYING', canonicalTime: 4102.8 });
+      addViewer(room, makeViewer('host', true, { mediaTime: 4102.8, bufferedAhead: 60, paused: false }));
+      const reconnected = makeViewer('peer', false, { mediaTime: 0, bufferedAhead: 30, paused: false });
+      reconnected.joinedAt = Date.now() - 500;
+      addViewer(room, reconnected);
+
+      const result = tick(room);
+
+      assert.equal(room.state, 'PLAYING');
+      assert.equal(result.dispatches.some(d => d.message.type === 'SEEK'), false);
+    });
+
     it('ignores drift < 250ms', () => {
       const room = makeRoom({ state: 'PLAYING' });
       addViewer(room, makeViewer('v1', true, { mediaTime: 100.0, bufferedAhead: 15, paused: false }));
@@ -414,14 +709,15 @@ describe('Room State Machine', () => {
       assert.ok(room.adaptiveResumeThreshold > before);
     });
 
-    it('does not raise adaptiveResumeThreshold when a resync follows a long stable stretch', () => {
+    it('decays adaptiveResumeThreshold toward the configured base after a long stable stretch', () => {
       const room = makeRoom({ state: 'PLAYING', lastPlayStartAt: Date.now() - 120_000 });
-      room.adaptiveResumeThreshold = 5;
+      room.adaptiveResumeThreshold = 12;
       addViewer(room, makeViewer('v1', true, { mediaTime: 100.0, bufferedAhead: 15, paused: false }));
       addViewer(room, makeViewer('v2', false, { mediaTime: 106.0, bufferedAhead: 12, paused: false }));
       tick(room);
       assert.equal(room.state, 'RESYNCING');
-      assert.ok(room.adaptiveResumeThreshold < 5);
+      assert.ok(room.adaptiveResumeThreshold < 12);
+      assert.ok(room.adaptiveResumeThreshold >= config.bufferResumeThreshold);
     });
   });
 });

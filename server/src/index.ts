@@ -8,11 +8,12 @@ import staticFiles from '@fastify/static';
 import { WebSocketServer } from 'ws';
 import { config } from './config';
 import { registerRoutes } from './routes';
-import { setupWebSocketServer, startTickLoop, stopTickLoop } from './roomManager';
+import { closeAllRooms, setupWebSocketServer, startTickLoop, stopTickLoop } from './roomManager';
 import { getDb } from './db';
 import { generateHLSAsync, hasHLS } from './ffmpeg';
 import { readPersistedConfig } from './persistedConfig';
 import { startTunnel, stopTunnel } from './tunnel';
+import { rateLimitKey } from './clientIp';
 
 async function main() {
   // Ensure data directories exist
@@ -30,7 +31,7 @@ async function main() {
 
   const app = Fastify({
     logger: config.isDev ? { level: 'info' } : { level: 'warn' },
-    trustProxy: true,
+    forceCloseConnections: true, // open video streams and the SSE log must not hold up shutdown
   });
 
   // Rate limiting
@@ -38,9 +39,7 @@ async function main() {
     global: true,
     max: 200,
     timeWindow: '1m',
-    keyGenerator: (req) => {
-      return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.ip;
-    },
+    keyGenerator: rateLimitKey,
   });
 
   // Multipart for file uploads
@@ -81,7 +80,7 @@ async function main() {
 
   // Build HTTP server and attach WebSocket server
   const server = app.server as http.Server;
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 
   server.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url ?? '', `http://${request.headers.host}`);
@@ -106,24 +105,25 @@ async function main() {
   // Kick off HLS generation for any existing library files that don't have it yet
   const libraryDir = path.join(config.mediaDir, 'library');
   for (const f of fs.readdirSync(libraryDir)) {
+    if (/\.upload-[0-9a-f]+\.tmp$/.test(f)) {
+      fs.rmSync(path.join(libraryDir, f), { force: true }); // abandoned by a crash mid-upload
+      continue;
+    }
     if (!f.endsWith('.mp4')) continue;
     const fp = path.join(libraryDir, f);
     if (!hasHLS(fp)) generateHLSAsync(fp);
   }
 
   // Graceful shutdown
-  process.on('SIGTERM', async () => {
+  const shutdown = async () => {
     stopTunnel();
     stopTickLoop();
+    closeAllRooms();
     await app.close();
     process.exit(0);
-  });
-  process.on('SIGINT', async () => {
-    stopTunnel();
-    stopTickLoop();
-    await app.close();
-    process.exit(0);
-  });
+  };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
 
   await app.listen({ port: config.port, host: config.host });
   console.log(`PookieFlix running at http://${config.host}:${config.port}`);

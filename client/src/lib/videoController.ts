@@ -1,7 +1,8 @@
 import type { ClientHeartbeat } from '../types';
 import { rlog } from './remoteLogger';
+import { bufferedAheadSeconds } from './bufferedAhead';
 
-export type VideoEvent = 'play' | 'pause' | 'seek' | 'ended' | 'statechange' | 'error';
+export type VideoEvent = 'play' | 'pause' | 'seek' | 'ended' | 'statechange' | 'error' | 'playbackblocked' | 'playbackunblocked';
 export type VideoEventHandler = (event: VideoEvent) => void;
 
 export class VideoController {
@@ -11,6 +12,7 @@ export class VideoController {
   private scheduledPlayTimeout: ReturnType<typeof setTimeout> | null = null;
   private _playAtGeneration = 0; // incremented on cancel; guards stale seeked/canplay callbacks
   private lastUserActionAt = 0;
+  private _playbackBlocked = false; // browser refused play() until the viewer interacts
   private listeners: VideoEventHandler[] = [];
 
   constructor(video: HTMLVideoElement) {
@@ -25,7 +27,7 @@ export class VideoController {
       }
     };
 
-    this.video.addEventListener('play',          () => emit('play'));
+    this.video.addEventListener('play',          () => { this.setPlaybackBlocked(false); emit('play'); });
     this.video.addEventListener('pause',         () => emit('pause'));
     this.video.addEventListener('seeking',       () => emit('seek'));
     this.video.addEventListener('ended',         () => emit('ended'));
@@ -64,6 +66,12 @@ export class VideoController {
 
   get applyingServerCommand(): boolean {
     return this._applyingServerCommand;
+  }
+
+  // Browsers also fire 'pause' when a film plays to its end. Reporting that as
+  // a user pause would freeze the other viewer just short of the ending.
+  isUserPause(): boolean {
+    return !this._applyingServerCommand && !this.video.ended;
   }
 
   applyPause(mediaTime: number): void {
@@ -108,11 +116,41 @@ export class VideoController {
 
   applyPlay(): void {
     this.beginServerCommand();
-    this.video.play().catch(() => {
-      // Autoplay blocked — user needs to interact
+    this.startPlayback();
+  }
+
+  private setPlaybackBlocked(blocked: boolean): void {
+    if (this._playbackBlocked === blocked) return;
+    this._playbackBlocked = blocked;
+    this.listeners.forEach(fn => fn(blocked ? 'playbackblocked' : 'playbackunblocked'));
+  }
+
+  private startPlayback(): void {
+    this.video.play().catch((err: { name?: string }) => {
+      // Reported in the heartbeat so the room waits for this viewer's tap rather
+      // than seeing their frozen position as drift and resyncing both viewers.
+      if (err?.name === 'NotAllowedError') {
+        rlog.warn('VIDEO play blocked by browser, waiting for a tap');
+        this.setPlaybackBlocked(true);
+      }
     }).finally(() => {
       setTimeout(() => this.endServerCommand(), 500);
     });
+  }
+
+  // Must run inside a tap handler. Spends the gesture unlocking the element,
+  // then hands back to the server, which starts playback for both viewers.
+  async unlockPlayback(): Promise<void> {
+    this.beginServerCommand();
+    try {
+      await this.video.play();
+      this.video.pause();
+      this.setPlaybackBlocked(false);
+    } catch {
+      // Still refused; the prompt stays up for another try.
+    } finally {
+      setTimeout(() => this.endServerCommand(), 500);
+    }
   }
 
   schedulePlayAt(mediaTime: number, wallClockTime: number): void {
@@ -130,14 +168,10 @@ export class VideoController {
         if (delay > 0) {
           this.scheduledPlayTimeout = setTimeout(() => {
             if (this._playAtGeneration !== gen) return;
-            this.video.play().catch(() => {}).finally(() => {
-              setTimeout(() => this.endServerCommand(), 500);
-            });
+            this.startPlayback();
           }, delay);
         } else {
-          this.video.play().catch(() => {}).finally(() => {
-            setTimeout(() => this.endServerCommand(), 500);
-          });
+          this.startPlayback();
         }
       };
 
@@ -206,6 +240,7 @@ export class VideoController {
       playbackRate: video.playbackRate,
       lastUserAction: this.lastUserActionAt,
       serverCommandPending: this._applyingServerCommand,
+      playbackBlocked: this._playbackBlocked,
     };
   }
 
@@ -218,16 +253,7 @@ export class VideoController {
   }
 
   private getBufferedAhead(): number {
-    const video = this.video;
-    const currentTime = video.currentTime;
-    const buffered = video.buffered;
-
-    for (let i = 0; i < buffered.length; i++) {
-      if (buffered.start(i) <= currentTime + 0.1 && buffered.end(i) > currentTime) {
-        return buffered.end(i) - currentTime;
-      }
-    }
-    return 0;
+    return bufferedAheadSeconds(this.video.buffered, this.video.currentTime, this.video.duration);
   }
 
   get currentTime(): number {

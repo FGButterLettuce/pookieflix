@@ -5,6 +5,11 @@ import os from 'os';
 import path from 'path';
 import type { FastifyInstance } from 'fastify';
 
+// Set before the first import of the routes: config reads DATA_DIR once, and
+// without this these tests run against the repo's real data directory.
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pookieflix-autolink-test-'));
+process.env.DATA_DIR = dataDir;
+
 describe('autolink matching', () => {
   let matchFilenameToUntrackedItem: typeof import('../src/routes').matchFilenameToUntrackedItem;
 
@@ -35,11 +40,8 @@ describe('autolink matching', () => {
 
 describe('autolink match route', () => {
   let app: FastifyInstance;
-  let dataDir: string;
 
   before(async () => {
-    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pookieflix-autolink-test-'));
-    process.env.DATA_DIR = dataDir;
     const Fastify = (await import('fastify')).default;
     const { registerRoutes } = await import('../src/routes');
     app = Fastify();

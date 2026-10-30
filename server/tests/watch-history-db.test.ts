@@ -18,6 +18,16 @@ describe('watch history', () => {
     fs.mkdirSync(mediaDir, { recursive: true });
   });
 
+  it('treats a position in the final 5% as completed', () => {
+    assert.equal(db.normalizeResumeTime(95, 100), 0);
+    assert.equal(db.normalizeResumeTime(8135.531, 8146.197), 0);
+  });
+
+  it('keeps an earlier position resumable', () => {
+    assert.equal(db.normalizeResumeTime(94.9, 100), 94.9);
+    assert.equal(db.normalizeResumeTime(50, 0), 50);
+  });
+
   after(() => {
     fs.rmSync(dataDir, { recursive: true, force: true });
   });

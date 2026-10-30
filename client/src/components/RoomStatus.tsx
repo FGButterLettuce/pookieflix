@@ -3,17 +3,19 @@ import type { RoomState } from '../types';
 interface Props {
   state: RoomState;
   viewerCount: number;
+  singlePlayer: boolean;
 }
 
+// Kept short: this pill shares one line with the title on a phone.
 const STATE_LABELS: Record<RoomState, string> = {
-  WAITING_FOR_VIEWERS: 'Waiting for the other viewer…',
-  READY_CHECK: 'Both viewers connected, buffering…',
+  WAITING_FOR_VIEWERS: 'Waiting for them…',
+  READY_CHECK: 'Getting ready…',
   PLAYING: 'Playing',
   USER_PAUSED: 'Paused',
-  BUFFERING: 'Buffering, waiting for both viewers…',
-  SEEKING: 'Seeking, syncing…',
+  BUFFERING: 'Buffering…',
+  SEEKING: 'Syncing…',
   RESYNCING: 'Re-syncing…',
-  ENDED: 'Video ended',
+  ENDED: 'Ended',
 };
 
 const STATE_COLORS: Record<RoomState, string> = {
@@ -27,7 +29,7 @@ const STATE_COLORS: Record<RoomState, string> = {
   ENDED: '#a78bfa',
 };
 
-export function RoomStatus({ state, viewerCount }: Props) {
+export function RoomStatus({ state, viewerCount, singlePlayer }: Props) {
   const isTransient = ['BUFFERING', 'SEEKING', 'RESYNCING', 'WAITING_FOR_VIEWERS', 'READY_CHECK'].includes(state);
 
   return (
@@ -35,6 +37,8 @@ export function RoomStatus({ state, viewerCount }: Props) {
       display: 'flex',
       alignItems: 'center',
       gap: 8,
+      flexShrink: 0,
+      whiteSpace: 'nowrap',
       padding: '6px 12px',
       borderRadius: 20,
       background: 'rgba(0,0,0,0.6)',
@@ -54,9 +58,11 @@ export function RoomStatus({ state, viewerCount }: Props) {
       <span style={{ color: STATE_COLORS[state], fontSize: 13, fontWeight: 500 }}>
         {STATE_LABELS[state]}
       </span>
-      <span style={{ color: '#475569', fontSize: 12 }}>
-        {viewerCount}/2
-      </span>
+      {!singlePlayer && (
+        <span style={{ color: '#475569', fontSize: 12 }}>
+          {viewerCount}/2
+        </span>
+      )}
     </div>
   );
 }

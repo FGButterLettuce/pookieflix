@@ -148,12 +148,15 @@ export function Settings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newPassword }),
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(d.error ?? 'Failed to change password');
+      }
       setNewPassword('');
       setConfirmPassword('');
       setPwSaved(true);
       setTimeout(() => setPwSaved(false), 2500);
-    } catch { setPwError('Failed to change password'); }
+    } catch (e) { setPwError(e instanceof Error ? e.message : 'Failed to change password'); }
     setPwSaving(false);
   };
 

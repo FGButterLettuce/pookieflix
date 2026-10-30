@@ -5,11 +5,12 @@ import path from 'path';
 import { pipeline } from 'stream/promises';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { config } from './config';
+import { isDirectLocalRequest } from './clientIp';
 import { isSetupComplete, readPersistedConfig, writePersistedConfig, getPasswordHash, getSessionSecret } from './persistedConfig';
 import {
   createRoom, getRoomByToken, listLibraryFiles,
   purgeExpiredRooms, upsertLibraryMeta, deleteLibraryMeta, getLibraryMeta, renameLibraryFile, setSubtitleName,
-  updateLibraryLastTime,
+  updateLibraryLastTime, normalizeResumeTime,
   createMarathon, listMarathons, getMarathon, renameMarathon, deleteMarathon, listMarathonItems,
   addMarathonItem, getMarathonItem, updateMarathonItem, deleteMarathonItem, moveMarathonItem, upsertMarathonReview,
   moveMarathonItemToPosition, scanForOrphanedHlsEntries, recordWatchHistoryEntries, listWatchHistory, dismissWatchHistoryEntry,
@@ -20,8 +21,8 @@ import {
   generateThumbnailAsync, thumbPath, extractMetadata, applyFastStart, generateHLSAsync, hasHLS, hlsDir,
   getTranscodeStatus, cancelTranscode, pauseTranscode, resumeTranscode, restartTranscode,
 } from './ffmpeg';
-import { getRuntimeByToken } from './roomManager';
-import { fetchSubtitles, subtitlePath, searchSubtitles, extractTitle, srtToVtt, syncSubtitles, undoSync, shiftSubtitles } from './subtitles';
+import { getDiagnosticsSnapshot, getRuntimeByToken, notifySubtitlesChanged } from './roomManager';
+import { fetchSubtitles, subtitlePath, subtitleBackupPath, clearSubtitleBackup, searchSubtitles, extractTitle, srtToVtt, syncSubtitles, undoSync, shiftSubtitles } from './subtitles';
 import { startTunnel, stopTunnel, reconnectTunnel, getTunnelStatus } from './tunnel';
 
 // ── Remote log buffer ─────────────────────────────────────────────────────────
@@ -33,9 +34,22 @@ function pushLog(e: LogEntry) {
   if (logBuffer.length > 1000) logBuffer.shift();
   logSubs.forEach(fn => fn(e));
 }
+const MAX_LOG_ENTRIES_PER_REQUEST = 100;
+const LOG_REQUEST_BODY_LIMIT = 64 * 1024; // comfortably over a real client batch of 20 entries
+const LOG_LEVELS = new Set(['log', 'warn', 'error']);
 function clearLogs() {
   logBuffer.length = 0;
   logSubs.forEach(fn => fn('clear'));
+}
+
+function hasDiagnosticsAccess(req: FastifyRequest): boolean {
+  if (!config.diagnosticsToken) return false;
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return false;
+  const supplied = header.slice(7);
+  const expectedDigest = crypto.createHash('sha256').update(config.diagnosticsToken).digest();
+  const suppliedDigest = crypto.createHash('sha256').update(supplied).digest();
+  return crypto.timingSafeEqual(expectedDigest, suppliedDigest);
 }
 
 const LOG_VIEWER_HTML = `<!DOCTYPE html>
@@ -130,8 +144,16 @@ const SAFE_FILENAME_RE = /^[\w\-. ]+\.mp4$/i;
 function generateToken(): string { return crypto.randomBytes(32).toString('hex'); }
 function generateId(): string    { return crypto.randomBytes(16).toString('hex'); }
 
+// Until a password exists there is nothing to authenticate against, so admin
+// access (which is how the setup wizard sets one) stays on this machine/LAN.
+// Anything arriving through the tunnel or from a public address is refused.
+const FIRST_RUN_LOCAL_ONLY = 'No password is set yet. Finish setup from the local network, or set PASSWORD_HASH and SESSION_SECRET.';
+
 async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  if (!getPasswordHash()) return;
+  if (!getPasswordHash()) {
+    if (!isDirectLocalRequest(req)) await reply.status(403).send({ error: FIRST_RUN_LOCAL_ONLY });
+    return;
+  }
   const sessionSecret = getSessionSecret();
   if (!sessionSecret) {
     await reply.status(503).send({ error: 'Server misconfigured: SESSION_SECRET not set' });
@@ -156,6 +178,19 @@ function assertLibraryPath(filename: string): string {
   const full = path.resolve(base, filename);
   if (!full.startsWith(base + path.sep)) throw new Error('Invalid path');
   return full;
+}
+
+// A new upload under an existing name may be a different cut, so nothing made
+// from the previous version (including a transcode left by a deleted film,
+// which hasHLS would otherwise happily serve) can be reused.
+function clearDerivedFiles(videoPath: string, filename: string): void {
+  cancelTranscode(videoPath);
+  fs.rmSync(hlsDir(videoPath), { recursive: true, force: true });
+  fs.rmSync(subtitlePath(videoPath), { force: true });
+  clearSubtitleBackup(videoPath);
+  fs.rmSync(thumbPath(filename), { force: true });
+  setSubtitleName(filename, null);
+  updateLibraryLastTime(filename, 0);
 }
 
 // ── Autolink filename matching ────────────────────────────────────────────────
@@ -245,14 +280,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   app.get('/api/auth/me', async (req, reply) => {
-    if (!getPasswordHash()) return reply.send({ authed: true });
+    if (!getPasswordHash()) return reply.send({ authed: isDirectLocalRequest(req) });
     const sessionSecret = getSessionSecret();
     if (!sessionSecret) return reply.send({ authed: false });
     const token = getSessionToken(req.headers.cookie);
     return reply.send({ authed: token ? verifySession(token, sessionSecret) : false });
   });
 
-  app.post('/api/auth/login', async (req, reply) => {
+  app.post('/api/auth/login', {
+    config: { rateLimit: { max: 10, timeWindow: '1m' } },
+  }, async (req, reply) => {
     const { password } = req.body as { password?: string };
     const passwordHash = getPasswordHash();
     if (!password || !passwordHash || !verifyPassword(password, passwordHash)) {
@@ -270,7 +307,34 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ ok: true });
   });
 
+  // ── Machine diagnostics: disabled unless DIAGNOSTICS_TOKEN is configured ──
+  app.get('/api/internal/diagnostics/live', async (req, reply) => {
+    if (!hasDiagnosticsAccess(req)) {
+      // Use the same response for a missing/disabled token and a wrong token.
+      return reply.status(404).send({ error: 'Not found' });
+    }
+
+    const query = req.query as { since?: string; limit?: string };
+    const parsedSince = Number(query.since ?? 0);
+    const since = Number.isFinite(parsedSince) && parsedSince > 0 ? parsedSince : 0;
+    const parsedLimit = Number(query.limit ?? 200);
+    const limit = Number.isFinite(parsedLimit)
+      ? Math.max(1, Math.min(1000, Math.trunc(parsedLimit)))
+      : 200;
+    const logs = logBuffer.filter(entry => entry.ts > since).slice(-limit);
+
+    reply.header('Cache-Control', 'no-store');
+    return reply.send({
+      generatedAt: Date.now(),
+      rooms: getDiagnosticsSnapshot(),
+      logs,
+    });
+  });
+
   app.post('/api/auth/change-password', { preHandler: requireAdmin }, async (req, reply) => {
+    if (process.env.PASSWORD_HASH) {
+      return reply.status(409).send({ error: 'The password is set by PASSWORD_HASH in the environment. Change it there.' });
+    }
     const { newPassword } = req.body as { newPassword?: string };
     if (!newPassword || newPassword.length < 6) return reply.status(400).send({ error: 'Password must be at least 6 characters' });
     const newSecret = crypto.randomBytes(32).toString('hex');
@@ -287,11 +351,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Debug: log ingestion ───────────────────────────────────────────────────
-  app.post('/api/debug/logs', async (req, reply) => {
-    const body = req.body as { device?: string; entries?: Array<{ ts: number; level: string; msg: string }> };
+  // Unauthenticated on purpose — invited viewers have no session — so everything
+  // kept in logBuffer has to be bounded here.
+  app.post('/api/debug/logs', { bodyLimit: LOG_REQUEST_BODY_LIMIT }, async (req, reply) => {
+    const body = req.body as { device?: string; entries?: unknown };
     const device = String(body?.device ?? 'unknown').slice(0, 30);
-    for (const e of (body?.entries ?? [])) {
-      pushLog({ ts: Number(e.ts), device, level: String(e.level), msg: String(e.msg).slice(0, 500) });
+    const entries = Array.isArray(body?.entries) ? body.entries as Array<{ ts: number; level: string; msg: string }> : [];
+    for (const e of entries.slice(0, MAX_LOG_ENTRIES_PER_REQUEST)) {
+      const level = LOG_LEVELS.has(e?.level) ? e.level : 'log';
+      pushLog({ ts: Number(e?.ts), device, level, msg: String(e?.msg).slice(0, 500) });
     }
     return reply.send({ ok: true });
   });
@@ -331,7 +399,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const uploadUrl = process.env.UPLOAD_URL ?? persisted.UPLOAD_URL ?? config.uploadUrl;
     return reply.send({
       uploadUrl: uploadUrl || null,
-      setupComplete: isSetupComplete() || !!process.env.APP_BASE_URL,
+      // A password is part of setup: without one, the wizard is the only way to set it.
+      setupComplete: !!getPasswordHash() && (isSetupComplete() || !!process.env.APP_BASE_URL),
       subtitleLang: config.subtitleLang,
     });
   });
@@ -527,8 +596,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const sp = subtitlePath(filePath);
     if (fs.existsSync(sp)) fs.rmSync(sp, { force: true });
+    clearSubtitleBackup(filePath);
 
     deleteLibraryMeta(filename);
+    notifySubtitlesChanged(filename);
 
     return reply.send({ ok: true });
   });
@@ -588,6 +659,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (fs.existsSync(oldSub)) {
       try { fs.renameSync(oldSub, newSub); } catch { /* ignore */ }
     }
+    if (fs.existsSync(subtitleBackupPath(oldPath))) {
+      try { fs.renameSync(subtitleBackupPath(oldPath), subtitleBackupPath(newPath)); } catch { /* ignore */ }
+    }
 
     // Rename the HLS cache dir too — otherwise the old dir is left behind
     // under the old name, and the watch-history orphan scan (which treats
@@ -614,9 +688,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
     if (!fs.existsSync(filePath)) return reply.status(404).send({ error: 'Not found' });
     const body = req.body as { fileId?: number; label?: string } | null;
-    fetchSubtitles(filePath, filename, body?.fileId ?? undefined, body?.label ?? undefined)
-      .then(name => { if (name) setSubtitleName(filename, name); })
-      .catch(() => {});
+    // Awaited so the client's next fetch of the track gets the new file.
+    const name = await fetchSubtitles(filePath, filename, body?.fileId ?? undefined, body?.label ?? undefined);
+    if (!name) return reply.status(502).send({ error: 'Could not download subtitles' });
+    setSubtitleName(filename, name);
+    notifySubtitlesChanged(filename);
     return reply.send({ ok: true });
   });
 
@@ -628,7 +704,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     try { filePath = assertLibraryPath(filename); } catch { return reply.status(400).send({ error: 'Invalid path' }); }
     const vtt = subtitlePath(filePath);
     if (fs.existsSync(vtt)) fs.unlinkSync(vtt);
+    clearSubtitleBackup(filePath);
     setSubtitleName(filename, null);
+    notifySubtitlesChanged(filename);
     return reply.send({ ok: true });
   });
 
@@ -645,6 +723,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const result = await syncSubtitles(filePath);
     if (!result.ok) return reply.status(422).send({ error: result.error });
+    notifySubtitlesChanged(filename);
     return reply.send({ ok: true });
   });
 
@@ -659,6 +738,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const restored = undoSync(filePath);
     if (!restored) return reply.status(404).send({ error: 'Nothing to undo' });
+    notifySubtitlesChanged(filename);
     return reply.send({ ok: true });
   });
 
@@ -680,6 +760,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const result = shiftSubtitles(filePath, deltaMs);
     if (!result.ok) return reply.status(422).send({ error: result.error });
+    notifySubtitlesChanged(filename);
     return reply.send({ ok: true });
   });
 
@@ -713,7 +794,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const vtt = srtToVtt(content);
     fs.writeFileSync(subtitlePath(filePath), vtt, 'utf8');
+    clearSubtitleBackup(filePath);
     setSubtitleName(filename, uploadedName || 'Uploaded file');
+    notifySubtitlesChanged(filename);
     return reply.send({ ok: true });
   });
 
@@ -992,50 +1075,61 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     let savedFilename = '';
     let savedPath = '';
     let savedSize  = 0;
+    // Written beside the library and renamed in only once complete, so a failed
+    // or abandoned upload can never damage a film that already has this name.
+    let tempPath = '';
 
-    for await (const part of parts) {
-      if (part.type !== 'file') continue;
-      if (part.fieldname !== 'video') { await part.toBuffer(); continue; }
+    try {
+      for await (const part of parts) {
+        if (part.type !== 'file') continue;
+        if (part.fieldname !== 'video') { await part.toBuffer(); continue; }
 
-      if (part.mimetype !== 'video/mp4' && !part.filename?.toLowerCase().endsWith('.mp4')) {
-        await part.toBuffer();
-        return reply.status(400).send({ error: 'Only MP4 files are allowed' });
-      }
+        if (part.mimetype !== 'video/mp4' && !part.filename?.toLowerCase().endsWith('.mp4')) {
+          await part.toBuffer();
+          return reply.status(400).send({ error: 'Only MP4 files are allowed' });
+        }
 
-      savedFilename = sanitizeFilename(part.filename ?? 'video.mp4');
-      if (!savedFilename.toLowerCase().endsWith('.mp4')) savedFilename += '.mp4';
+        savedFilename = sanitizeFilename(part.filename ?? 'video.mp4');
+        if (!savedFilename.toLowerCase().endsWith('.mp4')) savedFilename += '.mp4';
 
-      const libraryDir = path.join(config.mediaDir, 'library');
-      fs.mkdirSync(libraryDir, { recursive: true });
+        const libraryDir = path.join(config.mediaDir, 'library');
+        fs.mkdirSync(libraryDir, { recursive: true });
 
-      savedPath = libraryFilePath(savedFilename);
-      const writeStream = fs.createWriteStream(savedPath);
-      let bytesWritten = 0;
+        savedPath = libraryFilePath(savedFilename);
+        tempPath = `${savedPath}.upload-${generateId()}.tmp`;
+        let bytesWritten = 0;
 
-      try {
         await pipeline(
           part.file,
           async function* (source) {
             for await (const chunk of source) {
               bytesWritten += (chunk as Buffer).length;
-              if (bytesWritten > config.maxUploadBytes) throw new Error('File too large');
               yield chunk;
             }
           },
-          writeStream,
+          // Opened synchronously so the file is certain to exist by the time a
+          // failed upload's cleanup removes it; a lazy open could recreate it after.
+          fs.createWriteStream(tempPath, { fd: fs.openSync(tempPath, 'w') }),
         );
         savedSize = bytesWritten;
-      } catch (err: unknown) {
-        writeStream.destroy();
-        fs.rmSync(savedPath, { force: true });
-        const msg = err instanceof Error ? err.message : 'Upload failed';
-        return reply.status(413).send({ error: msg });
       }
+    } catch (err: unknown) {
+      if (tempPath) fs.rmSync(tempPath, { force: true });
+      const status = (err as { statusCode?: number }).statusCode ?? 400;
+      return reply.status(status).send({ error: err instanceof Error ? err.message : 'Upload failed' });
     }
 
     if (!savedFilename || !savedPath || savedSize === 0) {
+      if (tempPath) fs.rmSync(tempPath, { force: true });
       return reply.status(400).send({ error: 'No video file provided' });
     }
+
+    clearDerivedFiles(savedPath, savedFilename);
+    fs.renameSync(tempPath, savedPath);
+
+    // Finished before the room exists: faststart moves the file's bytes, which
+    // would corrupt playback for anyone already range-reading it.
+    await applyFastStart(savedPath);
 
     // Extract duration + generate thumbnail (non-blocking)
     const { duration } = await extractMetadata(savedPath);
@@ -1046,7 +1140,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     });
 
     fetchSubtitles(savedPath, savedFilename).catch(() => {});
-    applyFastStart(savedPath).catch(() => {});
     generateHLSAsync(savedPath);
 
     // Create room
@@ -1090,7 +1183,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const stat   = fs.statSync(filePath);
     const meta   = getLibraryMeta(filename);
-    applyFastStart(filePath).catch(() => {});
     generateHLSAsync(filePath);
     const roomToken = generateToken();
     const now    = Date.now();
@@ -1111,7 +1203,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send({
       roomToken,
       roomUrl: `${process.env.APP_BASE_URL ?? readPersistedConfig().APP_BASE_URL ?? config.baseUrl}/room/${roomToken}`,
-      resumeTime: meta?.last_time ?? 0,
+      resumeTime: normalizeResumeTime(meta?.last_time ?? 0, meta?.duration ?? 0),
     });
   });
 

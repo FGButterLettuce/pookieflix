@@ -5,3 +5,4 @@ data/
 .env
 .superpowers/
 .worktrees/
+.DS_Store

@@ -32,6 +32,12 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
+For temporary machine-readable playback diagnostics, set a long random
+`DIAGNOSTICS_TOKEN`. This enables `GET /api/internal/diagnostics/live`, protected
+by `Authorization: Bearer <token>`. Its JSON response contains sanitized room
+state, viewer heartbeats, buffer measurements, and recent client logs. The route
+returns 404 when the token is unset or incorrect.
+
 ## How to use
 
 ### Upload a video
@@ -77,6 +83,10 @@ What the flags do: `-c:v libx264` re-encodes video to H.264 (broadly compatible)
 
 The app uses password auth with a session cookie (7-day TTL, `HttpOnly; SameSite=Strict`). Set your password during the setup wizard, or change it anytime in **Settings → Change password**.
 
+Until a password exists, admin access only works from the server itself or its local network, so an unfinished install can't be claimed through a tunnel or public address. On a public VPS, reach the wizard over an SSH tunnel (`ssh -L 3000:localhost:3000 your-server`) or set `PASSWORD_HASH` and `SESSION_SECRET` in the environment. A password set in the environment can only be changed there.
+
+Login attempts are limited to 10 a minute per client. Behind Cloudflare or a local reverse proxy, the client address comes from `Cf-Connecting-IP` or the last `X-Forwarded-For` hop.
+
 There's no account system, just one shared password since the app is private.
 
 ## Subtitles
@@ -95,7 +105,8 @@ Requires `OPENSUBTITLES_API_KEY` in your config. Subtitle language defaults to `
 
 - Both viewers send a heartbeat every 500 ms (`bufferedAhead`, `paused`, `seeking`, `waiting`, etc.).
 - The server is the single source of truth: all play/pause/seek commands come from it.
-- **Buffering:** if either viewer stalls (`waiting=true`), both pause. Both resume when each has enough buffer (adaptive threshold, starts at 1.5 s, increases on quick re-stalls).
+- **Buffering:** if either viewer stalls or drops below 2 seconds buffered, both pause. Both resume after each rebuilds at least 10 seconds (adaptive threshold can increase to 15 seconds after quick re-stalls). Once a viewer has buffered to the end of the film, they count as fully buffered.
+- **Blocked autoplay:** if a browser refuses to start playback, the room holds in buffering and that viewer gets a tap-to-start prompt.
 - **Drift < 250 ms:** ignored.
 - **Drift 250 ms – 5 s:** rate nudge (0.95× / 1.05×) on the lagging viewer.
 - **Drift > 5 s:** RESYNCING. Server seeks both to the behind viewer's position, then `PLAY_AT`.
@@ -185,7 +196,7 @@ pookieflix/
 - Media served at `/api/media/:token`; only valid, non-expired tokens work.
 - Path traversal prevented by resolving and checking all paths against the media root.
 - Only MP4 accepted on upload; content-type and extension both checked.
-- Rate limiting: 200 req/min global, 5/min upload, 10/min room creation.
+- Rate limiting: 200 req/min global, 10/min login, 5/min upload, 10/min room creation.
 - Rooms expire after `ROOM_TTL_HOURS` (default 24 h); expired files are deleted.
 - Password hashed with `crypto.scrypt` (N=16384, r=8, p=1), 64-byte random salt.
 - Session tokens: HMAC-SHA256 signed, 7-day expiry, `HttpOnly; SameSite=Strict` cookie.

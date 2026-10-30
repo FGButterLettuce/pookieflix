@@ -993,10 +993,9 @@ body {
   gap: var(--space-md) var(--space-lg);
 }
 @media (max-width: 639px) {
-  /* Two columns at minmax(160px,1fr) pack the grid about as tight as it
-     goes on a phone screen — the column gap reads as barely-there next to
-     how close that leaves the actual poster edges. */
-  .library-grid { column-gap: var(--space-xl); }
+  /* A fixed two columns: minmax(160px,1fr) plus any real gap doesn't fit a
+     390px screen, and the grid silently drops to one screen-filling poster. */
+  .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
 }
 
 .library-card {
@@ -1045,15 +1044,6 @@ body {
   background: var(--surface2);
 }
 
-.thumb-spinner {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
 
 .lib-play-overlay {
   position: absolute;
@@ -1551,6 +1541,13 @@ body {
 .room-actions .copy-btn {
   margin-left: 0;
 }
+@media (max-width: 639px) {
+  /* Title and status keep the first line; the buttons get their own so
+     Copy link can't be pushed off the edge of the screen. */
+  .room-header { flex-wrap: wrap; gap: 8px 10px; padding: 8px 12px; }
+  .room-title { flex: 1 1 0; }
+  .room-actions { margin-left: 0; width: 100%; justify-content: flex-end; }
+}
 
 .copy-btn {
   margin-left: auto;
@@ -1695,6 +1692,8 @@ body {
 }
 
 .overlay-icon { font-size: 40px; }
+
+.overlay-content .copy-btn { margin-left: 0; }
 
 .overlay-title {
   font-size: 18px;

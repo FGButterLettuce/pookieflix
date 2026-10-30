@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { config } from './config';
+import { getOpenSubtitlesApiKey } from './persistedConfig';
 
 const OS_API = 'https://api.opensubtitles.com/api/v1';
 const UA = 'PookieFlix v1.0';
@@ -73,7 +74,7 @@ async function searchOsWithLabel(params: Record<string, string>): Promise<{ id: 
   const qs = new URLSearchParams({ ...params, languages: config.subtitleLang }).toString();
   try {
     const res = await fetch(`${OS_API}/subtitles?${qs}`, {
-      headers: { 'Api-Key': config.openSubtitlesApiKey, 'User-Agent': UA },
+      headers: { 'Api-Key': getOpenSubtitlesApiKey(), 'User-Agent': UA },
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) { await logOsFailure('search', res); return null; }
@@ -95,7 +96,7 @@ async function downloadOs(fileId: number): Promise<string | null> {
   try {
     const res = await fetch(`${OS_API}/download`, {
       method: 'POST',
-      headers: { 'Api-Key': config.openSubtitlesApiKey, 'User-Agent': UA, 'Content-Type': 'application/json' },
+      headers: { 'Api-Key': getOpenSubtitlesApiKey(), 'User-Agent': UA, 'Content-Type': 'application/json' },
       body: JSON.stringify({ file_id: fileId }),
       signal: AbortSignal.timeout(10000),
     });
@@ -147,8 +148,14 @@ export function vttToSrt(content: string): string {
 const syncInFlight = new Set<string>();
 const SYNC_TIMEOUT_MS = 2 * 60 * 1000; // 2 min — alass is normally ~30s for a full movie
 
-function backupPath(videoPath: string): string {
+export function subtitleBackupPath(videoPath: string): string {
   return subtitlePath(videoPath) + '.presync.bak';
+}
+
+// The backup belongs to the subtitle it was taken from. Once that subtitle is
+// replaced or removed, "Undo" must not bring the old one back.
+export function clearSubtitleBackup(videoPath: string): void {
+  fs.rmSync(subtitleBackupPath(videoPath), { force: true });
 }
 
 interface AlassResult { ok: boolean; stderr: string; timedOut: boolean; }
@@ -203,7 +210,7 @@ export async function syncSubtitles(videoPath: string): Promise<{ ok: true } | {
     // overwrite a still-valid backup from an earlier successful sync.
     const srtContent = fs.readFileSync(tmpSrtOut, 'utf8');
     fs.writeFileSync(tmpVtt, srtToVtt(srtContent), 'utf8');
-    fs.copyFileSync(vttPath, backupPath(videoPath));
+    fs.copyFileSync(vttPath, subtitleBackupPath(videoPath));
     fs.renameSync(tmpVtt, vttPath);
     return { ok: true };
   } catch {
@@ -217,7 +224,7 @@ export async function syncSubtitles(videoPath: string): Promise<{ ok: true } | {
 }
 
 export function undoSync(videoPath: string): boolean {
-  const backup = backupPath(videoPath);
+  const backup = subtitleBackupPath(videoPath);
   if (!fs.existsSync(backup)) return false;
   fs.copyFileSync(backup, subtitlePath(videoPath));
   fs.rmSync(backup);
@@ -259,8 +266,8 @@ export function shiftSubtitles(videoPath: string, deltaMs: number): { ok: true }
     // Only back up once per editing session — same rule as syncSubtitles — so
     // "Undo" always returns to the state before any manual adjustment, not just
     // the last single nudge.
-    if (!fs.existsSync(backupPath(videoPath))) {
-      fs.copyFileSync(vttPath, backupPath(videoPath));
+    if (!fs.existsSync(subtitleBackupPath(videoPath))) {
+      fs.copyFileSync(vttPath, subtitleBackupPath(videoPath));
     }
     const content = fs.readFileSync(vttPath, 'utf8');
     fs.writeFileSync(vttPath, shiftVtt(content, deltaMs), 'utf8');
@@ -273,11 +280,11 @@ export function shiftSubtitles(videoPath: string, deltaMs: number): { ok: true }
 // ── Public entry points ───────────────────────────────────────────────────────
 
 export async function searchSubtitles(query: string): Promise<{ fileId: number; label: string }[]> {
-  if (!config.openSubtitlesApiKey) return [];
+  if (!getOpenSubtitlesApiKey()) return [];
   const qs = new URLSearchParams({ query, languages: config.subtitleLang }).toString();
   try {
     const res = await fetch(`${OS_API}/subtitles?${qs}`, {
-      headers: { 'Api-Key': config.openSubtitlesApiKey, 'User-Agent': UA },
+      headers: { 'Api-Key': getOpenSubtitlesApiKey(), 'User-Agent': UA },
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) { await logOsFailure('manual search', res); return []; }
@@ -297,7 +304,7 @@ export async function searchSubtitles(query: string): Promise<{ fileId: number; 
 }
 
 export async function fetchSubtitles(videoPath: string, filename: string, fileId?: number, label?: string): Promise<string | null> {
-  if (!config.openSubtitlesApiKey) return null;
+  if (!getOpenSubtitlesApiKey()) return null;
   if (inFlight.has(videoPath)) return null;
   if (!fileId && hasSubtitles(videoPath)) return null;
 
@@ -328,7 +335,8 @@ export async function fetchSubtitles(videoPath: string, filename: string, fileId
     const content = await downloadOs(targetId);
     if (!content) return null;
     await fs.promises.writeFile(subtitlePath(videoPath), srtToVtt(content), 'utf8');
-    return chosenLabel;
+    clearSubtitleBackup(videoPath);
+    return chosenLabel ?? 'Downloaded subtitles';
   } catch (err) {
     console.error(`[subtitles] fetchSubtitles(${filename}) threw:`, err);
     return null;

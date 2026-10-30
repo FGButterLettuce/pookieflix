@@ -2,6 +2,7 @@ import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import Hls from 'hls.js';
 import type { VideoController } from '../lib/videoController';
 import { rlog } from '../lib/remoteLogger';
+import { DESKTOP_HLS_CONFIG } from '../lib/hlsConfig';
 
 interface Props {
   src: string;
@@ -43,7 +44,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
     }
 
     if (useHlsJs && Hls.isSupported()) {
-      const hls = new Hls();
+      const hls = new Hls(DESKTOP_HLS_CONFIG);
       hlsRef.current = hls;
       hls.on(Hls.Events.ERROR, (_evt, data) => {
         rlog.error(`HLS.js error type=${data.type} details=${data.details} fatal=${data.fatal}`);
@@ -100,7 +101,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
     };
 
     const handlePause = () => {
-      if (controllerRef.current?.applyingServerCommand) return;
+      if (controllerRef.current?.isUserPause() === false) return;
       onUserPause();
     };
 

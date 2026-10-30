@@ -1,15 +1,16 @@
 import crypto from 'crypto';
 import { WebSocket, WebSocketServer } from 'ws';
 import { config } from './config';
-import { getRoomByToken, updateLibraryLastTime, getLibraryMeta } from './db';
-import { hasSubtitles } from './subtitles';
+import { getRoomByToken, updateLibraryLastTime, getLibraryMeta, normalizeResumeTime } from './db';
+import { hasSubtitles, subtitlePath } from './subtitles';
 import { hasHLS } from './ffmpeg';
+import fs from 'fs';
 import path from 'path';
 import { tick, handleUserAction, handleViewerDisconnect } from './roomStateMachine';
+import { parseClientMessage } from './clientMessages';
 import type {
   RoomRuntime,
   ViewerRuntime,
-  ClientMessage,
   ServerMessage,
 } from './types';
 import type { DispatchItem } from './roomStateMachine';
@@ -35,10 +36,14 @@ export function getOrCreateRuntime(token: string): RoomRuntime | null {
     expiresAt: row.expires_at,
     state: 'WAITING_FOR_VIEWERS',
     viewers: new Map(),
-    canonicalTime: getLibraryMeta(row.media_filename)?.last_time ?? 0,
+    canonicalTime: (() => {
+      const meta = getLibraryMeta(row.media_filename);
+      return normalizeResumeTime(meta?.last_time ?? 0, meta?.duration ?? 0);
+    })(),
     canonicalTimeUpdatedAt: Date.now(),
     wasPlayingBeforeInterruption: false,
     wasUserPaused: false,
+    singlePlayer: false,
     pendingRateTarget: new Map(),
     lastTickAt: Date.now(),
     adaptiveResumeThreshold: config.bufferResumeThreshold,
@@ -52,6 +57,31 @@ export function getRuntimeByToken(token: string): RoomRuntime | null {
   return rooms.get(token) ?? null;
 }
 
+/** Sanitized runtime state for the token-protected diagnostics API. */
+export function getDiagnosticsSnapshot() {
+  const now = Date.now();
+  return Array.from(rooms.values()).map(room => ({
+    roomId: room.roomId,
+    mediaFilename: room.mediaFilename,
+    state: room.state,
+    singlePlayer: room.singlePlayer ?? false,
+    canonicalTime: room.canonicalTime,
+    canonicalTimeAgeMs: now - room.canonicalTimeUpdatedAt,
+    adaptiveResumeThreshold: room.adaptiveResumeThreshold,
+    bufferingForMs: room.bufferingStartAt === undefined ? null : now - room.bufferingStartAt,
+    forcedResumeAttempted: room.forcedResumeAttempted ?? false,
+    lastPlayStartedAgoMs: room.lastPlayStartAt === undefined ? null : now - room.lastPlayStartAt,
+    lastTickAgoMs: now - room.lastTickAt,
+    viewers: Array.from(room.viewers.values()).map(viewer => ({
+      viewerId: viewer.viewerId.slice(0, 8),
+      role: viewer.isHost ? 'host' : 'peer',
+      connectedForMs: now - viewer.joinedAt,
+      heartbeatAgeMs: viewer.heartbeatAt === 0 ? null : now - viewer.heartbeatAt,
+      heartbeat: viewer.heartbeat,
+    })),
+  }));
+}
+
 // ── Viewer management ─────────────────────────────────────────────────────────
 
 function generateViewerId(): string {
@@ -63,6 +93,14 @@ function persistLastTime(room: RoomRuntime): void {
   const libraryDir = path.join(config.mediaDir, 'library');
   if (!room.mediaPath.startsWith(libraryDir)) return;
   try { updateLibraryLastTime(room.mediaFilename, room.canonicalTime); } catch { /* ignore */ }
+}
+
+// Versioned by file so a changed subtitle gets past the one-hour HTTP cache,
+// while a reconnect to the same file keeps the same URL and doesn't reload the track.
+function currentSubtitleUrl(room: RoomRuntime): string | undefined {
+  if (!hasSubtitles(room.mediaPath)) return undefined;
+  const version = Math.trunc(fs.statSync(subtitlePath(room.mediaPath)).mtimeMs);
+  return `/api/subtitle/${room.roomToken}?v=${version}`;
 }
 
 function send(ws: WebSocket, msg: ServerMessage): void {
@@ -97,8 +135,8 @@ export function joinRoom(token: string, ws: WebSocket): string | null {
       send(ws, { type: 'ERROR', message: 'Room is full (max 2 viewers)' });
       return null;
     }
+    dispatch(room, handleViewerDisconnect(room, stale.viewerId).dispatches);
     try { stale.ws.terminate(); } catch { /* ignore */ }
-    room.viewers.delete(stale.viewerId);
   }
 
   const viewerId = generateViewerId();
@@ -128,8 +166,9 @@ export function joinRoom(token: string, ws: WebSocket): string | null {
     mediaUrl: `/api/media/${token}`,
     mediaFilename: room.mediaFilename,
     currentTime,
-    subtitleUrl: hasSubtitles(room.mediaPath) ? `/api/subtitle/${token}` : undefined,
+    subtitleUrl: currentSubtitleUrl(room),
     hlsUrl: hasHLS(room.mediaPath) ? `/api/hls/${token}/index.m3u8` : undefined,
+    singlePlayer: room.singlePlayer ?? false,
   });
 
   // Broadcast updated viewer count
@@ -138,6 +177,7 @@ export function joinRoom(token: string, ws: WebSocket): string | null {
       type: 'ROOM_UPDATE',
       state: room.state,
       viewerCount: room.viewers.size,
+      singlePlayer: room.singlePlayer ?? false,
     });
   }
 
@@ -167,12 +207,8 @@ export function handleMessage(token: string, viewerId: string, raw: string): voi
   const viewer = room.viewers.get(viewerId);
   if (!viewer) return;
 
-  let msg: ClientMessage;
-  try {
-    msg = JSON.parse(raw) as ClientMessage;
-  } catch {
-    return;
-  }
+  const msg = parseClientMessage(raw);
+  if (!msg) return;
 
   if (msg.type === 'HEARTBEAT') {
     viewer.heartbeat = msg.data;
@@ -182,6 +218,21 @@ export function handleMessage(token: string, viewerId: string, raw: string): voi
     dispatch(room, dispatches);
     // Persist position whenever user pauses
     if (msg.data.action === 'PAUSE') persistLastTime(room);
+  } else if (msg.type === 'SET_SINGLE_PLAYER') {
+    room.singlePlayer = msg.enabled;
+    // Re-tick immediately so toggling on/off takes effect right away rather
+    // than waiting for the next 500ms tick.
+    const { dispatches } = tick(room);
+    dispatch(room, dispatches);
+  }
+}
+
+// Library actions can change a film's subtitles while it's being watched.
+export function notifySubtitlesChanged(mediaFilename: string): void {
+  for (const room of rooms.values()) {
+    if (room.mediaFilename !== mediaFilename) continue;
+    const subtitleUrl = currentSubtitleUrl(room);
+    for (const viewer of room.viewers.values()) send(viewer.ws, { type: 'SUBTITLES_CHANGED', subtitleUrl });
   }
 }
 
@@ -214,6 +265,15 @@ export function startTickLoop(): void {
       }
     }
   }, 500);
+}
+
+// Saves every room's position and drops its sockets. Upgraded WebSockets are
+// invisible to the HTTP server, so app.close() would wait on them forever.
+export function closeAllRooms(): void {
+  for (const room of rooms.values()) {
+    persistLastTime(room);
+    for (const viewer of room.viewers.values()) viewer.ws.terminate();
+  }
 }
 
 export function stopTickLoop(): void {
@@ -255,7 +315,12 @@ export function setupWebSocketServer(wss: WebSocketServer): void {
     }, 15_000);
 
     ws.on('message', (data) => {
-      handleMessage(token, viewerId, data.toString());
+      // An exception here would be uncaught and take every room down with it.
+      try {
+        handleMessage(token, viewerId, data.toString());
+      } catch (err) {
+        console.error('[WS] message handler failed:', err);
+      }
     });
 
     ws.on('close', () => {

@@ -19,17 +19,20 @@ export interface ClientHeartbeat {
   playbackRate: number;
   lastUserAction: number;
   serverCommandPending: boolean;
+  playbackBlocked: boolean;
 }
 
 export type ClientMessage =
   | { type: 'HEARTBEAT'; data: ClientHeartbeat }
-  | { type: 'USER_ACTION'; data: { action: 'PLAY' | 'PAUSE' | 'SEEK'; mediaTime?: number } };
+  | { type: 'USER_ACTION'; data: { action: 'PLAY' | 'PAUSE' | 'SEEK'; mediaTime?: number } }
+  | { type: 'SET_SINGLE_PLAYER'; enabled: boolean };
 
 export type ServerMessage =
-  | { type: 'JOINED'; viewerId: string; isHost: boolean; roomState: RoomState; mediaUrl: string; mediaFilename: string; currentTime: number; subtitleUrl?: string; hlsUrl?: string }
-  | { type: 'ROOM_UPDATE'; state: RoomState; viewerCount: number }
+  | { type: 'JOINED'; viewerId: string; isHost: boolean; roomState: RoomState; mediaUrl: string; mediaFilename: string; currentTime: number; subtitleUrl?: string; hlsUrl?: string; singlePlayer: boolean }
+  | { type: 'ROOM_UPDATE'; state: RoomState; viewerCount: number; singlePlayer: boolean }
   | { type: 'PAUSE'; mediaTime: number }
   | { type: 'SEEK'; mediaTime: number }
+  | { type: 'SUBTITLES_CHANGED'; subtitleUrl?: string }
   | { type: 'PLAY' }
   | { type: 'PLAY_AT'; mediaTime: number; wallClockTime: number }
   | { type: 'RATE_ADJUST'; playbackRate: number }

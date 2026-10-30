@@ -27,11 +27,19 @@ function activeViewers(room: RoomRuntime): ViewerRuntime[] {
   );
 }
 
+// In single-player mode (watching together in person, on one device) playback
+// should never wait on a second viewer that isn't coming.
+function requiredViewers(room: RoomRuntime): number {
+  return room.singlePlayer ? 1 : 2;
+}
+
 function allViewers(room: RoomRuntime): ViewerRuntime[] {
   return Array.from(room.viewers.values());
 }
 
 function isBuffering(hb: ClientHeartbeat): boolean {
+  if (hb.playbackBlocked) return true;         // can't play until the viewer taps
+  if (hb.ended) return false;                  // nothing left to buffer
   if (hb.serverCommandPending) return false;
   if (hb.waiting) return true;                 // video literally stalled — always act
   // readyState>=4 (HAVE_ENOUGH_DATA) only means "the current instant is covered" — it
@@ -47,11 +55,18 @@ function isSeeking(hb: ClientHeartbeat): boolean {
 }
 
 function isReadyToPlay(hb: ClientHeartbeat, threshold: number = config.bufferResumeThreshold): boolean {
-  if (hb.serverCommandPending || hb.seeking || hb.waiting) return false;
+  if (hb.serverCommandPending || hb.seeking || hb.waiting || hb.playbackBlocked) return false;
   // Same readyState>=4 pitfall as isBuffering above: it means "covered for this instant,"
   // not "has a real cushion" — trusting it here let a viewer resume with almost no
   // buffer margin at all. The bufferedAhead threshold is the actual signal.
   return hb.bufferedAhead >= threshold;
+}
+
+// Array.every is true for an empty list, so "everyone is X" must also check
+// that enough viewers are reporting — otherwise a moment of stale heartbeats
+// reads as "all viewers ready" or "all viewers finished".
+function everyoneActive(room: RoomRuntime, active: ViewerRuntime[], check: (hb: ClientHeartbeat) => boolean): boolean {
+  return active.length >= requiredViewers(room) && active.every(v => v.heartbeat !== null && check(v.heartbeat));
 }
 
 function canonicalTimeNow(room: RoomRuntime): number {
@@ -98,12 +113,36 @@ function buildRoomUpdate(room: RoomRuntime): DispatchItem[] {
     type: 'ROOM_UPDATE',
     state: room.state,
     viewerCount: room.viewers.size,
+    singlePlayer: room.singlePlayer ?? false,
   };
   return broadcast(room, msg);
 }
 
+const WAITING_STATES: RoomState[] = ['READY_CHECK', 'BUFFERING', 'SEEKING', 'RESYNCING'];
+
 function setRoomState(room: RoomRuntime, newState: RoomState): void {
+  if (newState !== room.state && WAITING_STATES.includes(newState)) room.bufferingStartAt = Date.now();
   room.state = newState;
+}
+
+// Every waiting state gets one forced PLAY_AT per incident. iOS Safari only
+// buffers aggressively while "playing", so it may never report enough buffer
+// while paused — and a lone single-player device has nobody else to be ready.
+function canForceResume(room: RoomRuntime, active: ViewerRuntime[], threshold: number): boolean {
+  if (room.forcedResumeAttempted) return false;
+  if (Date.now() - (room.bufferingStartAt ?? Date.now()) <= 15_000) return false;
+  return active.some(v => v.heartbeat && (
+    isReadyToPlay(v.heartbeat, threshold)
+    || (room.singlePlayer && !v.heartbeat.seeking && !v.heartbeat.serverCommandPending)
+  ));
+}
+
+function resumePlayback(room: RoomRuntime, forced: boolean): DispatchItem[] {
+  room.bufferingStartAt = undefined;
+  room.forcedResumeAttempted = forced;
+  room.lastPlayStartAt = Date.now();
+  setRoomState(room, 'PLAYING');
+  return [...buildPlayAt(room), ...buildRoomUpdate(room)];
 }
 
 // ── Peer status broadcast ────────────────────────────────────────────────────
@@ -135,6 +174,12 @@ function buildPeerStatuses(room: RoomRuntime): DispatchItem[] {
 
 function handleDrift(room: RoomRuntime, active: ViewerRuntime[]): DispatchItem[] {
   if (active.length < 2) return [];
+
+  // A freshly joined/reconnected player reports 0:00 until PLAY_AT has landed
+  // and its first seek completes. Treating that bootstrap value as real drift
+  // rewinds both viewers to the beginning via Math.min(host, peer).
+  const newestJoinAt = Math.max(...active.map(v => v.joinedAt));
+  if (Date.now() - newestJoinAt < config.driftJoinGraceMs) return [];
 
   // Host is the first viewer who joined (or the one marked isHost)
   const host = active.find(v => v.isHost) ?? active[0];
@@ -222,7 +267,7 @@ export function tick(room: RoomRuntime): TickResult {
 
   switch (room.state) {
     case 'WAITING_FOR_VIEWERS': {
-      if (active.length >= 2) {
+      if (active.length >= requiredViewers(room)) {
         setRoomState(room, 'READY_CHECK');
         dispatches.push(...buildRoomUpdate(room));
       }
@@ -230,28 +275,36 @@ export function tick(room: RoomRuntime): TickResult {
     }
 
     case 'READY_CHECK': {
-      if (active.length < 2) {
+      if (active.length < requiredViewers(room)) {
         setRoomState(room, 'WAITING_FOR_VIEWERS');
         dispatches.push(...buildRoomUpdate(room));
-      } else if (active.every(v => v.heartbeat && isReadyToPlay(v.heartbeat, room.adaptiveResumeThreshold))) {
+      } else if (everyoneActive(room, active, hb => isReadyToPlay(hb, room.adaptiveResumeThreshold))) {
         if (room.wasUserPaused) {
           room.wasUserPaused = false;
           setRoomState(room, 'USER_PAUSED');
           dispatches.push(...buildPauseAll(room));
+          dispatches.push(...buildRoomUpdate(room));
         } else {
-          room.lastPlayStartAt = Date.now();
-          setRoomState(room, 'PLAYING');
-          dispatches.push(...buildPlayAt(room));
+          dispatches.push(...resumePlayback(room, false));
         }
-        dispatches.push(...buildRoomUpdate(room));
+      } else if (!room.wasUserPaused && canForceResume(room, active, room.adaptiveResumeThreshold)) {
+        dispatches.push(...resumePlayback(room, true));
       }
       break;
     }
 
     case 'PLAYING': {
-      if (active.length < 2 && totalConnected < 2) {
+      if (active.length < requiredViewers(room) && totalConnected < requiredViewers(room)) {
         setRoomState(room, 'WAITING_FOR_VIEWERS');
         dispatches.push(...buildPauseAll(room));
+        dispatches.push(...buildRoomUpdate(room));
+        break;
+      }
+
+      // Finished viewers must be recognized before the buffer checks below:
+      // the end of a film always has less than the pause threshold ahead of it.
+      if (everyoneActive(room, active, hb => !hb.serverCommandPending && !!hb.ended)) {
+        setRoomState(room, 'ENDED');
         dispatches.push(...buildRoomUpdate(room));
         break;
       }
@@ -278,6 +331,9 @@ export function tick(room: RoomRuntime): TickResult {
             room.adaptiveResumeThreshold - 0.5,
             config.bufferResumeThreshold
           );
+          // Stable playback closes the previous incident, so a later Safari
+          // stall gets its own one forced nudge.
+          room.forcedResumeAttempted = false;
         }
         setRoomState(room, 'BUFFERING');
         room.wasPlayingBeforeInterruption = true;
@@ -293,14 +349,6 @@ export function tick(room: RoomRuntime): TickResult {
         updateCanonicalTime(room, host.heartbeat.mediaTime);
       }
 
-      // Check for video ended — use the explicit ended flag from the browser rather than
-      // inferring from bufferedAhead===0, which can false-positive after seeks near EOF.
-      if (active.every(v => v.heartbeat && !v.heartbeat.serverCommandPending && v.heartbeat.ended)) {
-        setRoomState(room, 'ENDED');
-        dispatches.push(...buildRoomUpdate(room));
-        break;
-      }
-
       // Skip drift correction while any client is applying a server command —
       // heartbeats during srvCmd=true report stale mediaTime, creating false drift.
       if (active.every(v => !v.heartbeat?.serverCommandPending)) {
@@ -310,7 +358,7 @@ export function tick(room: RoomRuntime): TickResult {
     }
 
     case 'USER_PAUSED': {
-      if (active.length < 2 && totalConnected < 2) {
+      if (active.length < requiredViewers(room) && totalConnected < requiredViewers(room)) {
         room.wasUserPaused = true;
         setRoomState(room, 'WAITING_FOR_VIEWERS');
         dispatches.push(...buildRoomUpdate(room));
@@ -320,14 +368,14 @@ export function tick(room: RoomRuntime): TickResult {
     }
 
     case 'BUFFERING': {
-      if (active.length < 2 && totalConnected < 2) {
+      if (active.length < requiredViewers(room) && totalConnected < requiredViewers(room)) {
         setRoomState(room, 'WAITING_FOR_VIEWERS');
         dispatches.push(...buildRoomUpdate(room));
         break;
       }
 
       const t = room.adaptiveResumeThreshold;
-      const allReady = active.every(v => v.heartbeat && isReadyToPlay(v.heartbeat, t));
+      const allReady = everyoneActive(room, active, hb => isReadyToPlay(hb, t));
       // Timeout: if stuck >15s and at least one viewer is ready, force PLAY_AT once per
       // BUFFERING incident. iOS Safari only buffers aggressively while "playing", so a
       // single nudge unsticks it — but forcing this repeatedly for a viewer that's stuck
@@ -338,53 +386,41 @@ export function tick(room: RoomRuntime): TickResult {
       // never recovering, both viewers cycling BUFFERING/PLAYING the whole time). One
       // forced attempt per incident keeps the Safari fix while letting a genuinely-stuck
       // viewer just keep buffering undisturbed until it's actually ready.
-      const bufferingTimedOut = !room.forcedResumeAttempted
-        && Date.now() - (room.bufferingStartAt ?? Date.now()) > 15_000
-        && active.some(v => v.heartbeat && isReadyToPlay(v.heartbeat, t));
-
-      if (allReady || bufferingTimedOut) {
-        room.bufferingStartAt = undefined;
-        room.forcedResumeAttempted = !allReady;
-        room.lastPlayStartAt = Date.now();
-        setRoomState(room, 'PLAYING');
-        dispatches.push(...buildPlayAt(room));
-        dispatches.push(...buildRoomUpdate(room));
+      if (allReady || canForceResume(room, active, t)) {
+        dispatches.push(...resumePlayback(room, !allReady));
       }
       break;
     }
 
     case 'SEEKING': {
-      if (active.length < 2 && totalConnected < 2) {
+      if (active.length < requiredViewers(room) && totalConnected < requiredViewers(room)) {
         setRoomState(room, 'WAITING_FOR_VIEWERS');
         dispatches.push(...buildRoomUpdate(room));
         break;
       }
 
-      if (active.every(v => v.heartbeat && !isSeeking(v.heartbeat) && isReadyToPlay(v.heartbeat, room.adaptiveResumeThreshold))) {
-        if (room.wasPlayingBeforeInterruption) {
-          room.lastPlayStartAt = Date.now();
-          setRoomState(room, 'PLAYING');
-          dispatches.push(...buildPlayAt(room));
-        } else {
-          setRoomState(room, 'USER_PAUSED');
-        }
+      const seekSettled = everyoneActive(room, active, hb => !isSeeking(hb) && isReadyToPlay(hb, room.adaptiveResumeThreshold));
+      if (seekSettled && !room.wasPlayingBeforeInterruption) {
+        setRoomState(room, 'USER_PAUSED');
         dispatches.push(...buildRoomUpdate(room));
+      } else if (seekSettled) {
+        dispatches.push(...resumePlayback(room, false));
+      } else if (room.wasPlayingBeforeInterruption && canForceResume(room, active, room.adaptiveResumeThreshold)) {
+        dispatches.push(...resumePlayback(room, true));
       }
       break;
     }
 
     case 'RESYNCING': {
-      if (active.length < 2 && totalConnected < 2) {
+      if (active.length < requiredViewers(room) && totalConnected < requiredViewers(room)) {
         setRoomState(room, 'WAITING_FOR_VIEWERS');
         dispatches.push(...buildRoomUpdate(room));
         break;
       }
 
-      if (active.every(v => v.heartbeat && !isSeeking(v.heartbeat) && isReadyToPlay(v.heartbeat, room.adaptiveResumeThreshold))) {
-        room.lastPlayStartAt = Date.now();
-        setRoomState(room, 'PLAYING');
-        dispatches.push(...buildPlayAt(room));
-        dispatches.push(...buildRoomUpdate(room));
+      const resynced = everyoneActive(room, active, hb => !isSeeking(hb) && isReadyToPlay(hb, room.adaptiveResumeThreshold));
+      if (resynced || canForceResume(room, active, room.adaptiveResumeThreshold)) {
+        dispatches.push(...resumePlayback(room, !resynced));
       }
       break;
     }
@@ -417,7 +453,7 @@ export function handleUserAction(
       if (room.state === 'USER_PAUSED' || room.state === 'READY_CHECK') {
         room.wasUserPaused = false;
         const active = activeViewers(room);
-        if (active.length >= 2 && active.every(v => v.heartbeat && isReadyToPlay(v.heartbeat, room.adaptiveResumeThreshold))) {
+        if (everyoneActive(room, active, hb => isReadyToPlay(hb, room.adaptiveResumeThreshold))) {
           room.lastPlayStartAt = Date.now();
           setRoomState(room, 'PLAYING');
           dispatches.push(...buildPlayAt(room));
@@ -445,13 +481,15 @@ export function handleUserAction(
     case 'SEEK': {
       if (mediaTime === undefined) break;
       updateCanonicalTime(room, mediaTime);
+      room.forcedResumeAttempted = false; // a new position is a new buffering incident
+      room.bufferingStartAt = Date.now();
 
       // Any active state (playing, buffering, resyncing, seeking) means we want to
-      // resume after the seek. Only stay paused if we were explicitly USER_PAUSED.
+      // resume after the seek, and so does seeking from ENDED, which is how a film
+      // gets rewatched. Only stay paused if we were explicitly USER_PAUSED.
       room.wasPlayingBeforeInterruption =
         room.state !== 'USER_PAUSED' &&
-        room.state !== 'WAITING_FOR_VIEWERS' &&
-        room.state !== 'ENDED';
+        room.state !== 'WAITING_FOR_VIEWERS';
 
       setRoomState(room, 'SEEKING');
       dispatches.push(...buildSeekAll(room, mediaTime));
@@ -470,10 +508,12 @@ export function handleUserAction(
 
 export function handleViewerDisconnect(room: RoomRuntime, viewerId: string): TickResult {
   const dispatches: DispatchItem[] = [];
-  room.viewers.delete(viewerId);
-
   const prevState = room.state;
-  room.wasUserPaused = room.state === 'USER_PAUSED';
+  // ws emits 'error' then 'close' for one socket; only the first may count.
+  if (!room.viewers.delete(viewerId)) return { dispatches, stateChanged: false };
+
+  // A second drop lands in WAITING_FOR_VIEWERS, which must not erase the first.
+  room.wasUserPaused = room.wasUserPaused || room.state === 'USER_PAUSED';
 
   if (room.state === 'PLAYING' || room.state === 'BUFFERING' || room.state === 'RESYNCING' || room.state === 'SEEKING') {
     const t = canonicalTimeNow(room);

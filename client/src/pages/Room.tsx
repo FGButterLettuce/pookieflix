@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bug } from 'lucide-react';
+import { ArrowLeft, Bug, User, Users } from 'lucide-react';
 import Hls from 'hls.js';
 import { VideoPlayer } from '../components/VideoPlayer';
 import type { VideoPlayerHandle } from '../components/VideoPlayer';
@@ -24,6 +24,9 @@ function guessTitle(filename: string): string {
 }
 
 const HEARTBEAT_INTERVAL = 500;
+// Mirrors bufferPauseThreshold/bufferResumeThreshold in server/src/config.ts.
+const PAUSE_BUFFER_SECONDS = 2;
+const RESUME_BUFFER_SECONDS = 10;
 
 // Chrome has added experimental native HLS support and now passes canPlayType
 // for it too, but its segment queue doesn't reliably survive a long paused/
@@ -62,6 +65,12 @@ interface RoomInfo {
   hlsUrl?: string;
 }
 
+function singlePlayerTitle(enabled: boolean): string {
+  return enabled
+    ? 'Watching together in person · click to wait for a second device again'
+    : 'Waiting for a second device to join · click to watch together in person on this one';
+}
+
 export function Room() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
@@ -69,9 +78,11 @@ export function Room() {
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [roomState, setRoomState] = useState<RoomState>('WAITING_FOR_VIEWERS');
   const [viewerCount, setViewerCount] = useState(0);
+  const [singlePlayer, setSinglePlayer] = useState(false);
   const [peerStatus, setPeerStatus] = useState<PeerStatus>({ bufferedAhead: -1, mediaTime: 0, seeking: false, waiting: false });
   const [copied, setCopied] = useState(false);
   const [fatalError, setFatalError] = useState('');
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
 
   const [subtitleUrl, setSubtitleUrl] = useState<string | undefined>();
   const [showSubPicker, setShowSubPicker] = useState(false);
@@ -99,6 +110,7 @@ export function Room() {
   const lastPlayStartRef = useRef(0);    // epoch ms when PLAYING was last entered
   const prevRoomStateRef = useRef<RoomState>('WAITING_FOR_VIEWERS');
   const peerEverJoinedRef = useRef(false); // true once viewerCount reached 2
+  const subsTurnedOffRef = useRef(false);  // "Off" is per-viewer, so it outlives reconnects and the peer's changes
 
   // ── WebSocket setup ────────────────────────────────────────────────────────
 
@@ -122,9 +134,10 @@ export function Room() {
             subtitleUrl: msg.subtitleUrl,
             hlsUrl: msg.hlsUrl,
           });
-          setSubtitleUrl(msg.subtitleUrl);
+          if (!subsTurnedOffRef.current) setSubtitleUrl(msg.subtitleUrl);
           setSubQuery(guessTitle(msg.mediaFilename));
           setRoomState(msg.roomState);
+          setSinglePlayer(msg.singlePlayer);
           break;
         }
 
@@ -141,6 +154,7 @@ export function Room() {
           if (msg.viewerCount >= 2) peerEverJoinedRef.current = true;
           setRoomState(msg.state);
           setViewerCount(msg.viewerCount);
+          setSinglePlayer(msg.singlePlayer);
           break;
         }
 
@@ -182,6 +196,12 @@ export function Room() {
             seeking: msg.seeking,
             waiting: msg.waiting,
           });
+          break;
+        }
+
+        case 'SUBTITLES_CHANGED': {
+          rlog.log(`SUBTITLES_CHANGED present=${!!msg.subtitleUrl}`);
+          if (!subsTurnedOffRef.current) setSubtitleUrl(msg.subtitleUrl);
           break;
         }
 
@@ -233,6 +253,10 @@ export function Room() {
     vc.on((event) => {
       if (event === 'error') {
         setFatalError('This browser cannot play the video. The codec may not be supported (e.g. H.265/HEVC); try a different browser or ask the host to re-encode to H.264.');
+      } else if (event === 'playbackblocked') {
+        setPlaybackBlocked(true);
+      } else if (event === 'playbackunblocked') {
+        setPlaybackBlocked(false);
       }
     });
   }, [startHeartbeat]);
@@ -253,6 +277,10 @@ export function Room() {
     if (previewModeRef.current) return;
     wsRef.current?.send({ type: 'USER_ACTION', data: { action: 'SEEK', mediaTime: time } });
   }, []);
+
+  const toggleSinglePlayer = useCallback(() => {
+    wsRef.current?.send({ type: 'SET_SINGLE_PLAYER', enabled: !singlePlayer });
+  }, [singlePlayer]);
 
   // Exit preview when peer joins — server's PLAY_AT naturally resets position
   useEffect(() => {
@@ -280,28 +308,37 @@ export function Room() {
     }
   }, [subQuery]);
 
-  const applySub = useCallback(async (fileId: number) => {
+  // Subtitle changes below reach this viewer through SUBTITLES_CHANGED, the same
+  // message the other viewer gets, so both always load the same file.
+  const applySub = useCallback(async (fileId: number, label: string) => {
     if (!roomInfo) return;
     setSubApplying(true);
+    setSubSyncError('');
     try {
-      await fetch(`/api/library/${encodeURIComponent(roomInfo.mediaFilename)}/subtitles`, {
+      const res = await fetch(`/api/library/${encodeURIComponent(roomInfo.mediaFilename)}/subtitles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId }),
+        body: JSON.stringify({ fileId, label }),
       });
-      // Cache-bust so the track element re-fetches the new VTT
-      setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        setSubSyncError(data.error ?? 'Could not load those subtitles');
+        return;
+      }
+      subsTurnedOffRef.current = false;
       setSubSynced(false);
-      setSubSyncError('');
       setSubShiftTotalMs(0);
       setShowSubPicker(false);
       setSubResults([]);
+    } catch {
+      setSubSyncError('Could not load those subtitles');
     } finally {
       setSubApplying(false);
     }
-  }, [roomInfo, token]);
+  }, [roomInfo]);
 
   const removeSubs = useCallback(() => {
+    subsTurnedOffRef.current = true;
     setSubtitleUrl(undefined);
     setShowSubPicker(false);
     setSubResults([]);
@@ -325,13 +362,12 @@ export function Room() {
       }
       setSubSynced(true);
       setSubShiftTotalMs(0);
-      setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
     } catch {
       setSubSyncError('Sync failed');
     } finally {
       setSubSyncing(false);
     }
-  }, [roomInfo, token]);
+  }, [roomInfo]);
 
   const undoSyncSubs = useCallback(async () => {
     if (!roomInfo) return;
@@ -343,10 +379,9 @@ export function Room() {
     } finally {
       setSubSynced(false);
       setSubShiftTotalMs(0);
-      setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
       setSubUndoing(false);
     }
-  }, [roomInfo, token]);
+  }, [roomInfo]);
 
   const shiftSubs = useCallback(async (deltaMs: number) => {
     if (!roomInfo) return;
@@ -365,13 +400,12 @@ export function Room() {
       }
       setSubSynced(true);
       setSubShiftTotalMs(v => v + deltaMs);
-      setSubtitleUrl(`/api/subtitle/${token}?v=${Date.now()}`);
     } catch {
       setSubSyncError('Shift failed');
     } finally {
       setSubShifting(false);
     }
-  }, [roomInfo, token]);
+  }, [roomInfo]);
 
   // ── Copy room link ─────────────────────────────────────────────────────────
 
@@ -422,17 +456,28 @@ export function Room() {
   return (
     <div className="room-container">
       <div className="room-header">
-        <button className="settings-link" onClick={() => navigate('/')} title="Back to library">
+        <button className="settings-link" onClick={() => navigate('/')} title="Back to library" aria-label="Back to library">
           <ArrowLeft />
         </button>
         <span className="room-logo"><Logo size="sm" /></span>
         <span className="room-title" title={roomInfo.mediaFilename}>{guessTitle(roomInfo.mediaFilename)}</span>
-        <RoomStatus state={roomState} viewerCount={viewerCount || roomInfo.viewerCount} />
+        <RoomStatus state={roomState} viewerCount={viewerCount || roomInfo.viewerCount} singlePlayer={singlePlayer} />
         <div className="room-actions">
+          <button
+            className={`copy-btn sub-btn${singlePlayer ? ' sub-btn--active' : ''}`}
+            onClick={toggleSinglePlayer}
+            title={singlePlayerTitle(singlePlayer)}
+            aria-label={singlePlayerTitle(singlePlayer)}
+            aria-pressed={singlePlayer}
+          >
+            {singlePlayer ? <User size={14} /> : <Users size={14} />}
+          </button>
           <button
             className={`copy-btn sub-btn${showDebug ? ' sub-btn--active' : ''}`}
             onClick={() => setShowDebug(v => !v)}
             title="Debug: errors & warnings"
+            aria-label="Debug: errors & warnings"
+            aria-pressed={showDebug}
           >
             <Bug size={14} />
           </button>
@@ -440,6 +485,7 @@ export function Room() {
             className={`copy-btn sub-btn${subtitleUrl ? ' sub-btn--active' : ''}`}
             onClick={() => setShowSubPicker(v => !v)}
             title={subtitleUrl ? 'Subtitles on · click to change' : 'Subtitles off · click to search'}
+            aria-label={subtitleUrl ? 'Subtitles on, click to change' : 'Subtitles off, click to search'}
           >
             CC{subtitleUrl ? ' ✓' : ''}
           </button>
@@ -503,7 +549,7 @@ export function Room() {
                   <span className="sub-result-label">{r.label}</span>
                   <button
                     className="copy-btn"
-                    onClick={() => void applySub(r.fileId)}
+                    onClick={() => void applySub(r.fileId, r.label)}
                     disabled={subApplying}
                   >
                     {subApplying ? '…' : 'Use'}
@@ -540,7 +586,36 @@ export function Room() {
           </div>
         )}
 
-        {!previewMode && (roomState === 'BUFFERING' || roomState === 'WAITING_FOR_VIEWERS' || roomState === 'RESYNCING' || roomState === 'SEEKING') && (
+        {playbackBlocked && (
+          <div className="video-overlay">
+            <div className="overlay-content">
+              <div className="overlay-title">your browser needs a tap before it can play</div>
+              <button className="copy-btn-lg" onClick={() => void vcRef.current?.unlockPlayback()}>
+                tap to start watching
+              </button>
+            </div>
+          </div>
+        )}
+
+        {roomState === 'ENDED' && !playbackBlocked && (
+          <div className="video-overlay">
+            <div className="overlay-content">
+              <div className="overlay-title">that's the end</div>
+              <button className="copy-btn-lg" onClick={() => handleUserSeek(0)}>watch again</button>
+              <button className="copy-btn" onClick={() => navigate('/')}>back to library</button>
+            </div>
+          </div>
+        )}
+
+        {!previewMode && !playbackBlocked && roomState === 'READY_CHECK' && (
+          <div className="video-overlay">
+            <div className="overlay-content">
+              <div className="overlay-title">{singlePlayer ? 'loading a head start…' : 'you\'re both here, loading a head start…'}</div>
+            </div>
+          </div>
+        )}
+
+        {!previewMode && !playbackBlocked && (roomState === 'BUFFERING' || roomState === 'WAITING_FOR_VIEWERS' || roomState === 'RESYNCING' || roomState === 'SEEKING') && (
           <div className="video-overlay">
             <div className="overlay-content">
               {roomState === 'WAITING_FOR_VIEWERS' ? (
@@ -578,7 +653,7 @@ export function Room() {
                       : roomState === 'RESYNCING'
                       ? 'getting you both back in sync…'
                       : (() => {
-                          const peerLow = peerStatus.bufferedAhead >= 0 && peerStatus.bufferedAhead < 0.5;
+                          const peerLow = peerStatus.bufferedAhead >= 0 && peerStatus.bufferedAhead < PAUSE_BUFFER_SECONDS;
                           const stalls = stallCountRef.current;
                           if (peerLow) return stalls >= 2 ? 'their connection is a bit slow, giving them extra time to load' : 'waiting for them to load up 🍿';
                           if (stalls >= 3) return 'slow connection detected, buffering a bit more so it plays smoothly';
@@ -597,7 +672,7 @@ export function Room() {
                     <div className="overlay-buffer-bar">
                       <div
                         className="overlay-buffer-fill"
-                        style={{ width: `${Math.min(100, (peerStatus.bufferedAhead / 3) * 100)}%` }}
+                        style={{ width: `${Math.min(100, (peerStatus.bufferedAhead / RESUME_BUFFER_SECONDS) * 100)}%` }}
                       />
                     </div>
                   )}

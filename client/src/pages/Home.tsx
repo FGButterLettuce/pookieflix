@@ -438,9 +438,10 @@ export function Home() {
   const autoPick = async () => {
     if (!subPickerFile) return;
     setSubAutoLoading(true);
-    await fetch(`/api/library/${encodeURIComponent(subPickerFile)}/subtitles`, {
+    const res = await fetch(`/api/library/${encodeURIComponent(subPickerFile)}/subtitles`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
-    }).catch(() => {});
+    }).catch(() => null);
+    if (!res?.ok) setError('Could not find subtitles for that file.');
     setSubAutoLoading(false);
     closeSubPicker();
     loadLibrary();
@@ -470,11 +471,12 @@ export function Home() {
   const applySub = async (filename: string, fileId: number, label: string) => {
     setSubApplying(true);
     try {
-      await fetch(`/api/library/${encodeURIComponent(filename)}/subtitles`, {
+      const res = await fetch(`/api/library/${encodeURIComponent(filename)}/subtitles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileId, label }),
-      });
+      }).catch(() => null);
+      if (!res?.ok) setError('Could not download those subtitles.');
       closeSubPicker();
       loadLibrary();
     } finally {
@@ -501,7 +503,7 @@ export function Home() {
             />
           ) : (
             <div className="lib-thumb-placeholder">
-              {f.thumbReady ? <Film size={24} /> : <span className="thumb-spinner" />}
+              <Film size={24} />
             </div>
           )}
           <div className="lib-play-overlay"><Play size={26} /></div>
@@ -688,7 +690,7 @@ export function Home() {
             />
           ) : (
             <div className="lib-thumb-placeholder">
-              {f.thumbReady ? <Film size={28} /> : <span className="thumb-spinner" />}
+              <Film size={28} />
             </div>
           )}
           {f.duration > 0 && <span className="continue-time">{formatDuration(f.duration)}</span>}

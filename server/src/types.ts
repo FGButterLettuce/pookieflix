@@ -25,6 +25,7 @@ export interface ClientHeartbeat {
   playbackRate: number;
   lastUserAction: number;  // epoch ms of last user-initiated action
   serverCommandPending: boolean; // true while applying a server command
+  playbackBlocked?: boolean;     // browser refused play() until the viewer taps
 }
 
 export type UserActionType = 'PLAY' | 'PAUSE' | 'SEEK';
@@ -36,7 +37,8 @@ export interface ClientUserAction {
 
 export type ClientMessage =
   | { type: 'HEARTBEAT'; data: ClientHeartbeat }
-  | { type: 'USER_ACTION'; data: ClientUserAction };
+  | { type: 'USER_ACTION'; data: ClientUserAction }
+  | { type: 'SET_SINGLE_PLAYER'; enabled: boolean };
 
 // ── Wire protocol: server → client ──────────────────────────────────────────
 
@@ -49,6 +51,7 @@ export type ServerMessageType =
   | 'PLAY_AT'
   | 'RATE_ADJUST'
   | 'PEER_STATUS'
+  | 'SUBTITLES_CHANGED'
   | 'ERROR';
 
 export interface JoinedMessage {
@@ -61,12 +64,14 @@ export interface JoinedMessage {
   currentTime: number;
   subtitleUrl?: string;
   hlsUrl?: string;
+  singlePlayer: boolean;
 }
 
 export interface RoomUpdateMessage {
   type: 'ROOM_UPDATE';
   state: RoomState;
   viewerCount: number;
+  singlePlayer: boolean;
 }
 
 export interface PauseMessage {
@@ -102,6 +107,11 @@ export interface PeerStatusMessage {
   waiting: boolean;
 }
 
+export interface SubtitlesChangedMessage {
+  type: 'SUBTITLES_CHANGED';
+  subtitleUrl?: string; // absent when the film no longer has subtitles
+}
+
 export interface ErrorMessage {
   type: 'ERROR';
   message: string;
@@ -116,6 +126,7 @@ export type ServerMessage =
   | PlayAtMessage
   | RateAdjustMessage
   | PeerStatusMessage
+  | SubtitlesChangedMessage
   | ErrorMessage;
 
 // ── Room runtime state (in-memory, not persisted) ────────────────────────────
@@ -144,6 +155,7 @@ export interface RoomRuntime {
   wasUserPaused: boolean;               // preserved across reconnects so USER_PAUSED survives WS drops
   bufferingStartAt?: number;            // epoch ms when BUFFERING was entered (for timeout logic)
   forcedResumeAttempted?: boolean;      // whether this BUFFERING incident already used its one 15s force-resume
+  singlePlayer?: boolean;               // when true, playback starts/continues with just 1 viewer (in-person watching)
   pendingRateTarget: Map<string, number>; // viewerId → pending playback rate
   lastTickAt: number;
   lastPersistedAt?: number;

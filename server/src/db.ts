@@ -155,6 +155,16 @@ export function updateLibraryLastTime(filename: string, lastTime: number): void 
   `).run(filename, lastTime, Date.now());
 }
 
+/**
+ * Resume positions in the final 5% are treated as completed. Players frequently
+ * stop just before the browser emits `ended` (credits, decode errors, tab close),
+ * so requiring the exact final frame leaves finished movies stuck on Resume.
+ */
+export function normalizeResumeTime(lastTime: number, duration: number): number {
+  if (duration > 0 && lastTime >= duration * 0.95) return 0;
+  return lastTime;
+}
+
 export function getLibraryMeta(filename: string): LibraryMetaRow | undefined {
   const db = getDb();
   return db.prepare('SELECT * FROM library_meta WHERE filename = ?').get(filename) as unknown as LibraryMetaRow | undefined;
@@ -242,7 +252,7 @@ export function listLibraryFiles(): LibraryFileInfo[] {
       filename,
       size: stat.size,
       duration: meta?.duration ?? 0,
-      lastTime: meta?.last_time ?? 0,
+      lastTime: normalizeResumeTime(meta?.last_time ?? 0, meta?.duration ?? 0),
       lastPlayedAt: meta?.last_played_at ?? 0,
       thumbReady: (meta?.thumb_ready ?? 0) === 1,
       thumbUrl: `/api/library/${encodeURIComponent(filename)}/thumb`,

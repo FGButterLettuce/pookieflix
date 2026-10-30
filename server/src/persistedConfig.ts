@@ -18,17 +18,25 @@ export interface PersistedConfig {
 }
 
 export function readPersistedConfig(): PersistedConfig {
+  let raw: string;
   try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as PersistedConfig;
-  } catch {
-    return {};
+    raw = fs.readFileSync(CONFIG_PATH, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    throw err;
   }
+  // Deliberately not caught: treating a corrupt file as empty would look like
+  // "no password set" and open every admin route.
+  return JSON.parse(raw) as PersistedConfig;
 }
 
 export function writePersistedConfig(data: PersistedConfig): void {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const existing = readPersistedConfig();
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify({ ...existing, ...data }, null, 2));
+  // Write-then-rename so a crash mid-save can't leave a truncated config.
+  const tmpPath = `${CONFIG_PATH}.${process.pid}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify({ ...existing, ...data }, null, 2), { mode: 0o600 });
+  fs.renameSync(tmpPath, CONFIG_PATH);
 }
 
 export function isSetupComplete(): boolean {
@@ -42,9 +50,14 @@ export function isSetupComplete(): boolean {
 // since a stale in-memory copy would mean a newly-set password never
 // actually took effect until the process restarted.
 export function getPasswordHash(): string {
-  return process.env.PASSWORD_HASH ?? readPersistedConfig().PASSWORD_HASH ?? '';
+  return process.env.PASSWORD_HASH || readPersistedConfig().PASSWORD_HASH || '';
 }
 
 export function getSessionSecret(): string {
-  return process.env.SESSION_SECRET ?? readPersistedConfig().SESSION_SECRET ?? '';
+  return process.env.SESSION_SECRET || readPersistedConfig().SESSION_SECRET || '';
+}
+
+// Read fresh for the same reason: a key saved in Settings must work without a restart.
+export function getOpenSubtitlesApiKey(): string {
+  return process.env.OPENSUBTITLES_API_KEY || readPersistedConfig().OPENSUBTITLES_API_KEY || '';
 }
